@@ -35,9 +35,13 @@
 #   sheriff-mcp.jar      the MCP server, the hooks, the CI gate and the agent
 #   rules_catalog.json   from a checkout that has one
 #
-# The hooks go into %USERPROFILE%\.claude\settings.json: they guard every
-# project Claude Code opens, and let everything through where there is
-# nothing Sheriff analyzes. With codex on the PATH, Codex is set up the same
+# Only the assistants this machine has are set up, and the run ends saying
+# which. With Claude Code (claude on the PATH, or %USERPROFILE%\.claude, which
+# its desktop app and IDE extensions use), the hooks go into
+# %USERPROFILE%\.claude\settings.json: they guard every project Claude Code
+# opens, and let everything through where there is nothing Sheriff analyzes;
+# with claude on the PATH the server is registered too. With codex on the
+# PATH, Codex is set up the same
 # way (--install-codex). Codex asks once before it runs a new hook; that
 # review stays with you. With agy on the PATH, Antigravity is set up too
 # (--install-antigravity): the server and the tools it may run without asking,
@@ -213,25 +217,51 @@ if ($PullAlways) {
     $serverOptions += @('-e', 'SHERIFF_PULL=always')
     $codexOptions += '--pull-always'
 }
-# The hooks are only a settings file, so they do not wait for the claude
-# command: Claude Code from the desktop app or an IDE reads that file too.
-if ($NoHooks) {
-    Write-Host "The hooks were left out (-NoHooks). For every project, or in one project's folder without --user:"
+# A list of names as a sentence says it: "A", "A and B", "A, B and C".
+function Join-Names([string[]]$Names) {
+    if ($Names.Count -le 1) { return ($Names -join '') }
+    return (($Names[0..($Names.Count - 2)]) -join ', ') + ' and ' + $Names[-1]
+}
+# Only the assistants this machine has are set up, and the run ends saying
+# which: found is every one there, setUp the ones this run wrote into.
+$found = @()
+$setUp = @()
+# Claude Code is there when its command is, or its folder: the desktop app
+# and the IDE extensions read .claude\settings.json without putting claude on
+# the PATH, so the hooks go in for them too. With neither, nothing is written:
+# a settings file used to be created for an assistant nobody had.
+$claudeCli = [bool](Get-Command claude -ErrorAction SilentlyContinue)
+$claudeFound = $claudeCli -or (Test-Path (Join-Path $HOME '.claude'))
+if (-not $claudeFound) {
+    Write-Host "claude is not on the PATH and there is no .claude folder, so Claude Code was left alone. Once it is installed:"
+    Write-Host "  claude mcp add --scope user $name -- java -jar `"$jar`""
     Write-Host "  java -jar `"$jar`" --install-hooks --user"
 } else {
-    & java -jar $jar --install-hooks --user @hookOptions
-    if ($LASTEXITCODE -ne 0) { Write-Error "The hooks could not be written; see the message above." }
+    $found += 'Claude Code'
+    $claudeSetUp = $false
+    if ($NoHooks) {
+        Write-Host "The hooks were left out (-NoHooks). For every project, or in one project's folder without --user:"
+        Write-Host "  java -jar `"$jar`" --install-hooks --user"
+    } else {
+        & java -jar $jar --install-hooks --user @hookOptions
+        if ($LASTEXITCODE -ne 0) { Write-Error "The hooks could not be written; see the message above." }
+        $claudeSetUp = $true
+    }
+    if ($claudeCli) {
+        $null = Test-Native { claude mcp remove --scope user $name }
+        # Quoted, or PowerShell takes -- as its own end of parameters and drops it.
+        & claude mcp add --scope user $name @serverOptions '--' java -jar $jar
+        if ($LASTEXITCODE -ne 0) { Write-Error "The MCP server could not be registered; see the message above." }
+        Write-Host "Registered the MCP server as '$name'. Restart open Claude Code sessions to pick it up."
+        $claudeSetUp = $true
+    } else {
+        Write-Host "claude is not on the PATH, so the MCP server was not registered. By hand:"
+        Write-Host "  claude mcp add --scope user $name -- java -jar `"$jar`""
+    }
+    if ($claudeSetUp) { $setUp += 'Claude Code' }
 }
-if (Get-Command claude -ErrorAction SilentlyContinue) {
-    $null = Test-Native { claude mcp remove --scope user $name }
-    # Quoted, or PowerShell takes -- as its own end of parameters and drops it.
-    & claude mcp add --scope user $name @serverOptions '--' java -jar $jar
-    if ($LASTEXITCODE -ne 0) { Write-Error "The MCP server could not be registered; see the message above." }
-    Write-Host "Registered the MCP server as '$name'. Restart open Claude Code sessions to pick it up."
-} else {
-    Write-Host "claude is not on the PATH, so the MCP server was not registered. By hand:"
-    Write-Host "  claude mcp add --scope user $name -- java -jar `"$jar`""
-}
+if (Get-Command codex -ErrorAction SilentlyContinue) { $found += 'Codex' }
+if (Get-Command agy -ErrorAction SilentlyContinue) { $found += 'Antigravity' }
 if (-not $NoCodex) {
     if (-not (Get-Command codex -ErrorAction SilentlyContinue)) {
         Write-Host "codex is not on the PATH, so Codex was left alone. Once it is installed:"
@@ -241,6 +271,7 @@ if (-not $NoCodex) {
         & java -jar $jar --install-codex @hookOptions @codexOptions
         if ($LASTEXITCODE -ne 0) { Write-Error "Codex could not be set up; see the message above." }
         Write-Host "Restart open Codex sessions to pick it up; the first one asks you to review the new hooks."
+        $setUp += 'Codex'
     }
 }
 # Antigravity takes the same -PullAlways as Codex, and nothing about hooks: it
@@ -255,5 +286,19 @@ if (-not $NoAntigravity) {
         & java -jar $jar --install-antigravity @antigravityOptions
         if ($LASTEXITCODE -ne 0) { Write-Error "Antigravity could not be set up; see the message above." }
         Write-Host "Restart open agy sessions to pick it up."
+        $setUp += 'Antigravity'
     }
+}
+# Each assistant left out says so above, among everything else; this is the
+# line that says what the install amounts to.
+Write-Host ""
+if ($setUp.Count -gt 0) {
+    Write-Host "Sheriff is set up for $(Join-Names $setUp)."
+} elseif ($found.Count -eq 0) {
+    Write-Host "No assistant was found (Claude Code, Codex or Antigravity), so Sheriff is installed only as"
+    Write-Host "the CI check and the Maven plugin:"
+    Write-Host "  java -jar `"$jar`" --check"
+    Write-Host "Install one of them and run this again to set it up."
+} else {
+    Write-Host "Sheriff is set up for no assistant: the options left out $(Join-Names $found)."
 }

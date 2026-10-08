@@ -76,8 +76,12 @@ it costs nothing. Every scenario in it was a real bug; run it after touching
 the loop, git, the hooks, the MCP entry point or how containers are launched.
 
 `scripts/install.sh` copies the runnable jar and the catalog into
-`~/.local/share/sheriff-agent/`, registers the MCP server at user scope as
-`sheriff`, and wires the hooks into `~/.claude/settings.json`
+`~/.local/share/sheriff-agent/` and **sets up only the assistants the machine
+already has**, never installing one, then says in its last line which. For
+Claude Code (`claude` on the PATH, or `~/.claude`, which the desktop app and
+the IDE extensions read without putting `claude` on the PATH) it registers the
+MCP server at user scope as `sheriff` when there is a `claude` to do it with,
+and wires the hooks into `~/.claude/settings.json`
 (`--install-hooks --user`), so that no project needs a step of its own,
 together with `permissions.allow` rules for the four sheriff tools that do
 not commit or spend tokens (not `sheriff_autofix`): without them a model with
@@ -88,7 +92,11 @@ With `codex` on the PATH it sets Codex up the same way (`--install-codex`,
 and the approval `codex mcp add` cannot write, the order of work in
 `~/.codex/AGENTS.md`, which Codex reads in every project, and the Stop and
 turn hooks, without the gate, in `~/.codex/hooks.json`. The one step left to
-the user is Codex's review of a new hook, and it stays there on purpose. `--no-hooks` leaves the
+the user is Codex's review of a new hook, and it stays there on purpose. With
+no assistant at all it writes nothing into anyone's configuration (it used to
+create `~/.claude/settings.json` for a Claude Code nobody had) and ends saying
+the jar is installed only as the CI gate and the Maven plugin; `install.ps1`
+does the same. `--no-hooks` leaves the
 hooks out, `--no-codex` leaves Codex alone, `--no-antigravity` leaves
 Antigravity alone, `--fail-fast` writes the hooks as
 `--hook-stop --fail-fast` (an option, not a variable: Codex passes a hook

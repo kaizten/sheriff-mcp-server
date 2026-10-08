@@ -237,7 +237,7 @@ Sheriff's hooks are in /home/ana/.claude/settings.json, for every project Claude
 sheriff_test, sheriff_fix, sheriff_guidelines and sheriff_task run without asking.
 Where there is nothing Sheriff analyzes, they let everything through.
 Undo with: java -jar sheriff-mcp.jar --uninstall-hooks --user
-Added stdio MCP server sheriff with command: java -jar /home/ana/.local/share/sheriff-agent/sheriff-mcp.jar to user config
+Added stdio MCP server sheriff with command: /usr/bin/java -jar /home/ana/.local/share/sheriff-agent/sheriff-mcp.jar to user config
 File modified: /home/ana/.claude.json
 Registered the MCP server as 'sheriff'. Restart open Claude Code sessions to pick it up.
 Codex is set up for every project it opens:
@@ -256,11 +256,15 @@ Antigravity is set up for every project agy opens:
 It has no Sheriff hooks: a turn there can end with errors left.
 Undo with: java -jar sheriff-mcp.jar --uninstall-antigravity
 Restart open agy sessions to pick it up.
+
+Sheriff is set up for Claude Code, Codex and Antigravity.
 \end{answer}
 
 It says which version it installed and where and, for each assistant, which
 hooks it turned on, which tools may run without asking, and how to undo each
-one. As it asks,
+one; its last line, which assistants it set up. It sets up only the ones the
+machine already has, and never installs one: an assistant that is not there
+gets a line saying how to set it up once it is. As it asks,
 \textbf{restart the Claude Code and Codex sessions you had open}. To check that
 your assistants see the server: in Claude Code, \code{claude mcp list} must
 show \code{sheriff:}~\ldots~\textcolor{pbtip}{\faCheck}~\code{Connected} (inside
@@ -973,6 +977,10 @@ default. The server pulls the image when it starts.}
 \problem{\code{claude}, \code{codex} or \code{agy is not on the PATH}}{That
 assistant was not installed, so the installer did not set it up. Once you
 install it, run the line again, or the command it printed.}
+\problem{\code{No assistant was found}}{None of Claude Code, Codex or
+Antigravity is installed, so the installer wrote nothing into any assistant's
+configuration: Sheriff is there only as the CI check (\code{--check}) and the
+Maven plugin. Install one and run the line again.}
 
 \subsection{When a session opens}
 
