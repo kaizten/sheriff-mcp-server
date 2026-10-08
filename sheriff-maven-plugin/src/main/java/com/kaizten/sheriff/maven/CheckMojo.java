@@ -28,58 +28,42 @@ import org.apache.maven.plugins.annotations.Parameter;
 public class CheckMojo extends SheriffMojo {
 
     /**
-
      * The count that means the module passed.
-
      */
     private static final int NONE = 0;
 
     /**
-
      * Reported when Sheriff itself could not be run.
-
      */
     private static final String UNAVAILABLE = "Sheriff could not run: %s";
 
     /**
-
      * Reported when the module passed.
-
      */
     private static final String CLEAN = "Sheriff reports no errors under %s.";
 
     /**
-
      * Reported when the module did not pass.
-
      */
     private static final String SUMMARY = "Sheriff reports %d error(s) under %s in %s.";
 
     /**
-
      * Appended when the build is allowed to continue anyway.
-
      */
     private static final String TOLERATED = "%s Not failing the build (sheriff.failOnError=false).";
 
     /**
-
      * A line break inside a finding, with the indentation around it.
-
      */
     private static final String LINE_BREAK = "\\s*\\R\\s*";
 
     /**
-
      * What a line break inside a finding becomes.
-
      */
     private static final String SPACE = " ";
 
     /**
-
      * Report the findings without failing the build.
-
      */
     @Parameter(property = "sheriff.failOnError", defaultValue = "true")
     boolean failOnError = true;

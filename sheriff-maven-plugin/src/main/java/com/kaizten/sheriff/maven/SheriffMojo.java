@@ -35,38 +35,33 @@ import org.apache.maven.plugins.annotations.Parameter;
 public abstract class SheriffMojo extends AbstractMojo {
 
     /**
-
-     * The variable the agent reads the mounted directory from.
-
+     * What a goal says when Sheriff's image could not be had and the reason
+     * is unknown.
      */
     private static final String NO_IMAGE = "Sheriff's image is not available on this machine.";
+
+    /**
+     * The variable the agent reads the mounted directory from.
+     */
     private static final String TARGET_REPOSITORY = "TARGET_REPO";
 
     /**
-
      * The variable the agent reads the analyzed component from.
-
      */
     private static final String COMPONENT = "SHERIFF_COMPONENT";
 
     /**
-
      * The variable the agent reads the rule profile from.
-
      */
     private static final String TEST_TYPE = "SHERIFF_TEST_TYPE";
 
     /**
-
      * The variable the agent reads the image from.
-
      */
     private static final String IMAGE = "SHERIFF_IMAGE";
 
     /**
-
      * The variable the agent reads the per-run timeout from.
-
      */
     private static final String TIMEOUT = "SHERIFF_TIMEOUT";
 
@@ -82,23 +77,17 @@ public abstract class SheriffMojo extends AbstractMojo {
     private static final String MAVEN_BUILD = "pom.xml";
 
     /**
-
      * The image used when nothing says otherwise. Mirrors the annotation.
-
      */
     private static final String DEFAULT_IMAGE = "kaizten/sheriff:latest";
 
     /**
-
      * The per-run timeout used when nothing says otherwise. Mirrors the annotation.
-
      */
     private static final int DEFAULT_TIMEOUT = 300;
 
     /**
-
      * The directory whose presence means the module has code to analyze.
-
      */
     private static final String SOURCES = "src";
 
@@ -139,9 +128,7 @@ public abstract class SheriffMojo extends AbstractMojo {
     private static final String CATALOG_FILE = "sheriff/rules_catalog.json";
 
     /**
-
      * The module being built.
-
      */
     @Parameter(defaultValue = "${project.basedir}", readonly = true, required = true)
     protected File basedir;
@@ -158,25 +145,19 @@ public abstract class SheriffMojo extends AbstractMojo {
     protected String profile;
 
     /**
-
      * The Sheriff image to run.
-
      */
     @Parameter(property = "sheriff.image", defaultValue = "kaizten/sheriff:latest")
     protected String image = DEFAULT_IMAGE;
 
     /**
-
      * Seconds allowed for one Sheriff run.
-
      */
     @Parameter(property = "sheriff.timeout", defaultValue = "300")
     protected int timeoutSeconds = DEFAULT_TIMEOUT;
 
     /**
-
      * Whether to do nothing at all.
-
      */
     @Parameter(property = "sheriff.skip", defaultValue = "false")
     protected boolean skip;
