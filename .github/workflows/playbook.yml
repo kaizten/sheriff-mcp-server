@@ -1,0 +1,37 @@
+# Builds the user's playbook whenever its sources change, so that a change
+# that breaks it fails here, on its pull request, rather than in the release
+# workflow after the tag has been pushed. The two PDF files are kept as the
+# run's artifact, for a reviewer to read the change as the user will.
+#
+# The release builds them again with its own version on the cover
+# (release.yml); this run prints the version in the poms.
+name: Playbook
+
+on:
+  push:
+    branches: [main]
+    paths: ['playbook/**', 'scripts/playbook.sh', '.github/workflows/playbook.yml']
+  pull_request:
+    paths: ['playbook/**', 'scripts/playbook.sh', '.github/workflows/playbook.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - name: TeX
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            latexmk texlive-latex-extra texlive-fonts-extra texlive-lang-spanish texlive-pictures
+      - name: Spanish and English
+        run: scripts/playbook.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: playbook
+          path: playbook/build/sheriff-playbook-*.pdf

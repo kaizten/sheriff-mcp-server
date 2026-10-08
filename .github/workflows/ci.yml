@@ -1,0 +1,87 @@
+# Two jobs, because they need different things and fail for different reasons.
+#
+# build: both modules and every unit suite, on Linux, macOS and Windows. None
+# of them needs Docker, so a red here is always the code, and a red on one
+# system only is that system's paths, shells or executables.
+#
+# e2e: scripts/e2e.sh against the real kaizten/sheriff image and real git,
+# with a stand-in for the model, so it costs no tokens. It is the only check
+# of what the unit suites cannot see: which branch the loop edits, whether the
+# MCP's stdout stays clean, whether a timed-out container is really gone. A
+# red here with a green build can also be a new image: compare against the
+# last green run before touching the code.
+#
+# Nothing is uploaded. The e2e job extracts the rule catalog from the image,
+# which is Kaizten's content, and it stays on the runner.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+      - name: Build and test both modules
+        run: mvn -B install
+        shell: bash
+      # --no-pull: the Linux runner has Docker, and the image is 4 GB.
+      - name: Install as a user would (Linux, macOS)
+        if: runner.os != 'Windows'
+        run: SHERIFF_HOME="$RUNNER_TEMP/sheriff" scripts/install.sh --no-mcp --no-pull
+        shell: bash
+      # Windows PowerShell, the one Windows ships with: it treats a native
+      # command's stderr differently from PowerShell 7, which the release
+      # workflow runs the installer under.
+      - name: Install as a user would (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          $env:SHERIFF_HOME = Join-Path $env:RUNNER_TEMP 'sheriff'
+          ./scripts/install.ps1 -NoMcp -NoPull
+        shell: powershell
+      - name: The installed jar starts
+        run: java -jar "$RUNNER_TEMP/sheriff/sheriff-mcp.jar" --tools | head -c 200
+        shell: bash
+      # No Docker for Linux containers on these runners: the real "Sheriff's
+      # image cannot be had" case. The check must say so and exit 2, not hang.
+      - name: With no Sheriff image, --check fails clearly
+        if: runner.os != 'Linux'
+        run: |
+          set +e
+          java -jar "$RUNNER_TEMP/sheriff/sheriff-mcp.jar" --check --component sheriff-mcp-java 2> err.txt
+          code=$?
+          cat err.txt
+          test "$code" -eq 2 && grep -q "could not be downloaded" err.txt
+        shell: bash
+
+  e2e:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+      - name: Pull Sheriff
+        run: docker pull kaizten/sheriff:latest
+      - name: End-to-end checks
+        run: scripts/e2e.sh

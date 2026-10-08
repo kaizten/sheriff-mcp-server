@@ -1,0 +1,21 @@
+# Build output and runtime state. The runnable jar bundles every dependency;
+# committing a jar once was enough of a lesson.
+target/
+logs/
+
+# Sheriff's own state files, dropped at the root of whatever is mounted.
+sheriff_errors.json
+sheriff_summary.json
+sheriff_tracked_files.json
+
+# The extracted rule catalog, in both shapes. Not committed on purpose: it is
+# not this project's content, it is read out of Sheriff's proprietary image by
+# --extract-rules, down to the source of the fixer scripts it ships. Generate
+# your own against the image you have access to:
+#
+#   java -jar target/sheriff-mcp.jar --agent --extract-rules
+#
+# Everything here degrades gracefully without it -- the analysis runs against
+# Sheriff itself either way; only the rule lookups go quiet.
+rules_catalog.json
+SHERIFF_RULES.md
