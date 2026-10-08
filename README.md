@@ -41,10 +41,15 @@ gh release download -R kaizten/sheriff-mcp-server -p install.sh -O - | bash
 ```
 
 It installs the jar in `~/.local/share/sheriff-agent/`, pulls Sheriff's image
-(about 4 GB the first time, only what changed after that), registers the MCP
-server with Claude Code at user scope as `sheriff`, wires the hooks for every
-project, and sets Codex and Antigravity up the same way when they are
-installed. A release
+(about 4 GB the first time, only what changed after that), and sets up the
+assistants the machine already has, never installing one: Claude Code when
+`claude` is on the PATH or `~/.claude` exists (its desktop app and IDE
+extensions use it), with the hooks for every project and, with `claude` on the
+PATH, the MCP server registered at user scope as `sheriff`; Codex and
+Antigravity the same way when `codex` or `agy` is on the PATH. It ends saying
+which it set up. With none of them it writes no assistant's configuration and
+says so: the jar is still the CI gate (`--check`) and the Maven plugin's, and
+running the line again once an assistant is installed sets it up. A release
 carries no rule catalog: the tools extract it from the image on first use
 (about 6 s). From a clone, `scripts/install.sh` (`scripts\install.ps1` on
 Windows) does the same after building and testing both modules, which needs

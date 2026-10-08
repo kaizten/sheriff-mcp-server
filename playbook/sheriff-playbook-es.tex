@@ -240,7 +240,7 @@ Sheriff's hooks are in /home/ana/.claude/settings.json, for every project Claude
 sheriff_test, sheriff_fix, sheriff_guidelines and sheriff_task run without asking.
 Where there is nothing Sheriff analyzes, they let everything through.
 Undo with: java -jar sheriff-mcp.jar --uninstall-hooks --user
-Added stdio MCP server sheriff with command: java -jar /home/ana/.local/share/sheriff-agent/sheriff-mcp.jar to user config
+Added stdio MCP server sheriff with command: /usr/bin/java -jar /home/ana/.local/share/sheriff-agent/sheriff-mcp.jar to user config
 File modified: /home/ana/.claude.json
 Registered the MCP server as 'sheriff'. Restart open Claude Code sessions to pick it up.
 Codex is set up for every project it opens:
@@ -259,11 +259,15 @@ Antigravity is set up for every project agy opens:
 It has no Sheriff hooks: a turn there can end with errors left.
 Undo with: java -jar sheriff-mcp.jar --uninstall-antigravity
 Restart open agy sessions to pick it up.
+
+Sheriff is set up for Claude Code, Codex and Antigravity.
 \end{answer}
 
 Dice qué versión ha instalado y dónde y, para cada asistente, qué hooks ha
 activado, qué herramientas pueden ejecutarse sin pedir permiso y cómo deshacer
-cada cosa. Como pide,
+cada cosa; en su última línea, qué asistentes ha configurado. Solo configura
+los que la máquina ya tiene, y nunca instala ninguno: un asistente que no está
+recibe una línea que dice cómo configurarlo cuando lo esté. Como pide,
 \textbf{reinicia las sesiones de Claude Code y de Codex que tuvieras abiertas}.
 Para comprobar que tus asistentes ven el servidor: en Claude Code,
 \code{claude mcp list} debe mostrar
@@ -980,6 +984,10 @@ modo por defecto. El servidor la descargará al arrancar.}
 \problem{\code{claude}, \code{codex} o \code{agy is not on the PATH}}{Ese
 asistente no estaba instalado, así que el instalador no lo ha configurado.
 Cuando lo instales, repite la línea, o ejecuta el comando que te ha imprimido.}
+\problem{\code{No assistant was found}}{No hay instalado ninguno de Claude
+Code, Codex ni Antigravity, así que el instalador no ha escrito nada en la
+configuración de ningún asistente: Sheriff queda solo como comprobación de CI
+(\code{--check}) y como plugin de Maven. Instala uno y repite la línea.}
 
 \subsection{Al abrir una sesión}
 

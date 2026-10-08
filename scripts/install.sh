@@ -47,9 +47,12 @@ install.sh [options]      from a checkout: build, test and install
 
 Installs into ${SHERIFF_HOME:-~/.local/share/sheriff-agent}: sheriff-mcp.jar
 (the MCP server, the hooks, the CI gate and the agent's CLI) and, from a
-checkout that has one, rules_catalog.json. Registers the server with Claude
-Code at user scope as ${SHERIFF_MCP_NAME:-sheriff}, replacing an earlier
-registration, and wires the hooks into ~/.claude/settings.json. With codex on
+checkout that has one, rules_catalog.json. Sets up only the assistants this
+machine has, and ends saying which. With Claude Code (claude on the PATH, or
+~/.claude, which its desktop app and IDE extensions use), wires the hooks into
+~/.claude/settings.json and, with claude on the PATH, registers the server at
+user scope as ${SHERIFF_MCP_NAME:-sheriff}, replacing an earlier
+registration. With codex on
 the PATH, sets Codex up the same way (--install-codex); Codex asks once before
 it runs a new hook, and that review stays with you. With agy on the PATH, sets
 Antigravity up too (--install-antigravity): the server and the tools it may run
@@ -70,6 +73,23 @@ checkout() {
   if [[ -f "$candidate/pom.xml" && -d "$candidate/sheriff-mcp-java" ]]; then
     echo "$candidate"
   fi
+}
+
+# A list of names as a sentence says it: "A", "A and B", "A, B and C". Bash
+# 3.2, which macOS runs this with, has no negative indexes, hence the count.
+join_names() {
+  local result="" count=$# index=0 name
+  for name in "$@"; do
+    index=$((index + 1))
+    if (( index == 1 )); then
+      result="$name"
+    elif (( index == count )); then
+      result="$result and $name"
+    else
+      result="$result, $name"
+    fi
+  done
+  echo "$result"
 }
 
 # An MCP server that does not start shows only "connection closed" in Claude
@@ -325,22 +345,53 @@ main() {
     server_options+=(-e SHERIFF_PULL=always)
     codex_options+=(--pull-always)
   fi
-  # The hooks are only a settings file, so they do not wait for the claude
-  # command: Claude Code from the desktop app or an IDE reads that file too.
-  if (( hooks == 1 )); then
-    SHERIFF_JAVA="$java_bin" "${jar[@]}" --install-hooks --user ${hook_options[@]+"${hook_options[@]}"}
-  else
-    echo "The hooks were left out (--no-hooks). For every project, or in one project's folder without --user:"
-    echo "  java -jar $home_dir/sheriff-mcp.jar --install-hooks --user"
-  fi
+  # Only the assistants this machine has are set up, and the run ends saying
+  # which: found is every one there, set_up the ones this run wrote into.
+  local found=() set_up=()
+  # Claude Code is there when its command is, or its folder: the desktop app
+  # and the IDE extensions read ~/.claude/settings.json without putting claude
+  # on the PATH, so the hooks go in for them too. With neither, nothing is
+  # written: a settings file used to be created for an assistant nobody had.
+  local claude_cli=0 claude_found=0
   if command -v claude >/dev/null 2>&1; then
-    claude mcp remove --scope user "$name" >/dev/null 2>&1 || true
-    claude mcp add --scope user "$name" ${server_options[@]+"${server_options[@]}"} \
-      -- "$java_bin" -jar "$home_dir/sheriff-mcp.jar"
-    echo "Registered the MCP server as '$name'. Restart open Claude Code sessions to pick it up."
+    claude_cli=1
+  fi
+  if (( claude_cli == 1 )) || [[ -d "${HOME:-}/.claude" ]]; then
+    claude_found=1
+    found+=("Claude Code")
+  fi
+  if (( claude_found == 0 )); then
+    echo "claude is not on the PATH and there is no ~/.claude, so Claude Code was left alone. Once it is installed:"
+    echo "  claude mcp add --scope user $name -- java -jar $home_dir/sheriff-mcp.jar"
+    echo "  java -jar $home_dir/sheriff-mcp.jar --install-hooks --user"
   else
-    echo "claude is not on the PATH, so the MCP server was not registered. By hand:" >&2
-    echo "  claude mcp add --scope user $name -- java -jar $home_dir/sheriff-mcp.jar" >&2
+    local claude_set_up=0
+    if (( hooks == 1 )); then
+      SHERIFF_JAVA="$java_bin" "${jar[@]}" --install-hooks --user ${hook_options[@]+"${hook_options[@]}"}
+      claude_set_up=1
+    else
+      echo "The hooks were left out (--no-hooks). For every project, or in one project's folder without --user:"
+      echo "  java -jar $home_dir/sheriff-mcp.jar --install-hooks --user"
+    fi
+    if (( claude_cli == 1 )); then
+      claude mcp remove --scope user "$name" >/dev/null 2>&1 || true
+      claude mcp add --scope user "$name" ${server_options[@]+"${server_options[@]}"} \
+        -- "$java_bin" -jar "$home_dir/sheriff-mcp.jar"
+      echo "Registered the MCP server as '$name'. Restart open Claude Code sessions to pick it up."
+      claude_set_up=1
+    else
+      echo "claude is not on the PATH, so the MCP server was not registered. By hand:" >&2
+      echo "  claude mcp add --scope user $name -- java -jar $home_dir/sheriff-mcp.jar" >&2
+    fi
+    if (( claude_set_up == 1 )); then
+      set_up+=("Claude Code")
+    fi
+  fi
+  if command -v codex >/dev/null 2>&1; then
+    found+=("Codex")
+  fi
+  if command -v agy >/dev/null 2>&1; then
+    found+=("Antigravity")
   fi
   if (( codex == 1 )); then
     if ! command -v codex >/dev/null 2>&1; then
@@ -353,6 +404,7 @@ main() {
       SHERIFF_JAVA="$java_bin" "${jar[@]}" --install-codex ${hook_options[@]+"${hook_options[@]}"} \
         ${codex_options[@]+"${codex_options[@]}"}
       echo "Restart open Codex sessions to pick it up; the first one asks you to review the new hooks."
+      set_up+=("Codex")
     fi
   fi
   # Antigravity takes the same --pull-always as Codex, and nothing about hooks:
@@ -368,7 +420,21 @@ main() {
       fi
       SHERIFF_JAVA="$java_bin" "${jar[@]}" --install-antigravity ${antigravity_options[@]+"${antigravity_options[@]}"}
       echo "Restart open agy sessions to pick it up."
+      set_up+=("Antigravity")
     fi
+  fi
+  # Each assistant left out says so above, among everything else; this is the
+  # line that says what the install amounts to.
+  echo
+  if (( ${#set_up[@]} > 0 )); then
+    echo "Sheriff is set up for $(join_names "${set_up[@]}")."
+  elif (( ${#found[@]} == 0 )); then
+    echo "No assistant was found (Claude Code, Codex or Antigravity), so Sheriff is installed only as"
+    echo "the CI check and the Maven plugin:"
+    echo "  java -jar $home_dir/sheriff-mcp.jar --check"
+    echo "Install one of them and run this again to set it up."
+  else
+    echo "Sheriff is set up for no assistant: the options left out $(join_names "${found[@]}")."
   fi
 }
 
