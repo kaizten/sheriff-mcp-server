@@ -229,4 +229,34 @@ final class CodexInstallerTest {
         assertTrue(Files.exists(elsewhere.resolve("config.toml")));
         assertFalse(Files.exists(codexHome()));
     }
+
+    @Test
+    @DisabledOnOs(value = OS.WINDOWS, disabledReason = "the paths here are POSIX ones")
+    @DisplayName("given the Java install.sh checked, the server and the hooks run it rather than the PATH's")
+    void theServerAndTheHooksRunTheJavaTheyAreGiven() throws Exception {
+        assertEquals(0, installer(false).runningWith(Path.of("/usr/bin/java")).install());
+
+        String config = read("config.toml");
+        assertTrue(config.contains("command = \"/usr/bin/java\""), config);
+        assertFalse(config.contains("command = \"java\""), config);
+        JsonNode hooks = JSON.readTree(read("hooks.json")).path("hooks");
+        assertTrue(hooks.at("/Stop/0/hooks/0/command").asText().startsWith("\"/usr/bin/java\" -jar "),
+                hooks.toString());
+    }
+
+    @Test
+    @DisabledOnOs(value = OS.WINDOWS, disabledReason = "Windows has no POSIX permissions")
+    @DisplayName("a config.toml only its owner could read stays that way: a server's env can hold tokens")
+    void keepsTheConfigPrivate() throws Exception {
+        Files.createDirectories(codexHome());
+        Path config = codexHome().resolve("config.toml");
+        Files.writeString(config, "[mcp_servers.other]\ncommand = \"x\"\nenv = { TOKEN = \"secret\" }\n");
+        Files.setPosixFilePermissions(config, java.nio.file.attribute.PosixFilePermissions.fromString("rw-------"));
+
+        assertEquals(0, installer(false).install());
+
+        assertEquals("rw-------", java.nio.file.attribute.PosixFilePermissions.toString(
+                Files.getPosixFilePermissions(config)));
+        assertTrue(read("config.toml").contains("TOKEN = \"secret\""));
+    }
 }

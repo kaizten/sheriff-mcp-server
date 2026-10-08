@@ -171,4 +171,16 @@ final class AntigravityInstallerTest {
         assertFalse(Files.exists(servers()));
         assertTrue(output.toString(StandardCharsets.UTF_8).contains("not a JSON object"), output.toString());
     }
+
+    @Test
+    @DisplayName("given the Java install.sh checked, the server runs it rather than the PATH's")
+    void theServerRunsTheJavaItIsGiven() throws Exception {
+        Path java = home.resolve("jdk/bin/java");
+
+        assertEquals(0, installer().runningWith(java).pullingAlways().install());
+
+        JsonNode entry = JSON.readTree(servers().toFile()).path("mcpServers").path("sheriff");
+        assertEquals(java.toAbsolutePath().normalize().toString(), entry.path("command").asText());
+        assertEquals("always", entry.path("env").path("SHERIFF_PULL").asText(), entry.toString());
+    }
 }

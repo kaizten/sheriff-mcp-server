@@ -95,12 +95,12 @@ seed=$(git -C "$multi" rev-parse HEAD)
 base=$(git -C "$multi" branch --show-current)
 TARGET_REPO="$multi" SHERIFF_COMPONENT=app loop >"$work/1.out"
 check "it works on a branch of its own" '[[ $(git -C "$multi" branch --show-current) == sheriff-agent/* ]]'
-if [[ -f "$repo/sheriff-mcp-java/rules_catalog.json" ]]; then
-  check "Sheriff's own fixers ran inside it, in a commit of their own" \
-    'git -C "$multi" log --format=%s | grep -q "no model involved"'
-else
-  echo "  SKIP Sheriff's own fixers: no rule catalog, so nothing is known to be repairable (--extract-rules)"
-fi
+# Not only with a catalog beside the module: the loop finds one in the cache,
+# or extracts one, and with none at all it still runs Sheriff's default set.
+# This used to be skipped unless the catalog sat in the checkout, which since
+# the catalog moved to the cache meant always, CI included.
+check "Sheriff's own fixers ran inside it, in a commit of their own" \
+  'git -C "$multi" log --format=%s | grep -q "no model involved"'
 check "the branch that was checked out is untouched" '[[ $(git -C "$multi" rev-parse "$base") == "$seed" ]]'
 check "and nothing was left uncommitted" '[[ -z $(git -C "$multi" status --porcelain) ]]'
 check "cut short, it still ran the project's tests on what it left" 'grep -q "on what this run leaves behind" "$work/1.out"'

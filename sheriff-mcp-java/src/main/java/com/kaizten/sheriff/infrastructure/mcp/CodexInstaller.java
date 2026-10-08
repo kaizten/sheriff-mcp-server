@@ -2,10 +2,8 @@ package com.kaizten.sheriff.infrastructure.mcp;
 
 import java.io.IOException;
 import java.io.PrintStream;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -38,7 +36,7 @@ public final class CodexInstaller {
     private static final String CODEX_DIRECTORY = ".codex";
     private static final String CONFIG_FILE = "config.toml";
     private static final String AGENTS_FILE = "AGENTS.md";
-    private static final String TEMPORARY_SUFFIX = ".tmp";
+    private static final String JAVA_ON_THE_PATH = "java";
     private static final String SERVER_NAME = "sheriff";
     private static final String TABLE_START = "[";
     private static final String SERVER_TABLE = "[mcp_servers." + SERVER_NAME + "]";
@@ -46,7 +44,7 @@ public final class CodexInstaller {
     private static final int TOOL_TIMEOUT_SECONDS = 600;
     private static final String SERVER_ENTRY = """
             [mcp_servers.%s]
-            command = "java"
+            command = "%s"
             args = ["-jar", "%s"]
             tool_timeout_sec = %d
             %s
@@ -80,6 +78,7 @@ public final class CodexInstaller {
     private final String instructions;
     private final Optional<HookInstaller> hooks;
     private final boolean pullAlways;
+    private final String java;
 
     /**
      * Wires the installer.
@@ -101,6 +100,7 @@ public final class CodexInstaller {
         HookInstaller stopHook = HookInstaller.forCodex(jar, codexHome, home, output);
         this.hooks = Optional.of(failFast ? stopHook.failingFast() : stopHook);
         this.pullAlways = false;
+        this.java = JAVA_ON_THE_PATH;
     }
 
     /**
@@ -112,15 +112,17 @@ public final class CodexInstaller {
      * @param instructions the order of work
      * @param hooks what installs the turn and Stop hooks, if anything
      * @param pullAlways whether the server's entry sets {@code SHERIFF_PULL=always}
+     * @param java the Java the server runs with: {@code java}, or a path
      */
     private CodexInstaller(Path codexHome, Path jar, PrintStream output, String instructions,
-            Optional<HookInstaller> hooks, boolean pullAlways) {
+            Optional<HookInstaller> hooks, boolean pullAlways, String java) {
         this.codexHome = codexHome;
         this.jar = jar;
         this.output = output;
         this.instructions = instructions;
         this.hooks = hooks;
         this.pullAlways = pullAlways;
+        this.java = java;
     }
 
     /**
@@ -130,7 +132,7 @@ public final class CodexInstaller {
      * @return that installer
      */
     public CodexInstaller withoutStopHook() {
-        return new CodexInstaller(codexHome, jar, output, instructions, Optional.empty(), pullAlways);
+        return new CodexInstaller(codexHome, jar, output, instructions, Optional.empty(), pullAlways, java);
     }
 
     /**
@@ -141,7 +143,21 @@ public final class CodexInstaller {
      * @return that installer
      */
     public CodexInstaller pullingAlways() {
-        return new CodexInstaller(codexHome, jar, output, instructions, hooks, true);
+        return new CodexInstaller(codexHome, jar, output, instructions, hooks, true, java);
+    }
+
+    /**
+     * The same installer, with a server and hooks that run a given Java
+     * rather than the {@code java} on the PATH Codex starts them with, as
+     * {@link HookInstaller#runningWith} explains.
+     *
+     * @param executable the Java to run, by its path
+     * @return that installer
+     */
+    public CodexInstaller runningWith(Path executable) {
+        return new CodexInstaller(codexHome, jar, output, instructions,
+                hooks.map(installer -> installer.runningWith(executable)), pullAlways,
+                tomlString(executable.toAbsolutePath().normalize().toString()));
     }
 
     /**
@@ -253,10 +269,19 @@ public final class CodexInstaller {
      * @return the TOML
      */
     String serverEntry() {
-        String path = jar.toAbsolutePath().normalize().toString()
-                .replace(BACKSLASH, ESCAPED_BACKSLASH).replace(QUOTE, ESCAPED_QUOTE);
+        String path = tomlString(jar.toAbsolutePath().normalize().toString());
         String environment = pullAlways ? PULL_ALWAYS_LINE : BLANK;
-        return String.format(SERVER_ENTRY, SERVER_NAME, path, TOOL_TIMEOUT_SECONDS, environment, SERVER_NAME);
+        return String.format(SERVER_ENTRY, SERVER_NAME, java, path, TOOL_TIMEOUT_SECONDS, environment, SERVER_NAME);
+    }
+
+    /**
+     * A path as the inside of a TOML basic string.
+     *
+     * @param path the path
+     * @return it, with its backslashes and quotes escaped
+     */
+    private static String tomlString(String path) {
+        return path.replace(BACKSLASH, ESCAPED_BACKSLASH).replace(QUOTE, ESCAPED_QUOTE);
     }
 
     /**
@@ -326,21 +351,15 @@ public final class CodexInstaller {
     }
 
     /**
-     * Writes a file through a temporary one, so an interrupted write never
-     * leaves half of it behind, and where a symbolic link points, as
-     * {@link HookInstaller} does for the same reason.
+     * Writes a file whole, where a link points and with the permissions it
+     * had, as {@link ConfigFile} does for every installer.
      *
      * @param file the file
      * @param lines its new content
      * @throws IOException when it cannot be written
      */
     private static void write(Path file, List<String> lines) throws IOException {
-        Path target = Files.isSymbolicLink(file) ? file.toRealPath() : file;
-        Files.createDirectories(target.getParent());
-        Path temporary = target.resolveSibling(target.getFileName() + TEMPORARY_SUFFIX);
-        Files.writeString(temporary, String.join(System.lineSeparator(), lines) + System.lineSeparator(),
-                StandardCharsets.UTF_8);
-        Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+        ConfigFile.replace(file, String.join(System.lineSeparator(), lines) + System.lineSeparator());
     }
 
     /**

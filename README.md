@@ -539,6 +539,7 @@ which no tool reports.
 | `SHERIFF_RULES_CATALOG` | found or extracted | A catalog used as is |
 | `SHERIFF_EXPORT_DIR` | unset | Where the agent copies Sheriff's JSON |
 | `SHERIFF_STOP_MAX_BLOCKS` | `5` | How many times in a row the Stop hook sends a session back while errors remain, before it lets the turn end so as not to loop. A stop with nothing changed since the last block is sent back once more, saying so; a second such stop in a row goes through, as a model whose edits are denied cannot change anything. The installers give the hook 900 s, as with `SHERIFF_STOP_RUNS_TESTS=1` it runs the tests |
+| `SHERIFF_JAVA` | unset | The Java the jar's installers write into the user's configuration (Codex's and Antigravity's server, and the hooks of every project) instead of `java` found on the PATH. `install.sh` sets it to the Java it checked, and registers Claude Code's server with that Java too, so that an editor started from the desktop, with another PATH, still starts it. Ignored when it names nothing that can be run; a project's own hooks always run `java` |
 | `SHERIFF_FAIL_FAST` | unset | `1` makes the hooks run Sheriff with `--fail-fast`: it stops at the first error, so the check is quicker and reports one finding. Never used by the loop or `sheriff_fix`, which need all of them. The installers write it as an option of the hook command instead (`install.sh --fail-fast`) |
 | `VERIFICATION_TEST_CMD` | from the build tool | The project's test command |
 | `AI_BACKEND` | `claude_cli` | Who answers in the loop, below |
@@ -551,6 +552,12 @@ which no tool reports.
 | `anthropic_api` | `ANTHROPIC_API_KEY`; `ANTHROPIC_MODEL` |
 | `openai_api` | `OPENAI_API_KEY`; `OPENAI_MODEL`, `OPENAI_BASE_URL` |
 | `local` | Any OpenAI-compatible server (Ollama by default, `OPENAI_BASE_URL` for others) |
+
+The three API backends edit through two tools of the agent's own,
+`read_file` and `write_file`, and both are kept to the component: a path
+outside it, by `..` or by a symbolic link that leads out, is refused, so a
+model never reads the other projects beside a single-module one, nor writes
+into them.
 
 With Ollama, raise the model's context first (its default of 4096 tokens is
 shorter than a prompt plus a file): a Modelfile with `PARAMETER num_ctx 16384`,

@@ -136,4 +136,47 @@ class DeterministicFixerTests {
         assertEquals(2, report.errorsBefore());
         assertEquals(List.of("SortedImport"), report.codes());
     }
+
+    @Test
+    @DisplayName("the loop's pass and sheriff_fix give Sheriff the same commands, so the same code ends the same")
+    void theLoopAndSheriffFixRunTheSameCommands() {
+        FakeProcessRunner loop = FakeProcessRunner.always(ProcessOutcome.completed(0, OUTPUT, ""));
+        FakeProcessRunner tool = FakeProcessRunner.always(ProcessOutcome.completed(0, OUTPUT, ""));
+        fixer(loop, List::of).run();
+        new com.kaizten.sheriff.infrastructure.mcp.SheriffRunner(tool, "kaizten/sheriff:latest", repository,
+                Duration.ofSeconds(300)).fix("app", "JAVA", "");
+
+        assertEquals(withoutNames(tool.commands()), withoutNames(loop.commands()));
+    }
+
+    @Test
+    @DisplayName("a fix that never ran is reported as a pass that could not run, not as repairs handed over")
+    void aFixThatNeverRanIsReported() {
+        FakeProcessRunner runner = new FakeProcessRunner(List.of(ProcessOutcome.completed(0, OUTPUT, ""),
+                ProcessOutcome.unavailable("Cannot connect to the Docker daemon")));
+
+        DeterministicFixReport report = fixer(runner, CATALOG).run();
+
+        assertFalse(report.ran());
+        assertTrue(report.failure().contains("Docker daemon"), report.failure());
+        assertFalse(Files.exists(repository.resolve("sheriff_errors.json")), "the state was left behind");
+    }
+
+    /**
+     * Docker commands without the container's name, which is new every run.
+     *
+     * @param commands the commands as run
+     * @return the same, each without its {@code --name} and the name after it
+     */
+    private static List<List<String>> withoutNames(List<List<String>> commands) {
+        return commands.stream().map(command -> {
+            List<String> copy = new java.util.ArrayList<>(command);
+            int name = copy.indexOf("--name");
+            if (name >= 0) {
+                copy.remove(name + 1);
+                copy.remove(name);
+            }
+            return (List<String>) copy;
+        }).toList();
+    }
 }

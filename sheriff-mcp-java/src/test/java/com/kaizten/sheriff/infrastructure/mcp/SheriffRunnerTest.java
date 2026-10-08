@@ -1,6 +1,7 @@
 package com.kaizten.sheriff.infrastructure.mcp;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -154,17 +155,44 @@ final class SheriffRunnerTest {
         String one = "[{\"file\":\"/data/A.java\",\"description\":\"e\",\"howToSolve\":\"h\","
                 + "\"referenceCode\":\"JavaLineCommentsChecker\",\"type\":\"ERROR\"}]";
         QueuedProcessRunner processes = new QueuedProcessRunner(
-                ProcessOutcome.completed(0, two, ""), ProcessOutcome.completed(1, "", ""),
-                ProcessOutcome.completed(1, "", ""), ProcessOutcome.completed(0, one, ""),
-                ProcessOutcome.completed(0, one, ""), ProcessOutcome.completed(1, "", ""),
-                ProcessOutcome.completed(1, "", ""), ProcessOutcome.completed(0, one, ""));
+                ProcessOutcome.completed(0, two, ""), ProcessOutcome.completed(1, "fix report", ""),
+                ProcessOutcome.completed(1, "fix report", ""), ProcessOutcome.completed(0, one, ""),
+                ProcessOutcome.completed(1, "fix report", ""), ProcessOutcome.completed(1, "fix report", ""),
+                ProcessOutcome.completed(0, one, ""));
         FixRun run = new SheriffRunner(processes, IMAGE, repository, TIMEOUT).fix("conversor-temperatura", "JAVA", "");
 
         assertEquals(2, run.before().total());
         assertEquals(1, run.after().total());
         List<String> named = processes.commands.get(2);
         assertEquals("EmptyLinesInMethod,JavaLineCommentsChecker", named.get(named.indexOf("--fixers") + 1));
-        assertEquals(8, processes.commands.size(), "a second round, which repaired nothing, and no third");
+        assertEquals(7, processes.commands.size(),
+                "each round's analysis measures the one before and feeds its own repair; the third repaired nothing");
+    }
+
+    @Test
+    @DisplayName("a clean component is analyzed once and given to no fixer")
+    void aCleanComponentRunsNoFixer() {
+        QueuedProcessRunner processes = new QueuedProcessRunner(ProcessOutcome.completed(0, "", ""));
+
+        FixRun run = new SheriffRunner(processes, IMAGE, repository, TIMEOUT).fix("conversor-temperatura", "JAVA", "");
+
+        assertEquals(0, run.after().total());
+        assertEquals(1, processes.commands.size(), processes.commands.toString());
+    }
+
+    @Test
+    @DisplayName("a fix that never ran is a repair that could not run, not one that found nothing to do")
+    void aFixThatNeverRanIsUnavailable() {
+        String before = "[{\"file\":\"/data/A.java\",\"description\":\"d\",\"howToSolve\":\"h\","
+                + "\"referenceCode\":\"RULE_A\",\"type\":\"ERROR\"}]";
+        SheriffRunner runner = runner(ProcessOutcome.completed(0, before, ""),
+                ProcessOutcome.unavailable("Cannot connect to the Docker daemon"));
+
+        SheriffUnavailableException exception = assertThrows(SheriffUnavailableException.class,
+                () -> runner.fix("conversor-temperatura", "JAVA", ""));
+
+        assertTrue(exception.getMessage().contains("Docker daemon"), exception.getMessage());
+        assertFalse(Files.exists(repository.resolve("sheriff_errors.json")), "the state was left behind");
     }
 
     @Test

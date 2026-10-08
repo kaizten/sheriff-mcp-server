@@ -10,6 +10,9 @@ import java.io.IOException;
 import java.io.PrintStream;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.function.BiFunction;
 import java.util.function.Supplier;
 
@@ -26,6 +29,14 @@ import java.util.function.Supplier;
  * and {@code tools/call} runs one and answers with a content block. {@code
  * ping} is answered with an empty result, and anything else is
  * method-not-found rather than a reason to stop serving.
+ *
+ * <p>A {@code tools/call} runs on a thread of its own, one call at a time in
+ * the order they arrived, and everything else is answered at once: a call can
+ * take minutes (Sheriff, then the project's tests), and while it ran this
+ * server read nothing more, so a client's {@code ping} went unanswered until
+ * it finished. Responses are written whole, one per line, whichever thread
+ * writes them; when the input ends, the calls already read are answered
+ * before this returns.
  *
  * <p>A tool that fails answers as a normal result carrying {@code isError},
  * never as a JSON-RPC error: a JSON-RPC error means the call itself was
@@ -76,12 +87,15 @@ public final class JsonRpcServer {
     private static final String NOT_AN_OBJECT = "A request must be a JSON object.";
     private static final String INSTRUCTIONS_FIELD = "instructions";
     private static final String NO_INSTRUCTIONS = "";
+    private static final String CALL_THREAD = "sheriff-call";
+    private static final long DRAIN_HOURS = 6;
 
     private final Supplier<List<Map<String, Object>>> listTools;
     private final BiFunction<String, Map<String, Object>, ToolOutcome> callTool;
     private final String serverName;
     private final String instructions;
     private final ObjectMapper json = new ObjectMapper();
+    private final Object writing = new Object();
 
     /**
      * Wires the protocol layer to what actually answers the calls.
@@ -246,33 +260,61 @@ public final class JsonRpcServer {
      * @throws IOException when the input cannot be read
      */
     public void serve(BufferedReader input, PrintStream output) throws IOException {
-        String line = input.readLine();
-        while (line != null) {
-            String trimmed = line.strip();
-            if (!trimmed.isEmpty()) {
-                write(output, oneLine(trimmed));
+        ExecutorService calls = Executors.newSingleThreadExecutor(runnable -> {
+            Thread thread = new Thread(runnable, CALL_THREAD);
+            thread.setDaemon(true);
+            return thread;
+        });
+        try {
+            String line = input.readLine();
+            while (line != null) {
+                String trimmed = line.strip();
+                if (!trimmed.isEmpty()) {
+                    dispatch(trimmed, output, calls);
+                }
+                line = input.readLine();
             }
-            line = input.readLine();
+        } finally {
+            calls.shutdown();
+            awaitCalls(calls);
         }
     }
 
     /**
-     * The response to one raw line of input, catching whatever it takes to
-     * keep the session alive: one bad call must never end it.
+     * Answers one raw line of input: a {@code tools/call} on the calls'
+     * thread, anything else at once.
      *
      * @param line the request, not yet parsed
-     * @return the response to write, or {@code null} for a notification
+     * @param output where the response goes
+     * @param calls the thread that runs the tools
      */
-    private ObjectNode oneLine(String line) {
+    private void dispatch(String line, PrintStream output, ExecutorService calls) {
         JsonNode message;
         try {
             message = json.readTree(line);
         } catch (JsonProcessingException exception) {
-            return error(null, PARSE_ERROR, String.format(INVALID_JSON, exception.getMessage()));
+            write(output, error(null, PARSE_ERROR, String.format(INVALID_JSON, exception.getMessage())));
+            return;
         }
         if (!message.isObject()) {
-            return error(null, INVALID_REQUEST, NOT_AN_OBJECT);
+            write(output, error(null, INVALID_REQUEST, NOT_AN_OBJECT));
+            return;
         }
+        if (message.has(ID_FIELD) && TOOLS_CALL_METHOD.equals(message.path(METHOD_FIELD).asText(EMPTY_METHOD))) {
+            calls.execute(() -> write(output, answer(message)));
+        } else {
+            write(output, answer(message));
+        }
+    }
+
+    /**
+     * The response to one parsed message, catching whatever it takes to keep
+     * the session alive: one bad call must never end it.
+     *
+     * @param message the request, a JSON object
+     * @return the response to write, or {@code null} for a notification
+     */
+    private ObjectNode answer(JsonNode message) {
         try {
             return handle(message);
         } catch (RuntimeException exception) {
@@ -282,8 +324,23 @@ public final class JsonRpcServer {
     }
 
     /**
+     * Waits for the calls already read to be answered, for when the input
+     * has ended: a client that closes its end may still be reading.
+     *
+     * @param calls the thread that runs the tools, already shut down
+     */
+    private static void awaitCalls(ExecutorService calls) {
+        try {
+            calls.awaitTermination(DRAIN_HOURS, TimeUnit.HOURS);
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    /**
      * Writes one response as a single line and flushes it -- a client
-     * reading line by line never sees a partial message.
+     * reading line by line never sees a partial message, nor two answers
+     * written at once by two threads interleaved.
      *
      * @param output where to write
      * @param payload the response, {@code null} to write nothing
@@ -292,7 +349,9 @@ public final class JsonRpcServer {
         if (payload == null) {
             return;
         }
-        output.println(payload.toString());
-        output.flush();
+        synchronized (writing) {
+            output.println(payload.toString());
+            output.flush();
+        }
     }
 }

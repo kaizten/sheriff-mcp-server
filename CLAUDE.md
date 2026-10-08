@@ -97,6 +97,20 @@ the server's registration in both assistants (`claude mcp add -e`, and
 `--install-codex --pull-always` as `env` in the entry), and `--no-mcp`, which
 CI uses with `--no-pull`, touches no assistant's configuration at all.
 
+Every installer writes an assistant's file through `ConfigFile`: whole, where
+a symbolic link points, and **with the permissions it had**. A `settings.json`
+or a `config.toml` only its owner could read used to come out of an install
+readable by every user, and both can hold tokens. The server, and the hooks of
+every project, run the Java `install.sh` checked, by the path the shell found
+it at (`SHERIFF_JAVA`, read by `--install-hooks --user`, `--install-codex` and
+`--install-antigravity`): an editor started from the desktop can have another
+PATH, and the server then only showed "connection closed". A project's own
+`.claude/settings.json`, which a team commits, keeps `java`, and `install.ps1`
+passes none, as Windows installs each JDK update in a folder named after its
+version. An option the jar does not know is refused with exit code 2; it used
+to start the MCP server, so `--instal-hooks` waited on standard input or ended
+with nothing done and 0.
+
 **The same script installs a release**, which is how anyone without a clone
 gets the tools: read from a pipe, or with `--release[=TAG]`, it has no
 checkout, so it downloads the release's jar and checksum with `gh`, logged
@@ -251,8 +265,8 @@ the table, including `SHERIFF_EXPORT_DIR`.
   `domain/model/`, two in `application/service/`). `JAVA_DDD` is the same. So
   `Rules.withBaseProfiles` puts the base profile before every architecture
   profile, wherever a profile comes from (argument, variable, declaration,
-  plugin parameter), and the three places that run Sheriff (the analyzer,
-  `SheriffRunner`, `DeterministicFixer`) split the comma-separated list: one
+  plugin parameter), and the two places that run Sheriff (the analyzer and
+  `SheriffRepair`) split the comma-separated list: one
   analysis per profile, merged by `AnalysisResult.merged`, and repairs profile
   by profile, because `fix` reads the state of the `test` just before it.
   Declaring an architecture must add checks, never take the base ones away.
@@ -420,10 +434,15 @@ them before the tests. It reads Java declarations by pattern, not by parsing,
 and compares with `git show HEAD:`; with no repository it checks nothing.
 `scripts/e2e.sh` scenario 19 runs it against real git and Sheriff.
 
-`sheriff_fix`, the loop's first pass and `sheriff:fix` repair the same way
-(`SheriffRunner.fix` and `DeterministicFixer`): Sheriff's default set, then
-`--fixers` with every rule found, again for each profile whose count the round
-before lowered, up to three rounds.
+`sheriff_fix`, the loop's first pass and `sheriff:fix` repair with one class,
+`SheriffRepair` (`SheriffRunner.fix` and `DeterministicFixer` only call it
+and word its outcome): Sheriff's default set, then `--fixers` with every rule
+found, again for each profile whose count the round before lowered, up to
+three rounds, each round's analysis measuring the one before; a `fix` that
+did not run is a failure, not a repair that found nothing. It used to be
+written twice, and the copies had drifted (flags, rounds, a dead `fix`
+noticed by one and not the other); `DeterministicFixerTests` now checks the
+loop and `sheriff_fix` give Sheriff the same commands.
 
 ## Architecture
 
@@ -502,7 +521,12 @@ not of the loop**: a model that cannot emit structured `tool_calls` never calls
 one, and one that can may still call `read_file` and stop without writing —
 both observed on the same local model across two runs of the same file. Either
 way nothing unintended happens; the loop parks the file it made no progress on
-and cuts.
+and cuts. **Both tools are kept to the component** (`FileTools`, given it by
+`Composition`), reading as much as writing, with symbolic links followed to
+where they lead: paths stay relative to the mount, but for a single-module
+project the mount is the folder of every other project beside it, and the
+model could read their `.env` files and, in the repair pass, write into them
+where no `git status` of the component would show it.
 
 `AI_BACKEND=claude_cli` (the default) uses the Claude Code subscription and
 needs no API key. The loop works on its own branch, commits each pass, and
@@ -597,13 +621,20 @@ Two more things the loop and the tools rely on. The prompt reaches
 `MountLock` for its mount, across threads and processes, with the whole
 `test`, `fix`, `test` sequence held at once: Sheriff keeps its state at the
 root of the mount, so two sibling single-module projects checked together
-used to clobber each other's.
+used to clobber each other's. The lock files, and the markers the hooks
+leave for their next run (gate, turn, stop), live in a folder of the
+temporary directory per user (`TemporaryFolders`): shared, the first user to
+create one left it unwritable for the others. Markers older than a week are
+pruned when their folder is written; lock files never are.
 
 The MCP server writes the protocol to the stream it claims at startup and
 points `System.out` at stderr. Anything in the core that prints (the loop
 does) must never reach the JSON-RPC channel. `--agent` is dispatched before
-that, so the agent's CLI keeps its stdout. Background tasks run on one daemon
-thread, one at a time; when the client disconnects the server waits for them
+that, so the agent's CLI keeps its stdout. A `tools/call` runs on a thread of
+its own, one at a time in the order they came, so a `ping` or a `tools/list`
+is answered while Sheriff or the tests run; responses are written whole, and
+when the input ends the calls already read are answered first. Background
+tasks run on one daemon thread, one at a time; when the client disconnects the server waits for them
 to finish rather than cut a loop mid-pass. A client that stops the server
 instead gets no such courtesy: Codex ends a session with SIGTERM to the whole
 process group and SIGKILL about 0.3 s later. A shutdown hook then records

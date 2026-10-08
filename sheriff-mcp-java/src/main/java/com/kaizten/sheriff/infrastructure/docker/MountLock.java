@@ -1,5 +1,6 @@
 package com.kaizten.sheriff.infrastructure.docker;
 
+import com.kaizten.sheriff.infrastructure.process.TemporaryFolders;
 import java.io.IOException;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
@@ -27,8 +28,9 @@ import java.util.function.Supplier;
  *
  * <p>The lock is reentrant, so a whole {@code test}, {@code fix}, {@code test}
  * sequence can hold it while each run inside it asks again. Between processes
- * it is a file lock, kept in the temporary directory rather than in the
- * mount, where the scope check would read it as a change; the operating
+ * it is a file lock, kept in the user's own folder of the temporary
+ * directory ({@link TemporaryFolders}) rather than in the mount, where the
+ * scope check would read it as a change; the operating
  * system releases it if the holder dies. Best effort: a lock file that cannot
  * be created means running unlocked, as before, rather than not running.
  */
@@ -37,7 +39,6 @@ public final class MountLock {
     private static final Map<Path, ReentrantLock> IN_PROCESS = new ConcurrentHashMap<>();
     private static final Map<Path, FileChannel> CHANNELS = new ConcurrentHashMap<>();
     private static final Map<Path, FileLock> BETWEEN_PROCESSES = new ConcurrentHashMap<>();
-    private static final String TEMPORARY_DIRECTORY = "java.io.tmpdir";
     private static final String LOCK_DIRECTORY = "sheriff-locks";
     private static final String LOCK_SUFFIX = ".lock";
     private static final String DIGEST = "SHA-256";
@@ -127,7 +128,6 @@ public final class MountLock {
      */
     static Path lockFileFor(Path mount) throws NoSuchAlgorithmException {
         byte[] digest = MessageDigest.getInstance(DIGEST).digest(mount.toString().getBytes(StandardCharsets.UTF_8));
-        return Path.of(System.getProperty(TEMPORARY_DIRECTORY), LOCK_DIRECTORY,
-                HexFormat.of().formatHex(digest) + LOCK_SUFFIX);
+        return TemporaryFolders.forUser(LOCK_DIRECTORY).resolve(HexFormat.of().formatHex(digest) + LOCK_SUFFIX);
     }
 }

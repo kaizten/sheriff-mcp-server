@@ -73,10 +73,10 @@ final class SheriffGuidelinesTool {
      * @return that tool
      */
     Tool definition() {
-        Map<String, Object> schema = Schemas.objectSchema(Map.of(
-                QUERY_ARGUMENT, Schemas.stringProperty(QUERY_HELP),
-                ToolContext.REFERENCE_CODE_ARGUMENT, Schemas.stringProperty(REFERENCE_CODE_HELP),
-                ToolContext.PROFILE_ARGUMENT, Schemas.stringProperty(ToolContext.PROFILE_HELP)));
+        Map<String, Object> schema = Schemas.objectSchema(List.of(
+                Map.entry(QUERY_ARGUMENT, Schemas.stringProperty(QUERY_HELP)),
+                Map.entry(ToolContext.REFERENCE_CODE_ARGUMENT, Schemas.stringProperty(REFERENCE_CODE_HELP)),
+                Map.entry(ToolContext.PROFILE_ARGUMENT, Schemas.stringProperty(ToolContext.PROFILE_HELP))));
         return new Tool(context.guidelinesTool(), DESCRIPTION, schema, ANNOTATIONS, this::handle);
     }
 

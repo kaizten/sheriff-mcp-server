@@ -1,5 +1,6 @@
 package com.kaizten.sheriff.infrastructure.hook;
 
+import com.kaizten.sheriff.infrastructure.process.TemporaryFolders;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -31,7 +32,6 @@ import java.util.Optional;
  */
 public final class TurnStart {
 
-    private static final String TEMPORARY_DIRECTORY = "java.io.tmpdir";
     private static final String MEMORY_DIRECTORY = "sheriff-turn";
     private static final String DIGEST = "SHA-256";
     private static final String LINE_SEPARATOR = "\n";
@@ -43,10 +43,11 @@ public final class TurnStart {
     private final Path directory;
 
     /**
-     * Records in the system's temporary directory.
+     * Records in the user's own folder of the system's temporary directory,
+     * where records older than a week are pruned.
      */
     public TurnStart() {
-        this(Path.of(System.getProperty(TEMPORARY_DIRECTORY), MEMORY_DIRECTORY));
+        this(TemporaryFolders.forUser(MEMORY_DIRECTORY));
     }
 
     /**
@@ -75,6 +76,7 @@ public final class TurnStart {
                 content.append(component).append(FIELD_SEPARATOR).append(fingerprint).append(LINE_SEPARATOR));
         try {
             Files.createDirectories(directory);
+            TemporaryFolders.prune(directory, TemporaryFolders.MARKER_LIFETIME);
             Files.writeString(fileFor(session), content);
         } catch (IOException exception) {
             return;

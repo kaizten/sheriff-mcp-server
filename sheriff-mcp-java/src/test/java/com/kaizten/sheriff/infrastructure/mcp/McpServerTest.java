@@ -11,6 +11,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -102,5 +103,45 @@ final class McpServerTest {
         assertEquals("1", McpServer.hookEnvironment(environment, List.of("--hook-stop", "--fail-fast"))
                 .get("SHERIFF_FAIL_FAST"));
         assertEquals(environment, McpServer.hookEnvironment(environment, List.of("--hook-stop")));
+    }
+
+    @Test
+    @DisplayName("a mistyped option is refused: it used to start the server, which waited or ended doing nothing")
+    void aMistypedOptionIsNamed() {
+        assertEquals(Optional.of("--instal-hooks"), McpServer.unknownOption(List.of("--instal-hooks", "--user")));
+        assertEquals(Optional.of("-x"), McpServer.unknownOption(List.of("-x")));
+        assertEquals(Optional.of("--profile=JAVA"), McpServer.unknownOption(List.of("--check", "--profile=JAVA")));
+    }
+
+    @Test
+    @DisplayName("every option the jar documents, and the values that follow them, are accepted")
+    void theDocumentedOptionsAreKnown() {
+        List<List<String>> commandLines = List.of(List.of(),
+                List.of("--check", "--component", "app", "--profile", "JAVA"),
+                List.of("--call", "sheriff_fix", "component=app", "verify=true"),
+                List.of("--hook-stop", "--fail-fast"), List.of("--install-hooks", "--user", "--fail-fast"),
+                List.of("--uninstall-hooks", "--user"), List.of("--install-codex", "--no-hooks", "--pull-always"),
+                List.of("--uninstall-codex"), List.of("--install-antigravity", "--pull-always"),
+                List.of("--uninstall-antigravity"), List.of("--tools"), List.of("--help"), List.of("-h"),
+                List.of("--version"), List.of("--instructions"), List.of("--hook-gate"), List.of("--hook-turn"));
+
+        for (List<String> commandLine : commandLines) {
+            assertEquals(Optional.empty(), McpServer.unknownOption(commandLine), commandLine.toString());
+        }
+    }
+
+    @Test
+    @DisplayName("SHERIFF_JAVA is used only when it names a file that can be run")
+    void theJavaInstallShCheckedIsUsedWhenItCanRun() throws IOException {
+        Path java = Files.writeString(workspace.resolve("java"), "#!/bin/sh\n");
+        boolean runnable = java.toFile().setExecutable(true);
+
+        assertEquals(Optional.empty(), McpServer.chosenJava(Map.of()));
+        assertEquals(Optional.empty(), McpServer.chosenJava(Map.of("SHERIFF_JAVA", " ")));
+        assertEquals(Optional.empty(), McpServer.chosenJava(Map.of("SHERIFF_JAVA",
+                workspace.resolve("missing").toString())));
+        if (runnable && Files.isExecutable(java)) {
+            assertEquals(Optional.of(java), McpServer.chosenJava(Map.of("SHERIFF_JAVA", java.toString())));
+        }
     }
 }

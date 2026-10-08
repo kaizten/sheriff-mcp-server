@@ -45,12 +45,17 @@ jobs:
             echo "::error::the tag is $GITHUB_REF_NAME, but the jar says '$reported'"
             exit 1
           fi
-      - name: No rule catalog in the jar
+      # The Maven plugin bundles the catalog when one sits beside the MCP
+      # module at build time. The release does not publish the plugin, but a
+      # jar built here is the one anyone would take from it.
+      - name: No rule catalog in the jars
         run: |
-          if unzip -l sheriff-mcp-java/target/sheriff-mcp.jar | grep -E 'rules_catalog\.json|SHERIFF_RULES\.md'; then
-            echo "::error::the jar carries the rule catalog"
-            exit 1
-          fi
+          for jar in sheriff-mcp-java/target/sheriff-mcp.jar sheriff-maven-plugin/target/sheriff-maven-plugin-*.jar; do
+            if unzip -l "$jar" | grep -E 'rules_catalog\.json|SHERIFF_RULES\.md'; then
+              echo "::error::$jar carries the rule catalog"
+              exit 1
+            fi
+          done
       - name: The user's playbook, in Spanish and English
         run: |
           sudo apt-get update

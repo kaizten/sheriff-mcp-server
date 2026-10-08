@@ -57,6 +57,8 @@ class MountLockTests {
     void theLockFileIsNotInTheMount() throws Exception {
         MountLock.holding(mount, () -> null);
         assertTrue(!MountLock.lockFileFor(mount.toAbsolutePath().normalize()).startsWith(mount));
+        assertTrue(MountLock.lockFileFor(mount.toAbsolutePath().normalize()).getParent().getFileName().toString()
+                .startsWith("sheriff-locks-"), "one user's lock folder could not be written by another");
         try (var entries = Files.list(mount)) {
             assertEquals(0, entries.count());
         }

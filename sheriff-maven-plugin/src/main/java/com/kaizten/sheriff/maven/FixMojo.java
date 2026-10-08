@@ -36,88 +36,64 @@ import org.apache.maven.plugins.annotations.Parameter;
 public class FixMojo extends SheriffMojo {
 
     /**
-
      * Reported when Sheriff itself could not be run.
-
      */
     private static final String UNAVAILABLE = "Sheriff's own fixers could not run: %s";
 
     /**
-
      * Reported when nothing among the findings has a fixer.
-
      */
     private static final String NOTHING = "Nothing Sheriff can repair by itself among %d error(s).";
 
     /**
-
      * Reported when fixers were run. What they actually repaired is the next
      * analysis's answer, reported by {@link #OUTCOME}.
-
      */
     private static final String APPLIED = "Sheriff's own fixers were run for %d rule(s), free of charge: %s";
 
     /**
-
      * Warned for each fixer Sheriff said it could not apply.
-
      */
     private static final String NOT_APPLIED = "Sheriff could not apply its fixer for %s";
 
     /**
-
      * What the repair achieved, measured by analyzing again.
-
      */
     private static final String OUTCOME = "Errors under %s: %d before the repair, %d after (%d repaired).";
 
     /**
-
      * Between the rule ids in that report.
-
      */
     private static final String SEPARATOR = ", ";
 
     /**
-
      * The count that means nothing is left.
-
      */
     private static final int NONE = 0;
 
     /**
-
      * Reported when the analysis after the repair could not run.
-
      */
     private static final String UNAVAILABLE_AFTER = "Sheriff could not analyze the module after the repair: %s";
 
     /**
-
      * Reported when the repair left the module clean.
-
      */
     private static final String CLEAN = "No errors left under %s.";
 
     /**
-
      * Reported when errors are left after the repair.
-
      */
     private static final String REMAINING =
             "%d error(s) under %s in %s that Sheriff could not repair by itself; they need editing.";
 
     /**
-
      * Appended when the build is allowed to continue anyway.
-
      */
     private static final String TOLERATED = "%s Not failing the build (sheriff.failOnRemaining=false).";
 
     /**
-
      * Report what is left without failing the goal.
-
      */
     @Parameter(property = "sheriff.failOnRemaining", defaultValue = "true")
     boolean failOnRemaining = true;
