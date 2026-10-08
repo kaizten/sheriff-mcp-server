@@ -12,6 +12,8 @@ import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 
 /**
@@ -108,5 +110,47 @@ class FileToolsTests {
         assertTrue(scoped().isAllowed("app/A.java"));
         assertFalse(scoped().isAllowed("app/B.java"));
         assertTrue(new FileTools(repository, null).isAllowed("anything.java"));
+    }
+
+    @Test
+    @DisplayName("kept to the component, the model reads nothing beside it: for one module, that is every other project")
+    void theWorkspaceKeepsTheModelOutOfTheProjectsBesideIt() throws IOException {
+        Files.createDirectories(repository.resolve("other"));
+        Files.writeString(repository.resolve("other/.env"), "TOKEN=secret");
+        FileTools tools = new FileTools(repository, repository.resolve("app"), null);
+
+        assertTrue(tools.readFile("app/A.java").contains("class A"));
+        String refused = tools.readFile("other/.env");
+        assertTrue(refused.startsWith("Refused") && refused.contains("'app'"), refused);
+        assertTrue(tools.writeFile("other/new.java", "no").startsWith("Refused"));
+        assertFalse(Files.exists(repository.resolve("other/new.java")));
+        assertTrue(tools.writeFile("app/B.java", "repaired").startsWith("Wrote"));
+    }
+
+    @Test
+    @DisabledOnOs(value = OS.WINDOWS, disabledReason = "creating a symbolic link needs privileges on Windows")
+    @DisplayName("a link inside the component that leads out of it is refused, as .. is")
+    void aLinkThatLeadsOutIsRefused() throws IOException {
+        Path outside = Files.createDirectories(repository.resolve("other"));
+        Files.writeString(outside.resolve("secret.txt"), "secret");
+        Files.createSymbolicLink(repository.resolve("app/link"), outside);
+        Files.createSymbolicLink(repository.resolve("app/dangling.java"), outside.resolve("created.java"));
+        FileTools tools = new FileTools(repository, repository.resolve("app"), null);
+
+        assertTrue(tools.readFile("app/link/secret.txt").startsWith("Refused"));
+        assertTrue(tools.writeFile("app/link/new.java", "no").startsWith("Refused"));
+        assertTrue(tools.writeFile("app/dangling.java", "no").startsWith("Refused"));
+        assertFalse(Files.exists(outside.resolve("new.java")));
+        assertFalse(Files.exists(outside.resolve("created.java")));
+    }
+
+    @Test
+    @DisabledOnOs(value = OS.WINDOWS, disabledReason = "creating a symbolic link needs privileges on Windows")
+    @DisplayName("a link that stays inside the component is followed")
+    void aLinkThatStaysInsideIsFollowed() throws IOException {
+        Files.createSymbolicLink(repository.resolve("app/alias.java"), repository.resolve("app/A.java"));
+        FileTools tools = new FileTools(repository, repository.resolve("app"), null);
+
+        assertTrue(tools.readFile("app/alias.java").contains("class A"));
     }
 }

@@ -78,6 +78,7 @@ public final class AnthropicApiFixer implements CodeFixer {
     private final long maxTokens;
     private final int maxToolIterations;
     private final Path repositoryRoot;
+    private final Path workspace;
     private final PromptLog promptLog;
 
     /**
@@ -100,12 +101,39 @@ public final class AnthropicApiFixer implements CodeFixer {
             int maxToolIterations,
             Path repositoryRoot,
             PromptLog promptLog) {
+        this(apiKey, baseUrl, model, maxTokens, maxToolIterations, repositoryRoot, repositoryRoot, promptLog);
+    }
+
+    /**
+     * Wires the fixer, with its file tools kept to one folder of the
+     * repository, as {@link FileTools} explains.
+     *
+     * @param apiKey the key to authenticate with, empty when none is set
+     * @param baseUrl where the Messages API lives, empty for Anthropic's own
+     *     endpoint
+     * @param model the model to ask
+     * @param maxTokens the cap on one response
+     * @param maxToolIterations how many tool-calling turns are allowed
+     * @param repositoryRoot the directory the model's paths are relative to
+     * @param workspace the only folder the tools may read or write in
+     * @param promptLog where to record what was asked
+     */
+    public AnthropicApiFixer(
+            String apiKey,
+            String baseUrl,
+            String model,
+            long maxTokens,
+            int maxToolIterations,
+            Path repositoryRoot,
+            Path workspace,
+            PromptLog promptLog) {
         this.apiKey = apiKey;
         this.baseUrl = baseUrl;
         this.model = model;
         this.maxTokens = maxTokens;
         this.maxToolIterations = maxToolIterations;
         this.repositoryRoot = repositoryRoot;
+        this.workspace = workspace;
         this.promptLog = promptLog;
     }
 
@@ -121,7 +149,7 @@ public final class AnthropicApiFixer implements CodeFixer {
         if (apiKey.isBlank()) {
             return FixResult.failed(MISSING_KEY);
         }
-        FileTools tools = new FileTools(repositoryRoot, request.allowedFiles());
+        FileTools tools = new FileTools(repositoryRoot, workspace, request.allowedFiles());
         List<String> transcript = new ArrayList<>();
         try {
             FixResult result = converse(request, tools, transcript);

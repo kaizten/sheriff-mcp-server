@@ -516,7 +516,12 @@ not of the loop**: a model that cannot emit structured `tool_calls` never calls
 one, and one that can may still call `read_file` and stop without writing —
 both observed on the same local model across two runs of the same file. Either
 way nothing unintended happens; the loop parks the file it made no progress on
-and cuts.
+and cuts. **Both tools are kept to the component** (`FileTools`, given it by
+`Composition`), reading as much as writing, with symbolic links followed to
+where they lead: paths stay relative to the mount, but for a single-module
+project the mount is the folder of every other project beside it, and the
+model could read their `.env` files and, in the repair pass, write into them
+where no `git status` of the component would show it.
 
 `AI_BACKEND=claude_cli` (the default) uses the Claude Code subscription and
 needs no API key. The loop works on its own branch, commits each pass, and

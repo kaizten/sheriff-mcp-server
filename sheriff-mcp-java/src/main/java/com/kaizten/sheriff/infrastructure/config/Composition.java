@@ -289,6 +289,7 @@ public final class Composition {
                     configuration.apiMaxTokens(),
                     configuration.apiMaxToolIterations(),
                     configuration.targetRepository(),
+                    componentDirectory(),
                     log);
         }
         if (CODEX_CLI_BACKEND.equals(backend)) {
@@ -351,7 +352,19 @@ public final class Composition {
                 configuration.openAiMaxToolIterations(),
                 keyRequired,
                 configuration.targetRepository(),
+                componentDirectory(),
                 log);
+    }
+
+    /**
+     * The folder the API backends' file tools are kept to: the component,
+     * as the command-line backends are, and never the mount, which for a
+     * project of one module is the folder of every other project beside it.
+     *
+     * @return that folder
+     */
+    private Path componentDirectory() {
+        return configuration.targetRepository().resolve(configuration.component());
     }
 
     /**

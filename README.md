@@ -553,6 +553,12 @@ which no tool reports.
 | `openai_api` | `OPENAI_API_KEY`; `OPENAI_MODEL`, `OPENAI_BASE_URL` |
 | `local` | Any OpenAI-compatible server (Ollama by default, `OPENAI_BASE_URL` for others) |
 
+The three API backends edit through two tools of the agent's own,
+`read_file` and `write_file`, and both are kept to the component: a path
+outside it, by `..` or by a symbolic link that leads out, is refused, so a
+model never reads the other projects beside a single-module one, nor writes
+into them.
+
 With Ollama, raise the model's context first (its default of 4096 tokens is
 shorter than a prompt plus a file): a Modelfile with `PARAMETER num_ctx 16384`,
 and `OPENAI_MAX_TOKENS=12000` for a model that thinks before answering.

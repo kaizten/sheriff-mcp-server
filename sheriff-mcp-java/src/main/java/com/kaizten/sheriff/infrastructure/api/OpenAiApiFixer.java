@@ -388,6 +388,11 @@ public final class OpenAiApiFixer implements CodeFixer {
     private final Path repositoryRoot;
 
     /**
+     * The only folder the tools may read or write in.
+     */
+    private final Path workspace;
+
+    /**
      * Where the exchange is recorded.
      */
     private final PromptLog promptLog;
@@ -418,6 +423,34 @@ public final class OpenAiApiFixer implements CodeFixer {
             boolean keyRequired,
             Path repositoryRoot,
             PromptLog promptLog) {
+        this(apiKey, baseUrl, model, maxTokens, maxToolIterations, keyRequired, repositoryRoot, repositoryRoot,
+                promptLog);
+    }
+
+    /**
+     * Wires the fixer to an endpoint, with its file tools kept to one folder
+     * of the repository, as {@link FileTools} explains.
+     *
+     * @param apiKey the key, or empty where the endpoint needs none
+     * @param baseUrl the endpoint's base URL
+     * @param model the model to ask for
+     * @param maxTokens the ceiling on one answer
+     * @param maxToolIterations how many tool round trips one fix may take
+     * @param keyRequired whether a missing key stops the run
+     * @param repositoryRoot the directory the model's paths are relative to
+     * @param workspace the only folder the tools may read or write in
+     * @param promptLog where to record what was asked
+     */
+    public OpenAiApiFixer(
+            String apiKey,
+            String baseUrl,
+            String model,
+            long maxTokens,
+            int maxToolIterations,
+            boolean keyRequired,
+            Path repositoryRoot,
+            Path workspace,
+            PromptLog promptLog) {
         this.apiKey = apiKey;
         this.baseUrl = baseUrl;
         this.model = model;
@@ -425,6 +458,7 @@ public final class OpenAiApiFixer implements CodeFixer {
         this.maxToolIterations = maxToolIterations;
         this.keyRequired = keyRequired;
         this.repositoryRoot = repositoryRoot;
+        this.workspace = workspace;
         this.promptLog = promptLog;
     }
 
@@ -439,7 +473,7 @@ public final class OpenAiApiFixer implements CodeFixer {
         if (keyRequired && apiKey.isBlank()) {
             return FixResult.failed(MISSING_KEY);
         }
-        FileTools tools = new FileTools(repositoryRoot, request.allowedFiles());
+        FileTools tools = new FileTools(repositoryRoot, workspace, request.allowedFiles());
         List<String> transcript = new ArrayList<>();
         try {
             FixResult result = converse(request, tools, transcript);
