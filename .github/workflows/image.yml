@@ -41,7 +41,17 @@ concurrency:
 
 jobs:
   image:
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    # A workflow_run's branches filter matches the head branch by name, and a
+    # pull request from a fork whose branch is called main matches it too:
+    # this would then build the fork's commit and push it, with this
+    # repository's token, as one of Kaizten's tags. So only a push to main of
+    # this repository is published; pull requests are built by the
+    # pull_request trigger, which never publishes.
+    if: >-
+      github.event_name != 'workflow_run' || (
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event == 'push' &&
+        github.event.workflow_run.head_repository.full_name == github.repository)
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
