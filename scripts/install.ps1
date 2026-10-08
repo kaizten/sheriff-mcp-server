@@ -65,7 +65,11 @@ $image = if ($env:SHERIFF_IMAGE) { $env:SHERIFF_IMAGE } else { 'kaizten/sheriff:
 # A native command run for its exit code alone. Windows PowerShell turns the
 # stderr of a native command into errors when it is redirected, and 'Stop'
 # made them fatal: a first install aborted on 'claude mcp remove' finding
-# nothing to remove. Only for commands known to exist.
+# nothing to remove. Only for commands known to exist. Its answer is the
+# value it returns, so it leaves LASTEXITCODE at 0: a 'docker info' that found
+# Docker stopped was the last native command of an install with -NoMcp, and a
+# caller that exits with LASTEXITCODE, as GitHub Actions does, failed an
+# install that had worked.
 function Test-Native([scriptblock]$Command) {
     $saved = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
@@ -74,6 +78,7 @@ function Test-Native([scriptblock]$Command) {
         return $LASTEXITCODE -eq 0
     } finally {
         $ErrorActionPreference = $saved
+        $global:LASTEXITCODE = 0
     }
 }
 
