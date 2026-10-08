@@ -496,6 +496,32 @@ listed (`JAVA_HEXAGONAL,JAVA_DDD`); Sheriff runs one per analysis, so each
 listed profile costs one more run. With nothing declared, the base profile of
 the language the sources are in.
 
+**Every profile Sheriff accepts**, as its image of 8 October 2026 lists them
+(the base profile in bold). Any of them is declared the same way, and gets its
+language's base profile added: declaring `JAVA_HEXAGONAL_REST` runs `JAVA` and
+`JAVA_HEXAGONAL_REST`.
+
+| Language | Profiles |
+|---|---|
+| Java | **`JAVA`**, `JAVA_HEXAGONAL`, `JAVA_HEXAGONAL_DOMAIN`, `JAVA_HEXAGONAL_APPLICATION`, `JAVA_HEXAGONAL_REST`, `JAVA_HEXAGONAL_MONGODB`, `JAVA_HEXAGONAL_TIMESCALE`, `JAVA_DDD`, `JAVA_DDD_ENTITY`, `JAVA_DDD_VALUE_OBJECT`, `JAVA_DDD_ENUMERATE`, `JAVA_ENTITY`, `JAVA_VALUE_OBJECT`, `JAVA_ENUMERATE`, `JAVA_USE_CASE`, `JAVA_POM`, `JAVA_COMPILATION` |
+| TypeScript | **`TYPESCRIPT`**, `TYPESCRIPT_HEXAGONAL`, `TYPESCRIPT_HEXAGONAL_DOMAIN`, `TYPESCRIPT_HEXAGONAL_APPLICATION`, `TYPESCRIPT_HEXAGONAL_HTTP`, `TYPESCRIPT_HEXAGONAL_VUEJS`, `TYPESCRIPT_ENTITY`, `TYPESCRIPT_VALUE_OBJECT`, `TYPESCRIPT_ENUMERATE`, `TYPESCRIPT_FILENAME`, `TYPESCRIPT_LOCALE`, `TYPESCRIPT_PACKAGE`, `TYPESCRIPT_COMPILATION` |
+| Vue | **`VUEJS`**, `VUEJS_COMPONENT`, `VUEJS_VIEW`, `VUEJS_FILENAME` |
+| Perl | **`PERL_FORMAT`** |
+| Python | **`PYTHON`** |
+
+The image you have lists its own after an error line, as the longest
+`Possible Values` line, when asked for a profile it does not have:
+
+```bash
+docker run --rm kaizten/sheriff:latest test -t LIST
+```
+
+What each profile checks is Kaizten's to define. The tools know the exact
+rules of 12 of them, the ones Sheriff's own export covers. **For one request
+only**, name the profile to the assistant ("check the api module with
+`JAVA_DDD`"): the tools take it for that request, and the hooks keep to the
+project's declaration.
+
 No rule can be switched off: what the profile holds is what is checked.
 The one exception is a known false positive of Sheriff's, `FilenamePascalCase`
 on `package-info.java` and `module-info.java`, names Java itself requires,

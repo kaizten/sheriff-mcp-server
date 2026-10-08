@@ -734,6 +734,41 @@ Las reglas de la arquitectura \textbf{se suman} a las del lenguaje, nunca las
 sustituyen. Se pueden poner varias separadas por comas
 (\code{JAVA_HEXAGONAL,JAVA_DDD}); cada una añade un análisis más.
 
+\subsection{Todos los perfiles}
+
+Sheriff tiene más perfiles que los de arriba. Esta es la lista completa de su
+imagen del 8 de octubre de 2026, con el perfil base en negrita. Cualquiera se
+declara igual que una arquitectura, y la herramienta le añade siempre el perfil
+base de su lenguaje: declarar \code{JAVA_HEXAGONAL_REST} ejecuta \code{JAVA}
+y \code{JAVA_HEXAGONAL_REST}.
+
+\begin{center}
+\rowcolors{2}{pbcode}{white}
+\begin{tabularx}{\linewidth}{@{\hspace{6pt}}>{\bfseries}p{20mm}L}
+\headrow \thead{Lenguaje} & \thead{Perfiles} \\
+Java & \textbf{\code{JAVA}}, \code{JAVA_HEXAGONAL}, \code{JAVA_HEXAGONAL_DOMAIN}, \code{JAVA_HEXAGONAL_APPLICATION}, \code{JAVA_HEXAGONAL_REST}, \code{JAVA_HEXAGONAL_MONGODB}, \code{JAVA_HEXAGONAL_TIMESCALE}, \code{JAVA_DDD}, \code{JAVA_DDD_ENTITY}, \code{JAVA_DDD_VALUE_OBJECT}, \code{JAVA_DDD_ENUMERATE}, \code{JAVA_ENTITY}, \code{JAVA_VALUE_OBJECT}, \code{JAVA_ENUMERATE}, \code{JAVA_USE_CASE}, \code{JAVA_POM}, \code{JAVA_COMPILATION} \\
+TypeScript & \textbf{\code{TYPESCRIPT}}, \code{TYPESCRIPT_HEXAGONAL}, \code{TYPESCRIPT_HEXAGONAL_DOMAIN}, \code{TYPESCRIPT_HEXAGONAL_APPLICATION}, \code{TYPESCRIPT_HEXAGONAL_HTTP}, \code{TYPESCRIPT_HEXAGONAL_VUEJS}, \code{TYPESCRIPT_ENTITY}, \code{TYPESCRIPT_VALUE_OBJECT}, \code{TYPESCRIPT_ENUMERATE}, \code{TYPESCRIPT_FILENAME}, \code{TYPESCRIPT_LOCALE}, \code{TYPESCRIPT_PACKAGE}, \code{TYPESCRIPT_COMPILATION} \\
+Vue & \textbf{\code{VUEJS}}, \code{VUEJS_COMPONENT}, \code{VUEJS_VIEW}, \code{VUEJS_FILENAME} \\
+Perl & \textbf{\code{PERL_FORMAT}} \\
+Python & \textbf{\code{PYTHON}} \\
+\end{tabularx}
+\end{center}
+
+Para ver la lista de la versión de Sheriff que tengas, pídele un perfil que no
+existe. Después de una línea de error, la línea \code{Possible Values} más
+larga es la de los perfiles:
+
+\begin{command}{bash}
+docker run --rm kaizten/sheriff:latest test -t LISTA
+\end{command}
+
+Lo que comprueba cada perfil lo define Kaizten. Las herramientas conocen las
+reglas exactas de 12 de ellos, los que exporta el propio Sheriff.
+
+Para probar un perfil en una sola petición, sin declararlo, nómbralo:
+\ask{revisa el módulo api con JAVA\_DDD}. Las herramientas lo usan en esa
+petición, y los hooks siguen con el perfil que declara el proyecto.
+
 \subsection{Ninguna regla se puede desactivar}
 
 Lo que el perfil contiene es lo que se comprueba. La única excepción es un falso
