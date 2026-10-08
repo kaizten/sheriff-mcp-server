@@ -7,6 +7,7 @@ import com.kaizten.sheriff.infrastructure.mcp.McpConfig;
 import com.kaizten.sheriff.infrastructure.mcp.task.Task;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -30,6 +31,10 @@ final class SheriffAutofixTool {
     private static final String MAX_ITERATIONS_ARGUMENT = "max_iterations";
     private static final String MAX_ITERATIONS_HELP =
             "How many passes the loop may take, as a whole number. Left out, it is worked out.";
+    private static final String WHOLE_NUMBER = "[1-9][0-9]{0,8}";
+    private static final String NOT_A_CAP =
+            "max_iterations must be a whole number of at least 1, but it is '%s'. Nothing was started.%n"
+            + NextStep.MARK + " call this tool again with max_iterations left out, or set to a whole number.";
     private static final String ACCEPTED =
             "Task %s accepted: %s. It runs in the background and takes minutes: it edits files, "
             + "commits on its own branch and may spend tokens.%n" + NextStep.MARK + " tell the user it is "
@@ -80,15 +85,20 @@ final class SheriffAutofixTool {
      * @return that tool
      */
     Tool definition() {
-        Map<String, Object> schema = Schemas.objectSchema(Map.of(
-                ToolContext.COMPONENT_ARGUMENT, Schemas.stringProperty(ToolContext.COMPONENT_HELP),
-                ToolContext.PROFILE_ARGUMENT, Schemas.stringProperty(ToolContext.PROFILE_HELP),
-                MAX_ITERATIONS_ARGUMENT, Schemas.stringProperty(MAX_ITERATIONS_HELP)));
+        Map<String, Object> schema = Schemas.objectSchema(List.of(
+                Map.entry(ToolContext.COMPONENT_ARGUMENT, Schemas.stringProperty(ToolContext.COMPONENT_HELP)),
+                Map.entry(ToolContext.PROFILE_ARGUMENT, Schemas.stringProperty(ToolContext.PROFILE_HELP)),
+                Map.entry(MAX_ITERATIONS_ARGUMENT, Schemas.positiveIntegerProperty(MAX_ITERATIONS_HELP))));
         return new Tool(context.autofixTool(), DESCRIPTION, schema, ANNOTATIONS, this::handle);
     }
 
     /**
      * Queues the repair loop as a background task and answers with its id.
+     *
+     * <p>A cap that is not a whole number is refused here, before anything
+     * is accepted: the loop refused it too, but only once it ran in the
+     * background, so the client was told the task had started and learnt
+     * otherwise from {@code sheriff_task}.
      *
      * @param arguments the call's arguments
      * @return the text to answer with
@@ -97,6 +107,9 @@ final class SheriffAutofixTool {
         String component = context.componentArgument(arguments);
         String profile = context.profileArgument(arguments, component);
         String maxIterations = ToolContext.textArgument(arguments, MAX_ITERATIONS_ARGUMENT);
+        if (!maxIterations.isEmpty() && !maxIterations.matches(WHOLE_NUMBER)) {
+            throw new IllegalArgumentException(String.format(NOT_A_CAP, maxIterations));
+        }
         Map<String, String> resolved = new LinkedHashMap<>();
         resolved.put(ToolContext.COMPONENT_ARGUMENT, component);
         resolved.put(ToolContext.PROFILE_ARGUMENT, profile);

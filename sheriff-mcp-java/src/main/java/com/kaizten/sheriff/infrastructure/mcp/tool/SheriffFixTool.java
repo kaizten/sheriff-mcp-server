@@ -35,8 +35,7 @@ final class SheriffFixTool {
     private static final String REFERENCE_CODE_HELP =
             "Leave it out. Rule ids, separated by commas, narrow the repair to those.";
     private static final String VERIFY_ARGUMENT = "verify";
-    private static final String VERIFY_HELP =
-            "'true' to also run the project's tests after the repair.";
+    private static final String VERIFY_HELP = "true to also run the project's tests after the repair.";
     private static final String YES = "true";
     private static final String DEFAULT_FIXER_SCOPE = "every fixer Sheriff has for these errors";
     private static final String SPECIFIC_FIXER_SCOPE = "the `%s` fixer";
@@ -50,7 +49,7 @@ final class SheriffFixTool {
     private static final String FILE_SEPARATOR = ", ";
     private static final String UNDER = ", under %s";
     private static final String STILL_OUTSTANDING = "%nStill outstanding: %d error(s) in %d file(s). This answer "
-            + "lists the %d of the first %d, and the work is those files now:";
+            + "lists the %d error(s) of the first %d file(s), and the work is those files now:";
     private static final String SAME_AS_LAST_TIME = "%nThese %d errors are exactly the ones the last answer of "
             + "this tool listed: the edits since then fixed none of them.";
     private static final String OTHER_FILES = "%n%nLeft in the other files, for the calls after this one (%d): %s";
@@ -88,11 +87,11 @@ final class SheriffFixTool {
      * @return that tool
      */
     Tool definition() {
-        Map<String, Object> schema = Schemas.objectSchema(Map.of(
-                ToolContext.COMPONENT_ARGUMENT, Schemas.stringProperty(ToolContext.COMPONENT_HELP),
-                ToolContext.PROFILE_ARGUMENT, Schemas.stringProperty(ToolContext.PROFILE_HELP),
-                ToolContext.REFERENCE_CODE_ARGUMENT, Schemas.stringProperty(REFERENCE_CODE_HELP),
-                VERIFY_ARGUMENT, Schemas.stringProperty(VERIFY_HELP)));
+        Map<String, Object> schema = Schemas.objectSchema(List.of(
+                Map.entry(ToolContext.COMPONENT_ARGUMENT, Schemas.stringProperty(ToolContext.COMPONENT_HELP)),
+                Map.entry(ToolContext.PROFILE_ARGUMENT, Schemas.stringProperty(ToolContext.PROFILE_HELP)),
+                Map.entry(ToolContext.REFERENCE_CODE_ARGUMENT, Schemas.stringProperty(REFERENCE_CODE_HELP)),
+                Map.entry(VERIFY_ARGUMENT, Schemas.booleanProperty(VERIFY_HELP))));
         return new Tool(context.fixTool(), DESCRIPTION, schema, ANNOTATIONS, this::handle);
     }
 

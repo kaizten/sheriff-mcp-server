@@ -736,4 +736,98 @@ final class ToolsTest {
         assertTrue(text.contains("'app/src/main/java/demo' is not a component"), text);
         assertTrue(text.contains("Next step: call this tool again with component 'app'."), text);
     }
+
+    @Test
+    @DisplayName("every tool lists its arguments in one order, the component first, whatever the JVM")
+    void theArgumentsKeepTheirOrder() {
+        Map<Object, Object> properties = new LinkedHashMap<>();
+        for (Map<String, Object> definition : tools(List.of()).definitions()) {
+            Map<?, ?> schema = (Map<?, ?>) definition.get("inputSchema");
+            properties.put(definition.get("name"), List.copyOf(((Map<?, ?>) schema.get("properties")).keySet()));
+        }
+
+        assertEquals(List.of("component", "profile"), properties.get("sheriff_test"));
+        assertEquals(List.of("component", "profile", "reference_code", "verify"), properties.get("sheriff_fix"));
+        assertEquals(List.of("query", "reference_code", "profile"), properties.get("sheriff_guidelines"));
+        assertEquals(List.of("component", "profile", "max_iterations"), properties.get("sheriff_autofix"));
+        assertEquals(List.of("id"), properties.get("sheriff_task"));
+    }
+
+    @Test
+    @DisplayName("verify is declared a flag and max_iterations a whole number of at least one")
+    void theFlagAndTheCapAreDeclaredByType() {
+        Map<Object, Map<?, ?>> properties = new LinkedHashMap<>();
+        for (Map<String, Object> definition : tools(List.of()).definitions()) {
+            Map<?, ?> schema = (Map<?, ?>) definition.get("inputSchema");
+            properties.put(definition.get("name"), (Map<?, ?>) schema.get("properties"));
+        }
+
+        Map<?, ?> verify = (Map<?, ?>) properties.get("sheriff_fix").get("verify");
+        Map<?, ?> cap = (Map<?, ?>) properties.get("sheriff_autofix").get("max_iterations");
+        assertEquals("boolean", verify.get("type"));
+        assertEquals("integer", cap.get("type"));
+        assertEquals(1, cap.get("minimum"));
+    }
+
+    @Test
+    @DisplayName("verify sent as a JSON flag runs the tests, as the string 'true' does")
+    void verifyAsAFlagRunsTheTests() throws IOException {
+        mavenComponent("app");
+        String before = "[{\"file\":\"/data/app/A.java\",\"description\":\"d\",\"howToSolve\":\"h\","
+                + "\"referenceCode\":\"R\",\"type\":\"ERROR\"}]";
+        Tools tools = toolsWithTests(VerificationResult.failed("COMPILATION ERROR: cannot find symbol"),
+                ProcessOutcome.completed(0, before, ""), ProcessOutcome.completed(1, "fixed", ""),
+                ProcessOutcome.completed(1, "fixed", ""), ProcessOutcome.completed(0, "", ""));
+
+        ToolOutcome outcome = tools.call("sheriff_fix", Map.of("component", "app", "verify", true));
+
+        assertTrue(outcome.text().contains("FAIL after the repair"), outcome.text());
+    }
+
+    @Test
+    @DisplayName("a flag or a number is read as it is written, and anything else as nothing")
+    void flagsAndNumbersAreReadAsWritten() {
+        Map<String, Object> arguments = new LinkedHashMap<>();
+        arguments.put("flag", true);
+        arguments.put("whole", 5);
+        arguments.put("written", 5.0);
+        arguments.put("fraction", 2.5);
+        arguments.put("list", List.of("a"));
+
+        assertEquals("true", ToolContext.textArgument(arguments, "flag"));
+        assertEquals("5", ToolContext.textArgument(arguments, "whole"));
+        assertEquals("5", ToolContext.textArgument(arguments, "written"));
+        assertEquals("2.5", ToolContext.textArgument(arguments, "fraction"));
+        assertEquals("", ToolContext.textArgument(arguments, "list"));
+    }
+
+    @Test
+    @DisplayName("a cap that is not a whole number is refused before any task is accepted")
+    void aCapThatIsNotAWholeNumberStartsNothing() {
+        Tools tools = tools(List.of());
+
+        for (Object cap : List.of("abc", 0, 2.5, "-3")) {
+            ToolOutcome outcome = tools.call("sheriff_autofix", Map.of("component", "app", "max_iterations", cap));
+
+            assertTrue(outcome.isError(), outcome.text());
+            assertTrue(outcome.text().contains("max_iterations must be a whole number of at least 1"), outcome.text());
+            assertTrue(outcome.text().strip().lines().reduce((line, next) -> next).orElseThrow()
+                    .startsWith("Next step: call this tool again with max_iterations"), outcome.text());
+        }
+        assertEquals("No tasks yet in this session.", tools.call("sheriff_task", Map.of()).text().strip());
+    }
+
+    @Test
+    @DisplayName("the folder itself and the one above are not components, and Sheriff is not run for them")
+    void theFolderItselfAndTheOneAboveAreNotComponents() {
+        Tools tools = tools(List.of());
+
+        for (String name : List.of(".", "..", "./app", "../app")) {
+            ToolOutcome outcome = tools.call("sheriff_test", Map.of("component", name));
+
+            assertTrue(outcome.isError(), name);
+            assertTrue(outcome.text().contains("'" + name + "' is not a component"), outcome.text());
+            assertFalse(outcome.text().contains("could not run"), outcome.text());
+        }
+    }
 }

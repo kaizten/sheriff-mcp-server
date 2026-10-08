@@ -12,6 +12,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
@@ -71,6 +72,9 @@ record ToolContext(McpConfig config, SheriffRunner runner, RuleCatalog catalog, 
     private static final String SLASH = "/";
     private static final String BACKSLASH = "\\";
     private static final int FIRST_SEGMENT = 0;
+    private static final String THIS_FOLDER = ".";
+    private static final String FOLDER_ABOVE = "..";
+    private static final Set<String> RELATIVE_NAMES = Set.of(THIS_FOLDER, FOLDER_ABOVE);
     private static final String NOT_A_COMPONENT =
             "'%s' is not a component: a component is one folder directly under %s, and Sheriff analyzes all of "
             + "it.%n" + NextStep.MARK + " call this tool again with component '%s'.";
@@ -228,11 +232,17 @@ record ToolContext(McpConfig config, SheriffRunner runner, RuleCatalog catalog, 
      * Whether a name is a component Sheriff can analyze: one folder directly
      * under the directory it mounts.
      *
+     * <p>Not {@code .} nor {@code ..}: both are folders, Sheriff refuses
+     * them with "Invalid context", and that read to the model as a check
+     * that could not run rather than a name to correct; {@code ..} also sent
+     * {@code sheriff_autofix} to make its branch in whatever repository
+     * holds the folder above the project.
+     *
      * @param name the name given
      * @return {@code true} for such a folder
      */
     private boolean isComponent(String name) {
-        return !name.contains(SLASH) && !name.contains(BACKSLASH)
+        return !name.contains(SLASH) && !name.contains(BACKSLASH) && !RELATIVE_NAMES.contains(name)
                 && Files.isDirectory(config.repository().resolve(name));
     }
 
@@ -258,8 +268,12 @@ record ToolContext(McpConfig config, SheriffRunner runner, RuleCatalog catalog, 
     }
 
     /**
-     * One string argument, trimmed, empty when it was not given or is not a
-     * string.
+     * One argument as text, trimmed, empty when it was not given.
+     *
+     * <p>A flag or a number is taken as it reads, {@code true} or
+     * {@code 5}: the schema declares them that way, and a client that sent
+     * {@code "verify": true} used to have it dropped without a word, the
+     * tests never run.
      *
      * @param arguments the call's arguments
      * @param key the argument to read
@@ -267,7 +281,18 @@ record ToolContext(McpConfig config, SheriffRunner runner, RuleCatalog catalog, 
      */
     static String textArgument(Map<String, Object> arguments, String key) {
         Object value = arguments.get(key);
-        return value instanceof String text ? text.strip() : EMPTY;
+        if (value instanceof String text) {
+            return text.strip();
+        }
+        if (value instanceof Boolean flag) {
+            return flag.toString();
+        }
+        if (value instanceof Number number) {
+            double asWritten = number.doubleValue();
+            boolean whole = !Double.isInfinite(asWritten) && asWritten == Math.rint(asWritten);
+            return whole ? Long.toString(number.longValue()) : number.toString();
+        }
+        return EMPTY;
     }
 
     /**

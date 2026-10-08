@@ -4,6 +4,7 @@ import com.kaizten.sheriff.domain.valueobject.AnalysisResult;
 import com.kaizten.sheriff.infrastructure.mcp.FindingsRenderer;
 import com.kaizten.sheriff.infrastructure.mcp.task.Task;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -45,9 +46,9 @@ final class SheriffTestTool {
      * @return that tool
      */
     Tool definition() {
-        Map<String, Object> schema = Schemas.objectSchema(Map.of(
-                ToolContext.COMPONENT_ARGUMENT, Schemas.stringProperty(ToolContext.COMPONENT_HELP),
-                ToolContext.PROFILE_ARGUMENT, Schemas.stringProperty(ToolContext.PROFILE_HELP)));
+        Map<String, Object> schema = Schemas.objectSchema(List.of(
+                Map.entry(ToolContext.COMPONENT_ARGUMENT, Schemas.stringProperty(ToolContext.COMPONENT_HELP)),
+                Map.entry(ToolContext.PROFILE_ARGUMENT, Schemas.stringProperty(ToolContext.PROFILE_HELP))));
         return new Tool(context.testTool(), DESCRIPTION, schema, ANNOTATIONS, this::handle);
     }
 
