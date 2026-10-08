@@ -107,7 +107,9 @@ it at (`SHERIFF_JAVA`, read by `--install-hooks --user`, `--install-codex` and
 PATH, and the server then only showed "connection closed". A project's own
 `.claude/settings.json`, which a team commits, keeps `java`, and `install.ps1`
 passes none, as Windows installs each JDK update in a folder named after its
-version.
+version. An option the jar does not know is refused with exit code 2; it used
+to start the MCP server, so `--instal-hooks` waited on standard input or ended
+with nothing done and 0.
 
 **The same script installs a release**, which is how anyone without a clone
 gets the tools: read from a pipe, or with `--release[=TAG]`, it has no

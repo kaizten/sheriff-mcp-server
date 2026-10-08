@@ -43,6 +43,7 @@ public final class McpServer {
     private static final String TOOLS_FLAG = "--tools";
     private static final String CHECK_FLAG = "--check";
     private static final String HELP_FLAG = "--help";
+    private static final String SHORT_HELP_FLAG = "-h";
     private static final String VERSION_FLAG = "--version";
     private static final String VERSION_LINE = "sheriff-mcp %s%n";
     private static final String HOOK_GATE_FLAG = "--hook-gate";
@@ -67,6 +68,13 @@ public final class McpServer {
     private static final String FAIL_FAST_VARIABLE = "SHERIFF_FAIL_FAST";
     private static final String ENABLED = "1";
     private static final String AGENT_FLAG = "--agent";
+    private static final String OPTION_START = "-";
+    private static final String UNKNOWN_OPTION = "Unknown option '%s': java -jar sheriff-mcp.jar --help lists them.%n";
+    private static final int UNKNOWN_OPTION_EXIT = 2;
+    private static final List<String> OWN_OPTIONS = List.of(TOOLS_FLAG, CHECK_FLAG, HELP_FLAG, SHORT_HELP_FLAG,
+            VERSION_FLAG, HOOK_GATE_FLAG, HOOK_STOP_FLAG, HOOK_TURN_FLAG, CALL_FLAG, INSTRUCTIONS_FLAG,
+            INSTALL_HOOKS_FLAG, UNINSTALL_HOOKS_FLAG, USER_SCOPE_FLAG, INSTALL_CODEX_FLAG, UNINSTALL_CODEX_FLAG,
+            INSTALL_ANTIGRAVITY_FLAG, UNINSTALL_ANTIGRAVITY_FLAG, FAIL_FAST_FLAG, NO_HOOKS_FLAG, PULL_ALWAYS_FLAG);
     private static final String JAVA_VARIABLE = "SHERIFF_JAVA";
     private static final String NOT_A_JAVA =
             "SHERIFF_JAVA is '%s', which is not a file that can be run; the java on the PATH is used instead.%n";
@@ -148,8 +156,13 @@ public final class McpServer {
                     options.subList(AFTER_FIRST_OPTION, options.size()).toArray(String[]::new));
             return;
         }
+        Optional<String> unknown = unknownOption(options);
+        if (unknown.isPresent()) {
+            System.err.printf(UNKNOWN_OPTION, unknown.get());
+            System.exit(UNKNOWN_OPTION_EXIT);
+        }
         PrintStream protocol = claimStandardOutput();
-        if (options.contains(HELP_FLAG)) {
+        if (options.contains(HELP_FLAG) || options.contains(SHORT_HELP_FLAG)) {
             protocol.print(USAGE);
             return;
         }
@@ -263,6 +276,27 @@ public final class McpServer {
             output.println(outcome.text());
             return outcome.isError() ? CALL_FAILED : CALL_ANSWERED;
         }
+    }
+
+    /**
+     * The first option on a command line that this jar does not know, if
+     * there is one.
+     *
+     * <p>Anything that does not start with a dash is a value: a tool's name
+     * or {@code name=value} after {@code --call}, a component or a profile
+     * after {@code --check}. An option nobody knew used to be ignored, so
+     * {@code --instal-hooks} started the MCP server, which waited on standard
+     * input, or ended at once with nothing done and exit code 0.
+     *
+     * @param options the command line, without {@code --agent} and what
+     *     follows it
+     * @return that option, or empty when every one is known
+     */
+    static Optional<String> unknownOption(List<String> options) {
+        return options.stream()
+                .filter(option -> option.startsWith(OPTION_START))
+                .filter(option -> !OWN_OPTIONS.contains(option) && !CheckCommand.OPTIONS.contains(option))
+                .findFirst();
     }
 
     /**
