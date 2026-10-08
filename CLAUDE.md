@@ -621,7 +621,11 @@ Two more things the loop and the tools rely on. The prompt reaches
 `MountLock` for its mount, across threads and processes, with the whole
 `test`, `fix`, `test` sequence held at once: Sheriff keeps its state at the
 root of the mount, so two sibling single-module projects checked together
-used to clobber each other's.
+used to clobber each other's. The lock files, and the markers the hooks
+leave for their next run (gate, turn, stop), live in a folder of the
+temporary directory per user (`TemporaryFolders`): shared, the first user to
+create one left it unwritable for the others. Markers older than a week are
+pruned when their folder is written; lock files never are.
 
 The MCP server writes the protocol to the stream it claims at startup and
 points `System.out` at stderr. Anything in the core that prints (the loop

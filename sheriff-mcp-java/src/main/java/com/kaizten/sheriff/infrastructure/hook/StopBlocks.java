@@ -1,5 +1,6 @@
 package com.kaizten.sheriff.infrastructure.hook;
 
+import com.kaizten.sheriff.infrastructure.process.TemporaryFolders;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -20,7 +21,6 @@ import java.util.HexFormat;
  */
 public final class StopBlocks {
 
-    private static final String TEMPORARY_DIRECTORY = "java.io.tmpdir";
     private static final String MEMORY_DIRECTORY = "sheriff-stop";
     private static final String DIGEST = "SHA-256";
     private static final int NONE = 0;
@@ -35,10 +35,11 @@ public final class StopBlocks {
     private final Path directory;
 
     /**
-     * Counts in the system's temporary directory.
+     * Counts in the user's own folder of the system's temporary directory,
+     * where counts older than a week are pruned.
      */
     public StopBlocks() {
-        this(Path.of(System.getProperty(TEMPORARY_DIRECTORY), MEMORY_DIRECTORY));
+        this(TemporaryFolders.forUser(MEMORY_DIRECTORY));
     }
 
     /**
@@ -120,6 +121,7 @@ public final class StopBlocks {
         int next = count(session) + 1;
         try {
             Files.createDirectories(directory);
+            TemporaryFolders.prune(directory, TemporaryFolders.MARKER_LIFETIME);
             Files.writeString(fileFor(session),
                     next + SEPARATOR + sources + SEPARATOR + (stalledNow ? STALLED : NOT_STALLED));
         } catch (IOException exception) {

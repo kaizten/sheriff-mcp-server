@@ -1,5 +1,6 @@
 package com.kaizten.sheriff.infrastructure.hook;
 
+import com.kaizten.sheriff.infrastructure.process.TemporaryFolders;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileAlreadyExistsException;
@@ -28,7 +29,6 @@ import java.util.HexFormat;
  */
 public final class GateMemory {
 
-    private static final String TEMPORARY_DIRECTORY = "java.io.tmpdir";
     private static final String MEMORY_DIRECTORY = "sheriff-gate";
     private static final String DIGEST = "SHA-256";
     private static final String SEPARATOR = "\n";
@@ -36,10 +36,11 @@ public final class GateMemory {
     private final Path directory;
 
     /**
-     * Remembers warnings in the system's temporary directory.
+     * Remembers warnings in the user's own folder of the system's temporary
+     * directory, where markers older than a week are pruned.
      */
     public GateMemory() {
-        this(Path.of(System.getProperty(TEMPORARY_DIRECTORY), MEMORY_DIRECTORY));
+        this(TemporaryFolders.forUser(MEMORY_DIRECTORY));
     }
 
     /**
@@ -76,6 +77,7 @@ public final class GateMemory {
         }
         try {
             Files.createDirectories(directory);
+            TemporaryFolders.prune(directory, TemporaryFolders.MARKER_LIFETIME);
             Files.createFile(markerFor(session, component));
         } catch (FileAlreadyExistsException exception) {
             return;
