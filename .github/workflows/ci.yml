@@ -69,6 +69,78 @@ jobs:
           cat err.txt
           test "$code" -eq 2 && grep -q "could not be downloaded" err.txt
         shell: bash
+      # The installers set up only the assistants a machine has, and say which
+      # at the end; the steps above give them --no-mcp, which returns before
+      # any of that. So each runs here as a user's would: with no assistant,
+      # when it must write into no one's configuration, then with stand-ins
+      # for claude, codex and agy that only record how they were called. The
+      # runner is thrown away after, so its own home serves as the user's. mvn
+      # is a stand-in too, as the jar was built above, and the script runs
+      # under /bin/bash, which on macOS is the 3.2 a piped install gets there.
+      - name: The installer sets up the assistants there are, and only those (Linux, macOS)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          tools="$RUNNER_TEMP/stand-ins"; build="$RUNNER_TEMP/stand-in-mvn"; calls="$RUNNER_TEMP/calls"
+          none="$RUNNER_TEMP/none.log"; all="$RUNNER_TEMP/all.log"
+          mkdir -p "$tools" "$build"
+          printf '#!/bin/sh\nexit 0\n' > "$build/mvn"
+          for tool in claude codex agy; do
+            printf '#!/bin/sh\necho "%s $*" >> "%s"\n' "$tool" "$calls" > "$tools/$tool"
+          done
+          chmod +x "$build/mvn" "$tools"/*
+          export SHERIFF_HOME="$RUNNER_TEMP/sheriff-assistants"
+          PATH="$build:$PATH" /bin/bash scripts/install.sh --no-pull > "$none" 2>&1 || { cat "$none"; exit 1; }
+          cat "$none"
+          grep -q "No assistant was found" "$none"
+          test ! -e "$HOME/.claude" && test ! -e "$HOME/.codex" && test ! -e "$HOME/.gemini"
+          PATH="$tools:$build:$PATH" /bin/bash scripts/install.sh --no-pull > "$all" 2>&1 || { cat "$all"; exit 1; }
+          cat "$all"
+          grep -q "Sheriff is set up for Claude Code, Codex and Antigravity." "$all"
+          grep -q -- "--hook-stop" "$HOME/.claude/settings.json"
+          grep -q "mcp_servers.sheriff" "$HOME/.codex/config.toml"
+          grep -q "sheriff-mcp.jar" "$HOME/.gemini/config/mcp_config.json"
+          grep -q "claude mcp add --scope user sheriff" "$calls"
+      # The same in Windows PowerShell, run through cmd so that the
+      # installer's stderr reaches the log as text rather than as errors.
+      - name: The installer sets up the assistants there are, and only those (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $tools = Join-Path $env:RUNNER_TEMP 'stand-ins'
+          $build = Join-Path $env:RUNNER_TEMP 'stand-in-mvn'
+          $calls = Join-Path $env:RUNNER_TEMP 'calls.txt'
+          $none = Join-Path $env:RUNNER_TEMP 'none.log'
+          $all = Join-Path $env:RUNNER_TEMP 'all.log'
+          New-Item -ItemType Directory -Force -Path $tools, $build | Out-Null
+          Set-Content -Encoding ASCII -Path (Join-Path $build 'mvn.cmd') -Value '@exit /b 0'
+          foreach ($tool in 'claude', 'codex', 'agy') {
+              Set-Content -Encoding ASCII -Path (Join-Path $tools "$tool.cmd") -Value "@echo $tool %*>>`"$calls`""
+          }
+          $env:SHERIFF_HOME = Join-Path $env:RUNNER_TEMP 'sheriff-assistants'
+          $install = 'powershell -NoProfile -ExecutionPolicy Bypass -File scripts\install.ps1 -NoPull'
+          $env:PATH = "$build;$env:PATH"
+          cmd /c "$install > `"$none`" 2>&1"
+          $code = $LASTEXITCODE
+          Get-Content $none
+          if ($code -ne 0) { throw "the installer failed with no assistant ($code)" }
+          if (-not (Select-String -Quiet -Path $none -Pattern 'No assistant was found')) { throw 'no summary for no assistant' }
+          foreach ($folder in '.claude', '.codex', '.gemini') {
+              if (Test-Path (Join-Path $HOME $folder)) { throw "$folder was written with no assistant" }
+          }
+          $env:PATH = "$tools;$env:PATH"
+          cmd /c "$install > `"$all`" 2>&1"
+          $code = $LASTEXITCODE
+          Get-Content $all
+          if ($code -ne 0) { throw "the installer failed with the stand-ins ($code)" }
+          if (-not (Select-String -Quiet -SimpleMatch -Path $all -Pattern 'Sheriff is set up for Claude Code, Codex and Antigravity.')) { throw 'no summary for three assistants' }
+          if (-not (Select-String -Quiet -SimpleMatch -Path (Join-Path $HOME '.claude\settings.json') -Pattern '--hook-stop')) { throw 'no hooks for Claude Code' }
+          if (-not (Select-String -Quiet -SimpleMatch -Path (Join-Path $HOME '.codex\config.toml') -Pattern 'mcp_servers.sheriff')) { throw 'no server for Codex' }
+          if (-not (Test-Path (Join-Path $HOME '.gemini\config\mcp_config.json'))) { throw 'no server for Antigravity' }
+          if (-not (Select-String -Quiet -SimpleMatch -Path $calls -Pattern 'claude mcp add --scope user sheriff')) { throw 'the server was not registered' }
+          Write-Host 'The installer set up the assistants there were, and only those.'
 
   e2e:
     needs: build
