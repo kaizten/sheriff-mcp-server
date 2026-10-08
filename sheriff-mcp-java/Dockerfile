@@ -20,6 +20,16 @@ RUN mvn -q -B dependency:go-offline
 COPY src ./src
 RUN mvn -q -B package -DskipTests
 
+# The rule catalog, when one sits beside this file. The bracket in each name
+# makes the pattern a glob, so a catalog that is not there is no error, and
+# the Dockerfile is named with them so that the instruction always has a
+# match: a COPY whose globs all match nothing passes under BuildKit but fails
+# under Docker's classic builder ("no source files were specified"), which is
+# what a Docker without buildx runs. It is gathered here, in the builder, so
+# that the image below gets the catalog and nothing else.
+COPY Dockerfile rules_catalog.jso[n] SHERIFF_RULES.m[d] /extras/
+RUN rm /extras/Dockerfile
+
 FROM eclipse-temurin:21-jre
 
 # docker-cli, not docker.io: this image only ever talks to the host's daemon
@@ -36,8 +46,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Maven in the *runtime* image is not for building this agent -- that already
 # happened in the builder. It is for the verification gate: once Sheriff
-# reports zero errors the loop runs the *target* project's own tests, and
-# Sheriff only analyzes Java and TypeScript to begin with. Without Maven here,
+# reports zero errors the loop runs the *target* project's own tests, and the
+# projects Sheriff analyzes are mostly Java ones (it also reads TypeScript,
+# Vue, Perl and Python, whose tests need their own tools). Without Maven here,
 # the gate's default command fails with "command not found", the loop
 # correctly reads that as a failed test run, spends its one repair pass on a
 # problem no fix can solve, and reports repair_failed. Mount the host's ~/.m2
@@ -49,10 +60,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # the API ones -- anthropic_api, openai_api and local -- where a key or a URL
 # is all there is to supply.
 #
-# Codex's CLI is not installed. That is a choice about weight rather than a
-# finding: codex_cli was never exercised on the machine this was built on, so
-# shipping it here would be shipping something untested. Add it with
-# `npm install -g @openai/codex` if you want it.
+# Codex's CLI is not installed. That is a choice about weight: codex_cli works
+# (it was validated outside a container), but like Claude Code it needs a login
+# a fresh container does not have, so the image would carry it for nothing by
+# default. Add it with `npm install -g @openai/codex` if you mount a login.
 #
 # One thing to know before setting AI_BACKEND=local in a container: localhost
 # is the container's own, not the host's, so a model served on the host is not
@@ -67,22 +78,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # interface (OLLAMA_HOST=0.0.0.0), with
 # OPENAI_BASE_URL=http://host.docker.internal:11434/v1. Prefer --network host
 # unless you have a reason not to.
-RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+# Node 22, the long-term release: 20 reached its end of life in April 2026.
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/* \
     && npm install -g @anthropic-ai/claude-code
 
 WORKDIR /agent
 COPY --from=builder /build/target/sheriff-mcp.jar ./sheriff-mcp.jar
-# The bracket in each name is not a typo: it makes the pattern a glob, and a
-# glob that matches nothing is not an error the way a named file that is
-# missing would be. The catalog is not in version control -- it is extracted
-# from Sheriff's own image with --extract-rules, so a clone that has not run
-# that yet still builds this image, and extracts the catalog on first use
-# instead. That is the only way the published image is built
+# The catalog the builder gathered, if any. It is not in version control --
+# it is extracted from Sheriff's own image with --extract-rules, so a clone
+# that has not run that yet still builds this image, and extracts the catalog
+# on first use instead. That is the only way the published image is built
 # (.github/workflows/image.yml checks it): the catalog is Kaizten's content,
 # so an image built here with one beside it is for this machine only.
-COPY rules_catalog.jso[n] SHERIFF_RULES.m[d] ./
+COPY --from=builder /extras/ ./
 
 # The agent's own directory is normally derived from where the jar sits, which
 # is right everywhere except here: the catalog is copied next to it, so say so
