@@ -265,8 +265,8 @@ the table, including `SHERIFF_EXPORT_DIR`.
   `domain/model/`, two in `application/service/`). `JAVA_DDD` is the same. So
   `Rules.withBaseProfiles` puts the base profile before every architecture
   profile, wherever a profile comes from (argument, variable, declaration,
-  plugin parameter), and the three places that run Sheriff (the analyzer,
-  `SheriffRunner`, `DeterministicFixer`) split the comma-separated list: one
+  plugin parameter), and the two places that run Sheriff (the analyzer and
+  `SheriffRepair`) split the comma-separated list: one
   analysis per profile, merged by `AnalysisResult.merged`, and repairs profile
   by profile, because `fix` reads the state of the `test` just before it.
   Declaring an architecture must add checks, never take the base ones away.
@@ -434,10 +434,15 @@ them before the tests. It reads Java declarations by pattern, not by parsing,
 and compares with `git show HEAD:`; with no repository it checks nothing.
 `scripts/e2e.sh` scenario 19 runs it against real git and Sheriff.
 
-`sheriff_fix`, the loop's first pass and `sheriff:fix` repair the same way
-(`SheriffRunner.fix` and `DeterministicFixer`): Sheriff's default set, then
-`--fixers` with every rule found, again for each profile whose count the round
-before lowered, up to three rounds.
+`sheriff_fix`, the loop's first pass and `sheriff:fix` repair with one class,
+`SheriffRepair` (`SheriffRunner.fix` and `DeterministicFixer` only call it
+and word its outcome): Sheriff's default set, then `--fixers` with every rule
+found, again for each profile whose count the round before lowered, up to
+three rounds, each round's analysis measuring the one before; a `fix` that
+did not run is a failure, not a repair that found nothing. It used to be
+written twice, and the copies had drifted (flags, rounds, a dead `fix`
+noticed by one and not the other); `DeterministicFixerTests` now checks the
+loop and `sheriff_fix` give Sheriff the same commands.
 
 ## Architecture
 
