@@ -621,8 +621,11 @@ used to clobber each other's.
 The MCP server writes the protocol to the stream it claims at startup and
 points `System.out` at stderr. Anything in the core that prints (the loop
 does) must never reach the JSON-RPC channel. `--agent` is dispatched before
-that, so the agent's CLI keeps its stdout. Background tasks run on one daemon
-thread, one at a time; when the client disconnects the server waits for them
+that, so the agent's CLI keeps its stdout. A `tools/call` runs on a thread of
+its own, one at a time in the order they came, so a `ping` or a `tools/list`
+is answered while Sheriff or the tests run; responses are written whole, and
+when the input ends the calls already read are answered first. Background
+tasks run on one daemon thread, one at a time; when the client disconnects the server waits for them
 to finish rather than cut a loop mid-pass. A client that stops the server
 instead gets no such courtesy: Codex ends a session with SIGTERM to the whole
 process group and SIGKILL about 0.3 s later. A shutdown hook then records
