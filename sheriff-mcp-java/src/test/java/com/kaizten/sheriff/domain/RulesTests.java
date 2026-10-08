@@ -301,5 +301,13 @@ class RulesTests {
             assertEquals(List.of(base, layers), selection.rules());
             assertTrue(selection.exact());
         }
+
+        @Test
+        @DisplayName("one profile the catalog lacks makes the list approximate: the base's rules alone were shown as exact")
+        void aListWithAnUnknownProfileIsApproximate() {
+            RuleSelection selection = Rules.selectRulesForProfile(ALL, "JAVA,JAVA_HEXAGONAL_REST");
+            assertFalse(selection.exact());
+            assertEquals(List.of(JAVADOC, HEXAGONAL_ONLY, UNMAPPED_JAVA), selection.rules());
+        }
     }
 }

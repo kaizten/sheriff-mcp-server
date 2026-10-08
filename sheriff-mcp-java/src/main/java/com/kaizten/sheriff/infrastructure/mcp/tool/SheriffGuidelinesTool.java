@@ -35,6 +35,8 @@ final class SheriffGuidelinesTool {
     private static final String NO_SUCH_RULE = "No rule with id '%s'. Search instead: %s with query='%s'.";
     private static final String MATCHING = "%d of %d rule(s) matching '%s'";
     private static final String ENFORCES = "The %d rule(s) the '%s' profile enforces";
+    private static final String APPROXIMATE = "The catalog does not record which rules the '%s' profile runs, "
+            + "so these are all %d rule(s) of its language: some of them may not apply to it";
     private static final String NOTHING_MATCHED =
             "Nothing matched '%s'. The catalog has %d rules, searched word by word, so every word "
             + "has to appear somewhere in a rule. Try fewer words, or one of the terms the rules "
@@ -108,7 +110,9 @@ final class SheriffGuidelinesTool {
         } else {
             RuleSelection selection = Rules.selectRulesForProfile(rules, profile);
             selected = selection.rules();
-            heading = String.format(ENFORCES, selected.size(), profile);
+            heading = selection.exact()
+                    ? String.format(ENFORCES, selected.size(), profile)
+                    : String.format(APPROXIMATE, profile, selected.size());
         }
         if (selected.isEmpty()) {
             return String.format(NOTHING_MATCHED, query, rules.size());
