@@ -729,6 +729,41 @@ The architecture's rules \textbf{are added} to the language's, never put in
 their place. Several can be listed, separated by commas
 (\code{JAVA_HEXAGONAL,JAVA_DDD}); each one adds one more analysis.
 
+\subsection{Every profile}
+
+Sheriff has more profiles than the ones above. This is the full list of its
+image of 8 October 2026, with the base profile in bold. Any of them is declared
+like an architecture, and the tools always add its language's base profile:
+declaring \code{JAVA_HEXAGONAL_REST} runs \code{JAVA} and
+\code{JAVA_HEXAGONAL_REST}.
+
+\begin{center}
+\rowcolors{2}{pbcode}{white}
+\begin{tabularx}{\linewidth}{@{\hspace{6pt}}>{\bfseries}p{20mm}L}
+\headrow \thead{Language} & \thead{Profiles} \\
+Java & \textbf{\code{JAVA}}, \code{JAVA_HEXAGONAL}, \code{JAVA_HEXAGONAL_DOMAIN}, \code{JAVA_HEXAGONAL_APPLICATION}, \code{JAVA_HEXAGONAL_REST}, \code{JAVA_HEXAGONAL_MONGODB}, \code{JAVA_HEXAGONAL_TIMESCALE}, \code{JAVA_DDD}, \code{JAVA_DDD_ENTITY}, \code{JAVA_DDD_VALUE_OBJECT}, \code{JAVA_DDD_ENUMERATE}, \code{JAVA_ENTITY}, \code{JAVA_VALUE_OBJECT}, \code{JAVA_ENUMERATE}, \code{JAVA_USE_CASE}, \code{JAVA_POM}, \code{JAVA_COMPILATION} \\
+TypeScript & \textbf{\code{TYPESCRIPT}}, \code{TYPESCRIPT_HEXAGONAL}, \code{TYPESCRIPT_HEXAGONAL_DOMAIN}, \code{TYPESCRIPT_HEXAGONAL_APPLICATION}, \code{TYPESCRIPT_HEXAGONAL_HTTP}, \code{TYPESCRIPT_HEXAGONAL_VUEJS}, \code{TYPESCRIPT_ENTITY}, \code{TYPESCRIPT_VALUE_OBJECT}, \code{TYPESCRIPT_ENUMERATE}, \code{TYPESCRIPT_FILENAME}, \code{TYPESCRIPT_LOCALE}, \code{TYPESCRIPT_PACKAGE}, \code{TYPESCRIPT_COMPILATION} \\
+Vue & \textbf{\code{VUEJS}}, \code{VUEJS_COMPONENT}, \code{VUEJS_VIEW}, \code{VUEJS_FILENAME} \\
+Perl & \textbf{\code{PERL_FORMAT}} \\
+Python & \textbf{\code{PYTHON}} \\
+\end{tabularx}
+\end{center}
+
+To see the list of the Sheriff version you have, ask it for a profile that does
+not exist. After an error line, the longest \code{Possible Values} line is the
+profiles:
+
+\begin{command}{bash}
+docker run --rm kaizten/sheriff:latest test -t LIST
+\end{command}
+
+What each profile checks is Kaizten's to define. The tools know the exact rules
+of 12 of them, the ones Sheriff's own export covers.
+
+To try a profile for one request, without declaring it, name it:
+\ask{check the api module with JAVA\_DDD}. The tools use it for that request,
+and the hooks keep to the profile the project declares.
+
 \subsection{No rule can be switched off}
 
 What the profile holds is what is checked. The one exception is a known false
