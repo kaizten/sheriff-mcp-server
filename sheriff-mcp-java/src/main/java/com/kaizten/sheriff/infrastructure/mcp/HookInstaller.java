@@ -7,10 +7,8 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.kaizten.sheriff.infrastructure.process.Platform;
 import java.io.IOException;
 import java.io.PrintStream;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -53,7 +51,6 @@ public final class HookInstaller {
     private static final String CODEX_HOOKS_FILE = "hooks.json";
     private static final String FAIL_FAST_OPTION = " --fail-fast";
     private static final String NO_OPTION = "";
-    private static final String TEMPORARY_SUFFIX = ".tmp";
     private static final String HOOKS = "hooks";
     private static final String PRE_TOOL_USE = "PreToolUse";
     private static final String STOP = "Stop";
@@ -76,7 +73,8 @@ public final class HookInstaller {
     private static final String GATE_FLAG = "--hook-gate";
     private static final String STOP_FLAG = "--hook-stop";
     private static final String TURN_FLAG = "--hook-turn";
-    private static final String HOOK_COMMAND = "java -jar %s %s%s";
+    private static final String HOOK_COMMAND = "%s -jar %s %s%s";
+    private static final String JAVA_ON_THE_PATH = "java";
     private static final String QUOTED = "\"%s\"";
     private static final String HOME_REFERENCE = "$HOME/";
     private static final char BACKSLASH = '\\';
@@ -118,6 +116,7 @@ public final class HookInstaller {
     private final String installed;
     private final boolean withGate;
     private final boolean failFast;
+    private final String java;
 
     /**
      * Wires an installer for one project.
@@ -128,7 +127,8 @@ public final class HookInstaller {
      * @param output where to report what was done
      */
     public HookInstaller(Path project, Path jar, Path home, PrintStream output) {
-        this(project.resolve(SETTINGS_DIRECTORY).resolve(SETTINGS_FILE), jar, home, output, INSTALLED, true, false);
+        this(project.resolve(SETTINGS_DIRECTORY).resolve(SETTINGS_FILE), jar, home, output, INSTALLED, true, false,
+                JAVA_ON_THE_PATH);
     }
 
     /**
@@ -141,9 +141,11 @@ public final class HookInstaller {
      * @param installed what to report once they are in
      * @param withGate whether the gate goes in beside the turn and Stop hooks
      * @param failFast whether the hooks ask Sheriff to stop at the first error
+     * @param java the Java the hooks run with: {@code java}, found on the
+     *     PATH when they run, or a path to one
      */
     private HookInstaller(Path settings, Path jar, Path home, PrintStream output, String installed,
-            boolean withGate, boolean failFast) {
+            boolean withGate, boolean failFast, String java) {
         this.settings = settings;
         this.jar = jar;
         this.home = home;
@@ -151,6 +153,7 @@ public final class HookInstaller {
         this.installed = installed;
         this.withGate = withGate;
         this.failFast = failFast;
+        this.java = java;
     }
 
     /**
@@ -162,7 +165,25 @@ public final class HookInstaller {
      * @return that installer
      */
     public HookInstaller failingFast() {
-        return new HookInstaller(settings, jar, home, output, installed, withGate, true);
+        return new HookInstaller(settings, jar, home, output, installed, withGate, true, java);
+    }
+
+    /**
+     * The same installer, with hooks that run a given Java rather than the
+     * {@code java} found on the PATH when they run.
+     *
+     * <p>For the hooks of every project, which {@code install.sh} writes with
+     * the Java it checked: an editor started from the desktop can have
+     * another PATH than the terminal, with an older Java or none on it, and
+     * then every hook failed to start. A project's own settings, which a team
+     * commits, keep {@code java}.
+     *
+     * @param executable the Java to run, by its path
+     * @return that installer
+     */
+    public HookInstaller runningWith(Path executable) {
+        return new HookInstaller(settings, jar, home, output, installed, withGate, failFast,
+                pathReference(executable));
     }
 
     /**
@@ -328,7 +349,8 @@ public final class HookInstaller {
         ObjectNode group = json.createObjectNode();
         ObjectNode entry = group.putArray(HOOKS).addObject();
         entry.put(TYPE, COMMAND_TYPE);
-        entry.put(COMMAND, String.format(HOOK_COMMAND, jarReference(), flag, failFast ? FAIL_FAST_OPTION : NO_OPTION));
+        entry.put(COMMAND, String.format(HOOK_COMMAND, javaReference(), jarReference(), flag,
+                failFast ? FAIL_FAST_OPTION : NO_OPTION));
         return group;
     }
 
@@ -358,7 +380,27 @@ public final class HookInstaller {
      * @return the quoted path
      */
     String jarReference() {
-        Path absolute = jar.toAbsolutePath().normalize();
+        return pathReference(jar);
+    }
+
+    /**
+     * How the hook command names the Java it runs.
+     *
+     * @return {@code java}, or the quoted path {@link #runningWith} gave
+     */
+    String javaReference() {
+        return java;
+    }
+
+    /**
+     * How the hook command names a file: through {@code $HOME} when it is
+     * under it, quoted.
+     *
+     * @param file the file
+     * @return the quoted path
+     */
+    private String pathReference(Path file) {
+        Path absolute = file.toAbsolutePath().normalize();
         boolean throughHome = absolute.startsWith(home) && !Platform.windows();
         String path = throughHome ? HOME_REFERENCE + Platform.slashes(home.relativize(absolute))
                 : absolute.toString().replace(BACKSLASH, SLASH);
@@ -381,25 +423,16 @@ public final class HookInstaller {
     }
 
     /**
-     * Writes the settings through a temporary file, so an interrupted write
-     * never leaves half a settings file behind.
-     *
-     * <p>A settings file that is a symbolic link is written where it points.
-     * User settings often live in a dotfiles repository behind such a link,
-     * and moving the new file onto the link replaced it with a copy that the
-     * repository no longer saw.
+     * Writes the settings whole, where a link points and with the
+     * permissions they had, as {@link ConfigFile} does for every installer.
      *
      * @param settings the file
      * @param root its new content
      * @throws IOException when it cannot be written, or is a link to nothing
      */
     private void write(Path settings, ObjectNode root) throws IOException {
-        Path target = Files.isSymbolicLink(settings) ? settings.toRealPath() : settings;
-        Files.createDirectories(target.getParent());
-        Path temporary = target.resolveSibling(target.getFileName() + TEMPORARY_SUFFIX);
-        Files.writeString(temporary, json.writerWithDefaultPrettyPrinter().writeValueAsString(root)
-                + System.lineSeparator(), StandardCharsets.UTF_8);
-        Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+        ConfigFile.replace(settings, json.writerWithDefaultPrettyPrinter().writeValueAsString(root)
+                + System.lineSeparator());
     }
 
     /**
@@ -431,7 +464,7 @@ public final class HookInstaller {
      */
     public static HookInstaller forUser(Path jar, Path home, PrintStream output) {
         return new HookInstaller(home.resolve(SETTINGS_DIRECTORY).resolve(SETTINGS_FILE), jar, home, output,
-                INSTALLED_FOR_USER, true, false);
+                INSTALLED_FOR_USER, true, false, JAVA_ON_THE_PATH);
     }
 
     /**
@@ -446,6 +479,6 @@ public final class HookInstaller {
      */
     public static HookInstaller forCodex(Path jar, Path codexHome, Path home, PrintStream output) {
         return new HookInstaller(codexHome.resolve(CODEX_HOOKS_FILE), jar, home, output, INSTALLED_FOR_CODEX, false,
-                false);
+                false, JAVA_ON_THE_PATH);
     }
 }

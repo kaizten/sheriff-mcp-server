@@ -97,6 +97,18 @@ the server's registration in both assistants (`claude mcp add -e`, and
 `--install-codex --pull-always` as `env` in the entry), and `--no-mcp`, which
 CI uses with `--no-pull`, touches no assistant's configuration at all.
 
+Every installer writes an assistant's file through `ConfigFile`: whole, where
+a symbolic link points, and **with the permissions it had**. A `settings.json`
+or a `config.toml` only its owner could read used to come out of an install
+readable by every user, and both can hold tokens. The server, and the hooks of
+every project, run the Java `install.sh` checked, by the path the shell found
+it at (`SHERIFF_JAVA`, read by `--install-hooks --user`, `--install-codex` and
+`--install-antigravity`): an editor started from the desktop can have another
+PATH, and the server then only showed "connection closed". A project's own
+`.claude/settings.json`, which a team commits, keeps `java`, and `install.ps1`
+passes none, as Windows installs each JDK update in a folder named after its
+version.
+
 **The same script installs a release**, which is how anyone without a clone
 gets the tools: read from a pipe, or with `--release[=TAG]`, it has no
 checkout, so it downloads the release's jar and checksum with `gh`, logged

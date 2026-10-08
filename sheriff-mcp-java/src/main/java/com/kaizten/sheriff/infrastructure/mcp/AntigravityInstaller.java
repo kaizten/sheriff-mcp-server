@@ -6,10 +6,8 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.IOException;
 import java.io.PrintStream;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.List;
 
 /**
@@ -42,7 +40,6 @@ public final class AntigravityInstaller {
     private static final String SERVERS_FILE = "mcp_config.json";
     private static final String CLI_DIRECTORY = "antigravity-cli";
     private static final String SETTINGS_FILE = "settings.json";
-    private static final String TEMPORARY_SUFFIX = ".tmp";
     private static final String SERVERS = "mcpServers";
     private static final String SERVER_NAME = "sheriff";
     private static final String COMMAND = "command";
@@ -82,6 +79,7 @@ public final class AntigravityInstaller {
     private final Path jar;
     private final PrintStream output;
     private final boolean pullAlways;
+    private final String java;
 
     /**
      * Wires the installer.
@@ -92,22 +90,24 @@ public final class AntigravityInstaller {
      * @param output where to report what was done
      */
     public AntigravityInstaller(Path geminiHome, Path jar, PrintStream output) {
-        this(geminiHome, jar, output, false);
+        this(geminiHome, jar, output, false, JAVA);
     }
 
     /**
-     * Every field, for {@link #pullingAlways}.
+     * Every field, for {@link #pullingAlways} and {@link #runningWith}.
      *
      * @param geminiHome where {@code agy} keeps its configuration
      * @param jar this jar
      * @param output where to report
      * @param pullAlways whether the server's entry sets {@code SHERIFF_PULL=always}
+     * @param java the Java the server runs with: {@code java}, or a path
      */
-    private AntigravityInstaller(Path geminiHome, Path jar, PrintStream output, boolean pullAlways) {
+    private AntigravityInstaller(Path geminiHome, Path jar, PrintStream output, boolean pullAlways, String java) {
         this.geminiHome = geminiHome;
         this.jar = jar;
         this.output = output;
         this.pullAlways = pullAlways;
+        this.java = java;
     }
 
     /**
@@ -130,7 +130,20 @@ public final class AntigravityInstaller {
      * @return that installer
      */
     public AntigravityInstaller pullingAlways() {
-        return new AntigravityInstaller(geminiHome, jar, output, true);
+        return new AntigravityInstaller(geminiHome, jar, output, true, java);
+    }
+
+    /**
+     * The same installer, with a server that runs a given Java rather than
+     * the {@code java} on the PATH {@code agy} starts it with, as
+     * {@link HookInstaller#runningWith} explains.
+     *
+     * @param executable the Java to run, by its path
+     * @return that installer
+     */
+    public AntigravityInstaller runningWith(Path executable) {
+        return new AntigravityInstaller(geminiHome, jar, output, pullAlways,
+                executable.toAbsolutePath().normalize().toString());
     }
 
     /**
@@ -238,7 +251,7 @@ public final class AntigravityInstaller {
      */
     ObjectNode serverEntry() {
         ObjectNode entry = json.createObjectNode();
-        entry.put(COMMAND, JAVA);
+        entry.put(COMMAND, java);
         ArrayNode arguments = entry.putArray(ARGUMENTS);
         arguments.add(JAR_OPTION);
         arguments.add(jar.toAbsolutePath().normalize().toString());
@@ -283,21 +296,16 @@ public final class AntigravityInstaller {
     }
 
     /**
-     * Writes a file through a temporary one, so an interrupted write never
-     * leaves half of it behind, and where a symbolic link points, as
-     * {@link HookInstaller} does for the same reason.
+     * Writes a file whole, where a link points and with the permissions it
+     * had, as {@link ConfigFile} does for every installer.
      *
      * @param file the file
      * @param root its new content
      * @throws IOException when it cannot be written
      */
     private void write(Path file, ObjectNode root) throws IOException {
-        Path target = Files.isSymbolicLink(file) ? file.toRealPath() : file;
-        Files.createDirectories(target.getParent());
-        Path temporary = target.resolveSibling(target.getFileName() + TEMPORARY_SUFFIX);
-        Files.writeString(temporary, json.writerWithDefaultPrettyPrinter().writeValueAsString(root)
-                + System.lineSeparator(), StandardCharsets.UTF_8);
-        Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+        ConfigFile.replace(file, json.writerWithDefaultPrettyPrinter().writeValueAsString(root)
+                + System.lineSeparator());
     }
 
     /**

@@ -310,6 +310,13 @@ main() {
   if (( register == 0 )); then
     return 0
   fi
+  # The Java checked above, by the path the shell found it at, for everything
+  # an assistant starts: an editor started from the desktop can have another
+  # PATH, with an older Java or none, and the server then only showed
+  # "connection closed". The path is the one on the PATH, not where its links
+  # lead, so that updating that Java does not break it.
+  local java_bin
+  java_bin="$(command -v java)"
   local jar=(java -jar "$home_dir/sheriff-mcp.jar") hook_options=() server_options=() codex_options=()
   if (( fail_fast == 1 )); then
     hook_options+=(--fail-fast)
@@ -321,7 +328,7 @@ main() {
   # The hooks are only a settings file, so they do not wait for the claude
   # command: Claude Code from the desktop app or an IDE reads that file too.
   if (( hooks == 1 )); then
-    "${jar[@]}" --install-hooks --user ${hook_options[@]+"${hook_options[@]}"}
+    SHERIFF_JAVA="$java_bin" "${jar[@]}" --install-hooks --user ${hook_options[@]+"${hook_options[@]}"}
   else
     echo "The hooks were left out (--no-hooks). For every project, or in one project's folder without --user:"
     echo "  java -jar $home_dir/sheriff-mcp.jar --install-hooks --user"
@@ -329,7 +336,7 @@ main() {
   if command -v claude >/dev/null 2>&1; then
     claude mcp remove --scope user "$name" >/dev/null 2>&1 || true
     claude mcp add --scope user "$name" ${server_options[@]+"${server_options[@]}"} \
-      -- java -jar "$home_dir/sheriff-mcp.jar"
+      -- "$java_bin" -jar "$home_dir/sheriff-mcp.jar"
     echo "Registered the MCP server as '$name'. Restart open Claude Code sessions to pick it up."
   else
     echo "claude is not on the PATH, so the MCP server was not registered. By hand:" >&2
@@ -343,7 +350,8 @@ main() {
       if (( hooks == 0 )); then
         codex_options+=(--no-hooks)
       fi
-      "${jar[@]}" --install-codex ${hook_options[@]+"${hook_options[@]}"} ${codex_options[@]+"${codex_options[@]}"}
+      SHERIFF_JAVA="$java_bin" "${jar[@]}" --install-codex ${hook_options[@]+"${hook_options[@]}"} \
+        ${codex_options[@]+"${codex_options[@]}"}
       echo "Restart open Codex sessions to pick it up; the first one asks you to review the new hooks."
     fi
   fi
@@ -358,7 +366,7 @@ main() {
       if (( pull_always == 1 )); then
         antigravity_options+=(--pull-always)
       fi
-      "${jar[@]}" --install-antigravity ${antigravity_options[@]+"${antigravity_options[@]}"}
+      SHERIFF_JAVA="$java_bin" "${jar[@]}" --install-antigravity ${antigravity_options[@]+"${antigravity_options[@]}"}
       echo "Restart open agy sessions to pick it up."
     fi
   fi

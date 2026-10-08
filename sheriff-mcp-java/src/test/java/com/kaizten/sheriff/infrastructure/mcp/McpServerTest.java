@@ -11,6 +11,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -102,5 +103,20 @@ final class McpServerTest {
         assertEquals("1", McpServer.hookEnvironment(environment, List.of("--hook-stop", "--fail-fast"))
                 .get("SHERIFF_FAIL_FAST"));
         assertEquals(environment, McpServer.hookEnvironment(environment, List.of("--hook-stop")));
+    }
+
+    @Test
+    @DisplayName("SHERIFF_JAVA is used only when it names a file that can be run")
+    void theJavaInstallShCheckedIsUsedWhenItCanRun() throws IOException {
+        Path java = Files.writeString(workspace.resolve("java"), "#!/bin/sh\n");
+        boolean runnable = java.toFile().setExecutable(true);
+
+        assertEquals(Optional.empty(), McpServer.chosenJava(Map.of()));
+        assertEquals(Optional.empty(), McpServer.chosenJava(Map.of("SHERIFF_JAVA", " ")));
+        assertEquals(Optional.empty(), McpServer.chosenJava(Map.of("SHERIFF_JAVA",
+                workspace.resolve("missing").toString())));
+        if (runnable && Files.isExecutable(java)) {
+            assertEquals(Optional.of(java), McpServer.chosenJava(Map.of("SHERIFF_JAVA", java.toString())));
+        }
     }
 }

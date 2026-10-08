@@ -221,5 +221,36 @@ final class HookInstallerTest {
 
         assertFalse(settings(project).has("permissions"), settings(project).toString());
     }
-}
 
+    @Test
+    @DisabledOnOs(value = OS.WINDOWS, disabledReason = "on Windows the hooks name files by their absolute path")
+    @DisplayName("the hooks of every project run the Java install.sh checked, through $HOME when it is under it")
+    void theUserHooksRunTheJavaTheyAreGiven() throws Exception {
+        Path sdkJava = home.resolve(".sdkman/candidates/java/current/bin/java");
+        HookInstaller user = HookInstaller.forUser(installedJar(), home,
+                new PrintStream(output, true, StandardCharsets.UTF_8));
+
+        assertEquals(0, user.runningWith(sdkJava).install());
+        JsonNode inHome = JSON.readTree(home.resolve(".claude/settings.json").toFile()).path("hooks");
+        assertEquals(0, user.runningWith(Path.of("/usr/bin/java")).install());
+        JsonNode outside = JSON.readTree(home.resolve(".claude/settings.json").toFile()).path("hooks");
+
+        assertEquals("\"$HOME/.sdkman/candidates/java/current/bin/java\" -jar "
+                + "\"$HOME/.local/share/sheriff-agent/sheriff-mcp.jar\" --hook-gate",
+                inHome.at("/PreToolUse/0/hooks/0/command").asText());
+        assertEquals("\"/usr/bin/java\" -jar \"$HOME/.local/share/sheriff-agent/sheriff-mcp.jar\" --hook-stop",
+                outside.at("/Stop/0/hooks/0/command").asText());
+        assertEquals(1, outside.path("Stop").size(), "installing again replaced the hooks rather than adding to them");
+    }
+
+    @Test
+    @DisabledOnOs(value = OS.WINDOWS, disabledReason = "on Windows the hooks name files by their absolute path")
+    @DisplayName("a project's hooks, which a team commits, run the java on the PATH; the user's, the one given")
+    void theJavaReferenceIsThePathsUnlessOneIsGiven() throws Exception {
+        HookInstaller project = installer(project(), installedJar());
+
+        assertEquals("java", project.javaReference());
+        assertEquals("\"/opt/jdk/bin/java\"", project.runningWith(Path.of("/opt/jdk/bin/java")).javaReference());
+        assertEquals("\"$HOME/jdk/bin/java\"", project.runningWith(home.resolve("jdk/bin/java")).javaReference());
+    }
+}
