@@ -214,22 +214,31 @@ public final class Rules {
     /**
      * The rules in force for a profile, and whether that is exact.
      *
-     * <p>Exact when the catalog records this profile against its rules. When it
-     * does not, this falls back to every rule of the profile's language and
-     * says so, because the caller has to be able to tell the difference.
+     * <p>Each profile of a list is resolved by itself: the rules the catalog
+     * records against it, or, when it records none, every rule of that
+     * profile's language. The selection is exact only when every profile was
+     * found. It used to be exact as soon as one was, and a profile asked for
+     * with its base added ({@code JAVA,JAVA_HEXAGONAL_REST}) got the base's
+     * rules alone, presented as the rules in force, since Sheriff's export
+     * covers 12 of its 36 profiles.
      *
      * @param rules the whole catalog
-     * @param testType the profile in use
-     * @return the selection, with its exactness flag
+     * @param testType the profile in use, or several separated by commas
+     * @return the selection, in catalog order, with its exactness flag
      */
     public static RuleSelection selectRulesForProfile(List<SheriffRule> rules, String testType) {
-        List<String> profiles = profilesIn(testType);
-        List<SheriffRule> exact = rules.stream().filter(rule -> profiles.stream().anyMatch(rule::runsIn)).toList();
-        if (!exact.isEmpty()) {
-            return new RuleSelection(exact, true);
+        List<SheriffRule> chosen = new ArrayList<>();
+        boolean exact = true;
+        for (String profile : profilesIn(testType)) {
+            List<SheriffRule> recorded = rules.stream().filter(rule -> rule.runsIn(profile)).toList();
+            if (recorded.isEmpty()) {
+                exact = false;
+                String language = languageForProfile(profile);
+                recorded = rules.stream().filter(rule -> language.equals(rule.language())).toList();
+            }
+            chosen.addAll(recorded);
         }
-        String language = languageForProfile(testType);
-        return new RuleSelection(rules.stream().filter(rule -> language.equals(rule.language())).toList(), false);
+        return new RuleSelection(rules.stream().filter(chosen::contains).toList(), exact);
     }
 
     /**

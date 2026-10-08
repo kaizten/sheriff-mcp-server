@@ -130,6 +130,22 @@ final class ToolsTest {
     }
 
     @Test
+    @DisplayName("a profile the catalog does not record gets its language's rules, said to be that and not more")
+    void guidelinesSaysWhenAProfileIsNotInTheCatalog() {
+        SheriffRule base = new SheriffRule("RULE_A", "template", "solve it", "java", "", "", List.of("JAVA"));
+        SheriffRule other = new SheriffRule("RULE_B", "template", "solve it", "java", "", "", List.of());
+        Tools tools = tools(List.of(base, other));
+
+        String known = tools.call("sheriff_guidelines", Map.of("profile", "JAVA")).text();
+        String unknown = tools.call("sheriff_guidelines", Map.of("profile", "JAVA_HEXAGONAL_REST")).text();
+
+        assertTrue(known.startsWith("The 1 rule(s) the 'JAVA' profile enforces"), known);
+        assertTrue(unknown.startsWith("The catalog does not record which rules the 'JAVA,JAVA_HEXAGONAL_REST' "
+                + "profile runs, so these are all 2 rule(s) of its language"), unknown);
+        assertTrue(unknown.contains("RULE_A") && unknown.contains("RULE_B"), unknown);
+    }
+
+    @Test
     void guidelinesForAnUnknownReferenceCodePointsAtSearchingInstead() {
         SheriffRule rule = new SheriffRule("RULE_A", "template", "", "java", "", "", List.of("JAVA"));
         Tools tools = tools(List.of(rule));
