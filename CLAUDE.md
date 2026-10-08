@@ -152,6 +152,10 @@ as "connection closed"; re-run the script after pulling.
 `.github/workflows/ci.yml` runs both on every push to `main` and every pull
 request: `mvn -B install` first, then `scripts/e2e.sh` against the pulled
 image. A red e2e with a green build can be a new image rather than the code.
+On each of the three systems it also runs the installer as a user's would,
+which `--no-mcp` never reaches: with no assistant, when it must write into no
+one's configuration, then with stand-in `claude`, `codex` and `agy` that only
+record their calls, under `/bin/bash` (3.2 on macOS) and Windows PowerShell.
 `.github/workflows/image.yml` publishes the agent's image,
 `ghcr.io/kaizten/sheriff-mcp-server`, when CI passes on `main`, and only
 builds it on a pull request. It fails rather than publish the rule catalog:
