@@ -181,6 +181,87 @@ jobs:
           cmd /c rmdir (Join-Path $HOME '.jdks\jdk-17-ci')
           if (Test-Path (Join-Path $HOME '.jdks\jdk-17-ci')) { throw 'the link to the JDK is still there' }
           Write-Host 'The installer found the Java that was not on the PATH.'
+      # A release installs with no GitHub account: the one line reads the
+      # script from a pipe, so it has no checkout and downloads the latest
+      # release's jar by its public URL. A gh that fails and records its calls
+      # comes first on the PATH, and must not be called. A tag installs that
+      # release, and one that does not exist fails with the URL it tried.
+      - name: A release installs with no gh (bash)
+        shell: bash
+        run: |
+          set -euo pipefail
+          temp="$RUNNER_TEMP"
+          if command -v cygpath >/dev/null 2>&1; then temp="$(cygpath -u "$RUNNER_TEMP")"; fi
+          stand="$temp/no-gh"; calls="$temp/gh-calls"
+          mkdir -p "$stand"
+          printf '#!/bin/sh\necho "gh $*" >> "%s"\nexit 1\n' "$calls" > "$stand/gh"
+          chmod +x "$stand/gh"
+          export PATH="$stand:$PATH"
+          latest="$(curl -fsSLI -o /dev/null -w '%{url_effective}' https://github.com/kaizten/sheriff-mcp-server/releases/latest)"
+          tag="${latest##*/tag/}"
+          SHERIFF_HOME="$temp/no-gh-latest" bash -s -- --no-mcp --no-pull < scripts/install.sh
+          test "$(java -jar "$temp/no-gh-latest/sheriff-mcp.jar" --version)" = "sheriff-mcp ${tag#v}"
+          SHERIFF_HOME="$temp/no-gh-tag" bash -s -- --release="$tag" --no-mcp --no-pull < scripts/install.sh
+          test "$(java -jar "$temp/no-gh-tag/sheriff-mcp.jar" --version)" = "sheriff-mcp ${tag#v}"
+          if SHERIFF_HOME="$temp/no-gh-none" bash -s -- --release=v0.0.0-none --no-mcp --no-pull < scripts/install.sh 2> "$temp/none.err"; then
+            echo "a release that does not exist installed"; exit 1
+          fi
+          grep -q "releases/download/v0.0.0-none/sheriff-mcp.jar could not be downloaded" "$temp/none.err"
+          if [ -s "$calls" ]; then echo "gh was called:"; cat "$calls"; exit 1; fi
+      - name: A release installs with no gh (Windows PowerShell)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $stand = Join-Path $env:RUNNER_TEMP 'no-gh-ps'
+          $calls = Join-Path $stand 'calls.txt'
+          New-Item -ItemType Directory -Force -Path $stand | Out-Null
+          Set-Content -Encoding ASCII -Path (Join-Path $stand 'gh.cmd') -Value "@echo gh %*>>`"$calls`"`r`n@exit /b 1"
+          $env:PATH = "$stand;$env:PATH"
+          # The one line fetches the script with irm, which must give it as
+          # text although GitHub serves it as application/octet-stream.
+          $published = irm https://github.com/kaizten/sheriff-mcp-server/releases/latest/download/install.ps1
+          if (-not ($published -is [string]) -or -not $published.StartsWith('#')) { throw "irm did not give the script as text: $($published.GetType().FullName)" }
+          $script = Get-Content -Raw scripts\install.ps1
+          $env:SHERIFF_HOME = Join-Path $stand 'latest'
+          & ([scriptblock]::Create($script)) -NoMcp -NoPull
+          $version = & java -jar (Join-Path $env:SHERIFF_HOME 'sheriff-mcp.jar') --version
+          if ($LASTEXITCODE -ne 0 -or $version -notmatch '^sheriff-mcp ') { throw "the latest release did not install: $version" }
+          $env:SHERIFF_HOME = Join-Path $stand 'none'
+          $failed = $false
+          try { & ([scriptblock]::Create($script)) -Tag v0.0.0-none -NoMcp -NoPull } catch {
+              if ($_.Exception.Message -notmatch 'v0.0.0-none/sheriff-mcp.jar could not be downloaded') { throw }
+              $failed = $true
+          }
+          if (-not $failed) { throw 'a release that does not exist installed' }
+          if (Test-Path $calls) { Get-Content $calls; throw 'gh was called' }
+          Write-Host 'A release installed with no gh.'
+      - name: A release installs with no gh (PowerShell 7)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $stand = Join-Path $env:RUNNER_TEMP 'no-gh-ps'
+          $calls = Join-Path $stand 'calls.txt'
+          New-Item -ItemType Directory -Force -Path $stand | Out-Null
+          Set-Content -Encoding ASCII -Path (Join-Path $stand 'gh.cmd') -Value "@echo gh %*>>`"$calls`"`r`n@exit /b 1"
+          $env:PATH = "$stand;$env:PATH"
+          # The one line fetches the script with irm, which must give it as
+          # text although GitHub serves it as application/octet-stream.
+          $published = irm https://github.com/kaizten/sheriff-mcp-server/releases/latest/download/install.ps1
+          if (-not ($published -is [string]) -or -not $published.StartsWith('#')) { throw "irm did not give the script as text: $($published.GetType().FullName)" }
+          $script = Get-Content -Raw scripts\install.ps1
+          $env:SHERIFF_HOME = Join-Path $stand 'latest'
+          & ([scriptblock]::Create($script)) -NoMcp -NoPull
+          $version = & java -jar (Join-Path $env:SHERIFF_HOME 'sheriff-mcp.jar') --version
+          if ($LASTEXITCODE -ne 0 -or $version -notmatch '^sheriff-mcp ') { throw "the latest release did not install: $version" }
+          $env:SHERIFF_HOME = Join-Path $stand 'none'
+          $failed = $false
+          try { & ([scriptblock]::Create($script)) -Tag v0.0.0-none -NoMcp -NoPull } catch {
+              if ($_.Exception.Message -notmatch 'v0.0.0-none/sheriff-mcp.jar could not be downloaded') { throw }
+              $failed = $true
+          }
+          if (-not $failed) { throw 'a release that does not exist installed' }
+          if (Test-Path $calls) { Get-Content $calls; throw 'gh was called' }
+          Write-Host 'A release installed with no gh.'
       # With no Java at all, install.ps1 installs Temurin 21 with winget, which
       # the runner has, finds it in Program Files and sets everything up with
       # it. Last, as it leaves that JDK installed on the runner.

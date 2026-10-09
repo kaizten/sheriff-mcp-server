@@ -24,26 +24,18 @@ reference card to keep at hand.
 \begin{tip}
 \textbf{If you only have five minutes.}
 \begin{enumerate}[topsep=2pt,leftmargin=1.3em]
-  \item Have \code{gh} logged in to an account with access to the repository
-        (section~\ref{sec:requirements}). On Windows, in PowerShell:
+  \item Run the install line; no GitHub account is needed. If something is
+        missing, such as Java 17 or Docker, the installer tells you
+        (section~\ref{sec:install}). On Linux and macOS:
 \end{enumerate}
+\begin{command}[basicstyle=\ttfamily\scriptsize]{bash}
+curl -fsSL https://github.com/kaizten/sheriff-mcp-server/releases/latest/download/install.sh \
+  | bash
+\end{command}
+\noindent\hspace*{1.3em}On Windows, in PowerShell:
 \begin{command}[basicstyle=\ttfamily\footnotesize]{PowerShell}
-winget install --id GitHub.cli
-# In a new window, so that it sees gh:
-gh auth login
-\end{command}
-\begin{enumerate}[resume,leftmargin=1.3em]
-  \item Run the install line. If something is missing, such as Java 17 or
-        Docker, the installer tells you (section~\ref{sec:install}). On Linux
-        and macOS:
-\end{enumerate}
-\begin{command}[basicstyle=\ttfamily\footnotesize]{bash}
-gh release download -R kaizten/sheriff-mcp-server -p install.sh -O - | bash
-\end{command}
-\noindent\hspace*{1.3em}On Windows, in a new PowerShell window:
-\begin{command}[basicstyle=\ttfamily\scriptsize]{PowerShell}
-& ([scriptblock]::Create((gh release download -R kaizten/sheriff-mcp-server -p install.ps1 -O - |
-    Out-String)))
+$u = 'https://github.com/kaizten/sheriff-mcp-server/releases/latest/download'
+& ([scriptblock]::Create((irm "$u/install.ps1")))
 \end{command}
 \begin{enumerate}[resume,leftmargin=1.3em]
   \item Open Claude Code, Codex or Antigravity in your project and ask
@@ -155,36 +147,26 @@ needs and, when something is missing, tells you what to do.
 \subsection{The only thing you need first}
 \label{sec:requirements}
 
-The install line itself uses \code{gh}, GitHub's command line. So \code{gh}
-is the one thing that has to be ready before you start: installed and logged
-in to any GitHub account. Java and Docker need not be there first: the
-installer looks for them and tells you what to do.
-
-\begin{command}{PowerShell}
-winget install --id GitHub.cli
-# Open a new window, so that it sees gh, and in it:
-gh auth login
-\end{command}
-\begin{command}{bash}
-# macOS; on Linux, with your system's package manager (https://cli.github.com)
-brew install gh
-gh auth login
-\end{command}
+Nothing: no GitHub account, and none of its tools. The install line downloads
+the script from the repository's public releases page, and the script
+downloads the rest from the same place. Java and Docker need not be there
+first either: the installer looks for them and tells you what to do.
 
 \subsection{The install line}
 
 \needspace{4\baselineskip}
 On Linux and macOS:
 
-\begin{command}{bash}
-gh release download -R kaizten/sheriff-mcp-server -p install.sh -O - | bash
+\begin{command}[basicstyle=\ttfamily\scriptsize]{bash}
+curl -fsSL https://github.com/kaizten/sheriff-mcp-server/releases/latest/download/install.sh | bash
 \end{command}
 
-On Windows, in PowerShell (Windows PowerShell or PowerShell 7):
+Without \code{curl}, \code{wget -qO-} with the same address does the same. On
+Windows, in PowerShell (Windows PowerShell or PowerShell 7):
 
-\begin{command}[basicstyle=\ttfamily\scriptsize]{PowerShell}
-& ([scriptblock]::Create((gh release download -R kaizten/sheriff-mcp-server -p install.ps1 -O - |
-    Out-String)))
+\begin{command}[basicstyle=\ttfamily\footnotesize]{PowerShell}
+$u = 'https://github.com/kaizten/sheriff-mcp-server/releases/latest/download'
+& ([scriptblock]::Create((irm "$u/install.ps1")))
 \end{command}
 
 \subsection{If you would rather read the script first}
@@ -193,13 +175,14 @@ The install line hands the script straight to \code{bash}. If you would rather
 download it, read it and run it afterwards, do it this way; \code{--release}
 tells it to install the release even when you run it inside a repository:
 
-\begin{command}{bash}
-gh release download -R kaizten/sheriff-mcp-server -p install.sh
+\begin{command}[basicstyle=\ttfamily\scriptsize]{bash}
+curl -fsSLO https://github.com/kaizten/sheriff-mcp-server/releases/latest/download/install.sh
 bash install.sh --release
 \end{command}
 
-\begin{command}{PowerShell}
-gh release download -R kaizten/sheriff-mcp-server -p install.ps1
+\begin{command}[basicstyle=\ttfamily\footnotesize]{PowerShell}
+$u = 'https://github.com/kaizten/sheriff-mcp-server/releases/latest/download'
+irm "$u/install.ps1" -OutFile install.ps1
 .\install.ps1 -Release
 \end{command}
 
@@ -218,9 +201,6 @@ Java 17 or newer & It looks in \code{JAVA_HOME}, on the \code{PATH} and in
   and sets the assistants up with its full path. With none, on Windows it
   installs Temurin 21 with \code{winget}; on Linux and macOS it stops and tells
   you where to get it (\path{https://adoptium.net}). \\
-gh logged in & Only when installing a release. On Windows it installs it with
-  \code{winget} when it is missing and asks you to log in; on Linux and macOS
-  it stops and tells you what to do. \\
 Docker & It goes on without it, warning that nothing can be analyzed until you
   have it. With \code{--install-docker} it installs it (on Linux with Docker's
   script or, on Arch, \code{pacman}, and adds you to the \code{docker} group;
@@ -236,7 +216,8 @@ The MCP server & At the end it starts it once, as your assistant will, and
 \end{tabularx}
 \end{center}
 
-It always writes Claude Code's hooks, whether it is installed or not: they are only a
+It writes Claude Code's hooks even when \code{claude} is not on the
+\code{PATH}, as long as the folder \path{~/.claude} exists: they are only a
 settings file, which the desktop app and the editor extensions read too. It
 touches no project. Sheriff's rules (the \emph{catalog}) are not in the
 download: the tools extract them from the image the first time they need them,
@@ -309,10 +290,10 @@ Options go at the end of the install line: in bash, after \code{bash -s --};
 in PowerShell, after the script block. For example:
 
 \begin{command}{bash}
-gh release download ... -p install.sh -O - | bash -s -- --pull-always
+curl -fsSL .../install.sh | bash -s -- --pull-always
 \end{command}
-\begin{command}[basicstyle=\ttfamily\scriptsize]{PowerShell}
-& ([scriptblock]::Create((gh release download ... -p install.ps1 -O - | Out-String))) -PullAlways
+\begin{command}{PowerShell}
+& ([scriptblock]::Create((irm "$u/install.ps1"))) -PullAlways
 \end{command}
 
 \begin{center}
@@ -581,16 +562,14 @@ java -jar ~/.local/share/sheriff-agent/sheriff-mcp.jar --check
 \end{center}
 
 If Sheriff's image is not there, it pulls it before analyzing. In GitHub
-Actions, for example, with the token the workflow already has:
+Actions, for example, with no token and no account:
 
 \begin{command}{GitHub Actions}
 - uses: actions/setup-java@v5
   with: { distribution: temurin, java-version: '17' }
 - run: |
-    gh release download -R kaizten/sheriff-mcp-server \
-      -p sheriff-mcp.jar
-  env:
-    GH_TOKEN: ${{ github.token }}
+    curl -fsSLO https://github.com/kaizten/sheriff-mcp-server/\
+    releases/latest/download/sheriff-mcp.jar
 - run: java -jar sheriff-mcp.jar --check
 \end{command}
 \done The CI step is green, or red with the list of errors.
@@ -979,7 +958,7 @@ with the 81 tests and the project's formatter green.
 
 \subsection{When installing}
 
-These are the installer's own messages. On the first five it stops; on the rest
+These are the installer's own messages. On the first four it stops; on the rest
 it goes on and warns you.
 
 \problem{\code{No Java 17 or newer was found}}{There is no Java 17 or newer in
@@ -987,12 +966,10 @@ it goes on and warns you.
 Install one (for example, Temurin from \path{https://adoptium.net}; on Windows,
 \code{winget install EclipseAdoptium.Temurin.21.JDK}) and run the line again.
 It need not be on the \code{PATH}.}
-\problem{\code{gh is not installed}, or \code{gh is not logged in}}{Install
-\code{gh} and run \code{gh auth login} with the account that has access to the
-repository.}
-\problem{\code{release not found}, or HTTP 404}{The account \code{gh} is logged
-in to cannot read the repository. Check it with \code{gh auth status} and ask
-for access.}
+\problem{\code{... could not be downloaded}}{There is no network, or there is
+a proxy \code{curl} or PowerShell does not know about. With
+\code{--release=TAG} (\code{-Tag}), there is no release by that name. Run the
+line again once there is network.}
 \problem{\code{the jar downloaded does not match its checksum}}{The download
 was cut short. Run the line again.}
 \problem{\code{The MCP server does not start: FAIL}}{The installer started the
@@ -1192,9 +1169,11 @@ sheriff\_task & A task's state. \\
 \hfill
 \begin{minipage}[t]{0.48\linewidth}\raggedright
 \cardhead{Install or update}
-{\ttfamily\footnotesize gh release download \textbackslash\\
-\hspace*{1em}-R kaizten/sheriff-mcp-server \textbackslash\\
-\hspace*{1em}-p install.sh -O - | bash\par}
+{\ttfamily\footnotesize curl -fsSL https://github.com/\textbackslash\\
+kaizten/sheriff-mcp-server/\textbackslash\\
+releases/latest/download/\textbackslash\\
+install.sh | bash\par}
+{\footnotesize On Windows, the line in section~\ref{sec:install}.\par}
 
 \cardhead{Commands}
 {\ttfamily\footnotesize

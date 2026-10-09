@@ -3,15 +3,15 @@
 # Codex: the Windows counterpart of install.sh.
 #
 # From a checkout it builds and tests both modules first. Anywhere else it
-# downloads a release's jar with gh, logged in to any GitHub account: that is the
-# one line a release gives, and running it again updates everything.
+# downloads a release's jar from GitHub, by its public URL, with no account:
+# that is the one line a release gives, and running it again updates
+# everything.
 #
-#   & ([scriptblock]::Create((gh release download -R kaizten/sheriff-mcp-server -p install.ps1 -O - | Out-String)))
+#   & ([scriptblock]::Create((irm https://github.com/kaizten/sheriff-mcp-server/releases/latest/download/install.ps1)))
 #
 # Options go after that line, or after scripts\install.ps1:
 #   -Release [-Tag TAG]  install a release's jar instead of building (the
-#                        latest, or TAG); needs gh, logged in to any GitHub
-#                        account, and no Maven
+#                        latest, or TAG); needs no Maven
 #   -NoPull              do not pull Sheriff's image (the MCP server pulls it
 #                        by itself when it is missing)
 #   -InstallDocker       install Docker Desktop from docker.com when it is
@@ -37,8 +37,7 @@
 #
 # Java 17 or newer is looked for in JAVA_HOME, on the PATH and where JDKs are
 # installed, and every assistant is set up to run it by its absolute path.
-# With none, Temurin 21 is installed with winget, and so is gh when a release
-# is installed without it. A Java update that removes the folder of the old
+# With none, Temurin 21 is installed with winget. A Java update that removes the folder of the old
 # one breaks that path: run this again after it.
 #
 # Only the assistants this machine has are set up, and the run ends saying
@@ -56,7 +55,8 @@
 #
 # Two rules for whoever edits this file. It never calls exit: run as a script
 # block, exit would close the window it runs in. And it is ASCII only:
-# Windows PowerShell decodes gh's output in the console's code page.
+# Windows PowerShell decodes what irm downloads without knowing its encoding,
+# as GitHub serves it as application/octet-stream.
 #
 # If PowerShell refuses to run it as a file, allow local scripts for this session:
 #   Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
@@ -222,19 +222,11 @@ if (-not $java) {
 }
 Write-Host "Using Java $(Get-JavaMajor $java) at $java"
 if ($fromRelease) {
-    if (-not (Get-Command gh -ErrorAction SilentlyContinue) -and -not (Install-WithWinget 'GitHub.cli' 'gh')) {
-        Write-Error "gh is not installed, and it is what downloads a release: https://cli.github.com, then 'gh auth login', and run this again."
-    }
-    if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
-        Write-Error "gh could not be installed with winget (see above): https://cli.github.com, then 'gh auth login', and run this again."
-    }
-    if (-not (Test-Native { gh auth status })) {
-        Write-Host "gh is not logged in; log in with any GitHub account:"
-        & gh auth login
-        if (-not (Test-Native { gh auth status })) {
-            Write-Error "gh is not logged in. Run 'gh auth login' with any GitHub account, and run this again."
-        }
-    }
+    # A release's files are downloaded by their public URL, so no GitHub
+    # account is needed; gh used to do it, when the repository was private.
+    # Windows PowerShell on an older .NET offers nothing newer than TLS 1.0,
+    # and GitHub takes nothing older than 1.2.
+    [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 } elseif (-not (Get-Command mvn -ErrorAction SilentlyContinue)) {
     Write-Error "Maven (mvn) is not installed, and it is what builds these tools: https://maven.apache.org/install.html, or install a release instead: -Release"
 }
@@ -250,10 +242,22 @@ if ($fromRelease) {
     try {
         $which = if ($Tag) { $Tag } else { 'the latest release' }
         Write-Host "Downloading sheriff-mcp.jar from $which of $releases..."
-        $download = @('release', 'download')
-        if ($Tag) { $download += $Tag }
-        & gh @download -R $releases -p sheriff-mcp.jar -p sheriff-mcp.jar.sha256 -D $downloads
-        if ($LASTEXITCODE -ne 0) { Write-Error "The release could not be downloaded; gh says why above." }
+        $base = if ($Tag) { "https://github.com/$releases/releases/download/$Tag" } else { "https://github.com/$releases/releases/latest/download" }
+        # Without its progress bar: Windows PowerShell draws it so often that
+        # it makes a download several times slower.
+        $savedProgress = $ProgressPreference
+        $ProgressPreference = 'SilentlyContinue'
+        try {
+            foreach ($file in 'sheriff-mcp.jar', 'sheriff-mcp.jar.sha256') {
+                try {
+                    Invoke-WebRequest -UseBasicParsing -Uri "$base/$file" -OutFile (Join-Path $downloads $file)
+                } catch {
+                    Write-Error "$base/$file could not be downloaded: there is no network, or no release $(if ($Tag) { $Tag } else { 'yet' }). $($_.Exception.Message)"
+                }
+            }
+        } finally {
+            $ProgressPreference = $savedProgress
+        }
         $expected = ((Get-Content -Raw (Join-Path $downloads 'sheriff-mcp.jar.sha256')).Trim() -split '\s+')[0]
         $actual = (Get-FileHash -Algorithm SHA256 (Join-Path $downloads 'sheriff-mcp.jar')).Hash
         if ($expected -ne $actual) { Write-Error "The jar downloaded does not match its checksum. Run this again." }

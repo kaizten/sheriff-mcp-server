@@ -6,16 +6,18 @@
 # which it finds beside itself.
 #
 # From a checkout it builds and tests both modules first. Anywhere else it
-# downloads a release's jar with gh, logged in to any GitHub account: that is the
-# one line a release gives, and running it again updates everything.
+# downloads a release's jar from GitHub, by its public URL, with no account:
+# that is the one line a release gives, and running it again updates
+# everything.
 #
-#   gh release download -R kaizten/sheriff-mcp-server -p install.sh -O - | bash
+#   curl -fsSL https://github.com/kaizten/sheriff-mcp-server/releases/latest/download/install.sh | bash
 #
 # Options: --help, or usage() below. Everything runs from main(), on the last
 # line, so a script read from a pipe is read whole before any of it runs.
 set -euo pipefail
 
 readonly releases="kaizten/sheriff-mcp-server"
+readonly release_files="https://github.com/$releases/releases"
 readonly docker_desktop="https://desktop.docker.com/mac/main"
 readonly minimum_java=17
 scratch=""
@@ -27,8 +29,7 @@ install.sh [options]      from a checkout: build, test and install
                           anywhere else, or with --release: install a release
 
   --release[=TAG]   install a release's jar instead of building (the latest,
-                    or TAG); needs gh, logged in to any GitHub account,
-                    and no Maven
+                    or TAG); needs curl or wget, and no Maven
   --no-pull         do not pull Sheriff's image (the MCP server pulls it by
                     itself when it is missing)
   --install-docker  install Docker when it is missing, and start it when it
@@ -194,15 +195,22 @@ check_maven() {
   fi
 }
 
-check_gh() {
-  if ! command -v gh >/dev/null 2>&1; then
-    echo "install.sh: gh is not installed, and it is what downloads a release:" >&2
-    echo "  https://cli.github.com, then 'gh auth login', and run this again." >&2
+# A release's files are downloaded by their public URL, so no GitHub account
+# is needed: curl, or wget where there is no curl. gh used to do it, when the
+# repository was private, and asked every user to log in first.
+check_downloader() {
+  if ! command -v curl >/dev/null 2>&1 && ! command -v wget >/dev/null 2>&1; then
+    echo "install.sh: neither curl nor wget is installed, and one of them downloads the release." >&2
     exit 1
   fi
-  if ! gh auth status >/dev/null 2>&1; then
-    echo "install.sh: gh is not logged in. Run 'gh auth login' with any GitHub account." >&2
-    exit 1
+}
+
+# One file, from a URL into a path, failing on an HTTP error.
+fetch() {
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSL --retry 3 -o "$2" "$1"
+  else
+    wget -q --tries=3 -O "$2" "$1"
   fi
 }
 
@@ -236,14 +244,19 @@ sha256_check() {
 # A release carries no rule catalog: it is Kaizten's content, and the tools
 # extract their own from the image installed.
 download_release() {
-  local tag="$1" home_dir="$2" downloads="$scratch/release"
+  local tag="$1" home_dir="$2" downloads="$scratch/release" base file
+  base="$release_files/latest/download"
+  if [[ -n "$tag" ]]; then
+    base="$release_files/download/$tag"
+  fi
   mkdir -p "$downloads"
   echo "Downloading sheriff-mcp.jar from ${tag:-the latest release} of $releases..."
-  if ! gh release download ${tag:+"$tag"} -R "$releases" -p sheriff-mcp.jar -p sheriff-mcp.jar.sha256 \
-      -D "$downloads"; then
-    echo "install.sh: the release could not be downloaded; gh says why above." >&2
-    exit 1
-  fi
+  for file in sheriff-mcp.jar sheriff-mcp.jar.sha256; do
+    if ! fetch "$base/$file" "$downloads/$file"; then
+      echo "install.sh: $base/$file could not be downloaded: there is no network, or no release ${tag:-yet}." >&2
+      exit 1
+    fi
+  done
   if ! (cd "$downloads" && sha256_check sheriff-mcp.jar.sha256 >/dev/null); then
     echo "install.sh: the jar downloaded does not match its checksum. Run this again." >&2
     exit 1
@@ -417,7 +430,7 @@ main() {
   fi
   find_java
   if (( from_release == 1 )); then
-    check_gh
+    check_downloader
   else
     check_maven
   fi

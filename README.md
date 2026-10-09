@@ -18,7 +18,8 @@ what each answer and each hook means, and what to do when something is off. It
 is a PDF attached to every release, with that release's version on its cover:
 
 ```bash
-gh release download -R kaizten/sheriff-mcp-server -p 'sheriff-playbook-*.pdf'
+curl -fsSLO https://github.com/kaizten/sheriff-mcp-server/releases/latest/download/sheriff-playbook-es.pdf
+curl -fsSLO https://github.com/kaizten/sheriff-mcp-server/releases/latest/download/sheriff-playbook-en.pdf
 ```
 
 Its source is in [`playbook/`](playbook/), and `scripts/playbook.sh` builds it.
@@ -26,19 +27,23 @@ This readme stays the reference: every option, variable and reason.
 
 ## Install
 
-Java 17 or newer, git and Docker, on Linux, macOS or Windows, and
-[gh](https://cli.github.com) logged in (`gh auth login`) to any GitHub
-account (on Windows, `winget install --id GitHub.cli`, then a new window). One
-line installs the latest release, and the same line updates it:
+Java 17 or newer, git and Docker, on Linux, macOS or Windows; no GitHub
+account, as the repository is public. One line installs the latest release,
+and the same line updates it:
 
 ```bash
-gh release download -R kaizten/sheriff-mcp-server -p install.sh -O - | bash
+curl -fsSL https://github.com/kaizten/sheriff-mcp-server/releases/latest/download/install.sh | bash
 ```
 
 ```powershell
 # Windows, in PowerShell
-& ([scriptblock]::Create((gh release download -R kaizten/sheriff-mcp-server -p install.ps1 -O - | Out-String)))
+& ([scriptblock]::Create((irm https://github.com/kaizten/sheriff-mcp-server/releases/latest/download/install.ps1)))
 ```
+
+Where there is no curl, `wget -qO- <the same URL> | bash` does the same; the
+script itself downloads with either. The PowerShell line is a script block
+rather than `irm ... | iex` so that the script runs in a scope of its own,
+leaving nothing in your session, and takes options.
 
 It installs the jar in `~/.local/share/sheriff-agent/`, pulls Sheriff's image
 (about 4 GB the first time, only what changed after that), and sets up the
@@ -63,8 +68,7 @@ and where JDKs are installed (`/usr/lib/jvm`, macOS's `java_home`, on Windows
 and sets every assistant up to run it by that absolute path: Claude Code runs
 the hooks in Git Bash on Windows, and an editor started from the desktop can
 have another PATH, so a bare `java` that works in the terminal failed there.
-With none, `install.ps1` installs Temurin 21 with winget, and gh too when it
-installs a release without it. Run the line again after a Java update that
+With none, `install.ps1` installs Temurin 21 with winget. Run the line again after a Java update that
 removes the old one. Last, it starts the server as the assistants will and
 sends it `initialize`: `The MCP server starts: OK`, or FAIL with the cause.
 
@@ -116,8 +120,7 @@ Maven plugin only suits a Maven project; any other project gates its CI with
 installer checks the first two itself and says what is missing:
 
 ```bash
-java -version            # 17 or newer
-gh auth status           # logged in to any GitHub account
+java -version            # 17 or newer (it need not be on the PATH)
 docker info              # Docker running (Docker Desktop on macOS and Windows),
                          # or let the installer set it up: --install-docker
 claude --version         # Claude Code, for the MCP tools and the hooks
@@ -127,7 +130,7 @@ claude --version         # Claude Code, for the MCP tools and the hooks
 [Install](#install), and check them:
 
 ```bash
-gh release download -R kaizten/sheriff-mcp-server -p install.sh -O - | bash
+curl -fsSL https://github.com/kaizten/sheriff-mcp-server/releases/latest/download/install.sh | bash
 claude mcp list          # sheriff: ... ✔ Connected
 codex mcp list           # sheriff ... enabled, when Codex is installed
 java -jar ~/.local/share/sheriff-agent/sheriff-mcp.jar --version
@@ -214,7 +217,7 @@ fails on errors. For a CI runner, install the plugin there too
 | Symptom | Cause |
 |---|---|
 | `sheriff: ... ✗ Failed to connect` | The jar moved or was never built, or `java` is older than 17: run the installer again, which checks |
-| "release not found", or HTTP 404, while installing | The GitHub account `gh` is logged in to cannot read this repository: `gh auth status` |
+| "... could not be downloaded", while installing | No network, or a proxy curl or PowerShell is not told about; with `--release=TAG` (`-Tag`), no release by that name |
 | "Sheriff's image ... is being downloaded" | The first use on this machine: wait a few minutes |
 | "... could not be downloaded" | Docker is not running, or there is no network |
 | "... no matching manifest for windows" | Docker Desktop is set to Windows containers: switch it to Linux containers (its default) |
