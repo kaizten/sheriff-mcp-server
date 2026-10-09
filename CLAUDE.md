@@ -217,7 +217,7 @@ java -jar target/sheriff-mcp.jar --agent --help
 # The Maven plugin (needs the MCP module installed first)
 cd sheriff-maven-plugin
 mvn install
-mvn com.kaizten:sheriff-maven-plugin:1.0.4:check    # on any Maven module
+mvn com.kaizten:sheriff-maven-plugin:1.0.5:check    # on any Maven module
 ```
 
 The agent is configured entirely by environment variables — `TARGET_REPO`,
