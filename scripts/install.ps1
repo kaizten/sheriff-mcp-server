@@ -20,6 +20,11 @@
 #                        stopped. Docker Desktop asks you to accept its terms
 #                        the first time it starts; this does not accept them
 #                        for you
+#   -DockerWsl           use the Docker command line installed inside WSL (no
+#                        Docker Desktop): checks 'wsl docker info', pulls the
+#                        image through it and sets SHERIFF_DOCKER=wsl for this
+#                        user, so the server and the hooks run docker as
+#                        'wsl docker' (needs a jar that knows the variable)
 #   -PullAlways          have the MCP server pull a newer Sheriff image each
 #                        time it starts (SHERIFF_PULL=always, written into the
 #                        server's registration); without it a newer image is
@@ -61,7 +66,7 @@
 # If PowerShell refuses to run it as a file, allow local scripts for this session:
 #   Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 param(
-    [switch]$Release, [string]$Tag, [switch]$NoPull, [switch]$InstallDocker, [switch]$PullAlways,
+    [switch]$Release, [string]$Tag, [switch]$NoPull, [switch]$InstallDocker, [switch]$DockerWsl, [switch]$PullAlways,
     [switch]$NoMcp, [switch]$NoHooks, [switch]$NoCodex, [switch]$NoAntigravity, [switch]$FailFast
 )
 $ErrorActionPreference = 'Stop'
@@ -324,7 +329,19 @@ if ($InstallDocker -and -not (Get-Command docker -ErrorAction SilentlyContinue))
     }
 }
 $dockerRunning = $false
-if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
+$viaWsl = $DockerWsl -or ($env:SHERIFF_DOCKER -like 'wsl*')
+if ($viaWsl) {
+    if ((Get-Command wsl.exe -ErrorAction SilentlyContinue) -and (Test-Native { wsl.exe docker info })) {
+        $dockerRunning = $true
+        $env:SHERIFF_DOCKER = if ($env:SHERIFF_DOCKER -like 'wsl*') { $env:SHERIFF_DOCKER } else { 'wsl' }
+        if (-not $NoMcp) {
+            [Environment]::SetEnvironmentVariable('SHERIFF_DOCKER', $env:SHERIFF_DOCKER, 'User')
+            Write-Host "Docker runs through WSL (SHERIFF_DOCKER=$($env:SHERIFF_DOCKER), set for this user). Restart open Claude Code sessions and terminals to pick it up."
+        }
+    } else {
+        Write-Warning "'wsl docker info' failed: start the Docker engine inside WSL (for example 'wsl sudo service docker start') and run this again. The install goes on, but nothing can be analyzed until it is up."
+    }
+} elseif (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
     if (-not $InstallDocker) {
         Write-Warning "Docker is not installed. The install goes on, but nothing can be analyzed until it is: run this again with -InstallDocker, or see https://docs.docker.com/desktop/ (use Linux containers, its default)."
     }
@@ -341,7 +358,7 @@ if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
 }
 if ($dockerRunning -and -not $NoPull) {
     Write-Host "Pulling $image (about 4 GB the first time, only what changed after that)..."
-    & docker pull $image
+    if ($viaWsl) { & wsl.exe docker pull $image } else { & docker pull $image }
     if ($LASTEXITCODE -ne 0) {
         Write-Warning "Sheriff's image could not be pulled now (with Windows containers, switch Docker Desktop to Linux containers); the MCP server pulls it by itself when it starts."
     }
