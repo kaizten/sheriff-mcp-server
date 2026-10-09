@@ -29,7 +29,10 @@ concurrency:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # 45, not 20: the playbook's TeX packages are about 1 GB from Ubuntu's
+    # mirror, and on 9 October a slow one took 6 minutes for 21 MB and the
+    # job was cancelled before it published anything.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-java@v5

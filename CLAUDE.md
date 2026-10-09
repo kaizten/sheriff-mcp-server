@@ -105,7 +105,10 @@ With `codex` on the PATH it sets Codex up the same way (`--install-codex`,
 and the approval `codex mcp add` cannot write, the order of work in
 `~/.codex/AGENTS.md`, which Codex reads in every project, and the Stop and
 turn hooks, without the gate, in `~/.codex/hooks.json`. The one step left to
-the user is Codex's review of a new hook, and it stays there on purpose. With
+the user is Codex's review of a new hook, and it stays there on purpose; the
+installer and the playbook say what skipping it costs, as on PetClinic
+(9 October) Codex twice stopped with over a hundred errors left and only the
+Stop hook sent it on. With
 no assistant at all it writes nothing into anyone's configuration (it used to
 create `~/.claude/settings.json` for a Claude Code nobody had) and ends saying
 the jar is installed only as the CI gate and the Maven plugin; `install.ps1`
