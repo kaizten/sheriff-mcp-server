@@ -25,12 +25,25 @@ una tarjeta de referencia para tener a mano.
 \textbf{Si solo tienes cinco minutos.}
 \begin{enumerate}[topsep=2pt,leftmargin=1.3em]
   \item Ten \code{gh} con sesión iniciada en una cuenta con acceso al
-        repositorio (sección~\ref{sec:requisitos}).
+        repositorio (sección~\ref{sec:requisitos}). En Windows, en PowerShell:
+\end{enumerate}
+\begin{command}[basicstyle=\ttfamily\footnotesize]{PowerShell}
+winget install --id GitHub.cli
+# En una ventana nueva, para que vea gh:
+gh auth login
+\end{command}
+\begin{enumerate}[resume,leftmargin=1.3em]
   \item Ejecuta la línea de instalación. Si falta algo, como Java 17 o Docker,
-        el instalador te lo dice (sección~\ref{sec:instalacion}):
+        el instalador te lo dice (sección~\ref{sec:instalacion}). En Linux y
+        macOS:
 \end{enumerate}
 \begin{command}[basicstyle=\ttfamily\footnotesize]{bash}
 gh release download -R kaizten/sheriff-mcp-server -p install.sh -O - | bash
+\end{command}
+\noindent\hspace*{1.3em}En Windows, en una ventana nueva de PowerShell:
+\begin{command}[basicstyle=\ttfamily\scriptsize]{PowerShell}
+& ([scriptblock]::Create((gh release download -R kaizten/sheriff-mcp-server -p install.ps1 -O - |
+    Out-String)))
 \end{command}
 \begin{enumerate}[resume,leftmargin=1.3em]
   \item Abre Claude Code, Codex o Antigravity en tu proyecto y pide
@@ -146,10 +159,17 @@ lo que necesita y, si falta algo, te dice qué hacer.
 
 La propia línea de instalación usa \code{gh}, la línea de comandos de GitHub.
 Así que \code{gh} es lo único que tiene que estar listo antes de empezar:
-instalado (\path{https://cli.github.com}) y con sesión iniciada en cualquier
-cuenta de GitHub.
+instalado y con sesión iniciada en cualquier cuenta de GitHub. Java y Docker
+no hace falta tenerlos antes: el instalador los busca y te dice qué hacer.
 
+\begin{command}{PowerShell}
+winget install --id GitHub.cli
+# Abre una ventana nueva, para que vea gh, y en ella:
+gh auth login
+\end{command}
 \begin{command}{bash}
+# macOS; en Linux, con el gestor de paquetes de tu sistema (https://cli.github.com)
+brew install gh
 gh auth login
 \end{command}
 
@@ -196,9 +216,14 @@ repositorio en GitHub.
 \rowcolors{2}{pbcode}{white}
 \begin{tabularx}{\linewidth}{@{\hspace{6pt}}K{33mm}L}
 \headrow \thead{Comprueba} & \thead{Si falta} \\
-Java 17 o posterior & Se detiene y te indica dónde descargarlo
-  (\path{https://adoptium.net}). Instálalo y repite la línea. \\
-gh con sesión & Se detiene y te dice que ejecutes \code{gh auth login}. \\
+Java 17 o posterior & Lo busca en \code{JAVA_HOME}, en el \code{PATH} y en
+  las carpetas donde se instalan los JDK, aunque no esté en el \code{PATH}, y
+  configura los asistentes con su ruta completa. Si no hay ninguno, en Windows
+  instala Temurin 21 con \code{winget}; en Linux y macOS se detiene y te indica
+  dónde descargarlo (\path{https://adoptium.net}). \\
+gh con sesión & Solo al instalar una release. En Windows lo instala con
+  \code{winget} si falta y te pide iniciar sesión; en Linux y macOS se detiene
+  y te dice qué hacer. \\
 Docker & Sigue sin él y te avisa de que no se podrá analizar nada hasta que lo
   tengas. Con \code{--install-docker} lo instala (en Linux, con el script de
   Docker o, en Arch, con \code{pacman}, y te añade al grupo \code{docker}; en
@@ -209,6 +234,8 @@ Codex & Si está, lo configura (sección~\ref{sec:codex}). Si no, te imprime el
   comando para cuando lo instales. \\
 Antigravity & Si está \code{agy}, lo configura (sección~\ref{sec:antigravity}).
   Si no, te imprime el comando para cuando lo instales. \\
+El servidor MCP & Al final lo arranca una vez, como lo arrancará tu asistente,
+  y comprueba que responde: \code{OK}, o \code{FAIL} con la causa. \\
 \end{tabularx}
 \end{center}
 
@@ -227,10 +254,11 @@ instalador no las acepta por ti. En empresas de más de 250 personas o de más d
 \subsection{Lo que verás}
 
 Esta es la salida de una instalación real en una máquina con Claude Code,
-Codex y Antigravity. Entre la segunda línea y la tercera aparece también la descarga de la
+Codex y Antigravity. Entre la tercera línea y la cuarta aparece también la descarga de la
 imagen de Sheriff: unos 4\,GB la primera vez y, después, solo lo que cambie.
 
 \begin{answer}[Salida del instalador]
+Using Java 17 at /usr/bin/java
 Downloading sheriff-mcp.jar from the latest release of kaizten/sheriff-mcp-server...
 Installed sheriff-mcp 1.0.4 into /home/ana/.local/share/sheriff-agent
 Sheriff's hooks are in /home/ana/.claude/settings.json, for every project Claude Code opens:
@@ -259,13 +287,15 @@ Antigravity is set up for every project agy opens:
 It has no Sheriff hooks: a turn there can end with errors left.
 Undo with: java -jar sheriff-mcp.jar --uninstall-antigravity
 Restart open agy sessions to pick it up.
+The MCP server starts: OK, it answers as sheriff.
 
 Sheriff is set up for Claude Code, Codex and Antigravity.
 \end{answer}
 
-Dice qué versión ha instalado y dónde y, para cada asistente, qué hooks ha
+Dice qué Java usará, qué versión ha instalado y dónde y, para cada asistente, qué hooks ha
 activado, qué herramientas pueden ejecutarse sin pedir permiso y cómo deshacer
-cada cosa; en su última línea, qué asistentes ha configurado. Solo configura
+cada cosa; después, que el servidor arranca, y en su última línea, qué
+asistentes ha configurado. Solo configura
 los que la máquina ya tiene, y nunca instala ninguno: un asistente que no está
 recibe una línea que dice cómo configurarlo cuando lo esté. Como pide,
 \textbf{reinicia las sesiones de Claude Code y de Codex que tuvieras abiertas}.
@@ -955,12 +985,15 @@ pasadas, con los 81 tests y el formateador del proyecto en verde.
 
 \subsection{Al instalar}
 
-Estos son los mensajes del propio instalador. En los dos primeros se detiene; en
+Estos son los mensajes del propio instalador. En los cinco primeros se detiene; en
 los demás sigue y te avisa.
 
-\problem{\code{Java is not installed}, o \code{Java ... is on the PATH, but these tools need 17 or newer}}{Instala
-Java 17 o posterior (por ejemplo, Temurin de \path{https://adoptium.net}), haz
-que sea el que responde a \code{java -version} y repite la línea.}
+\problem{\code{No Java 17 or newer was found}}{No hay ningún Java 17 o posterior
+ni en \code{JAVA_HOME}, ni en el \code{PATH}, ni en las carpetas donde se
+instalan los JDK. Instala uno (por ejemplo, Temurin de
+\path{https://adoptium.net}; en Windows,
+\code{winget install EclipseAdoptium.Temurin.21.JDK}) y repite la línea. No
+hace falta que esté en el \code{PATH}.}
 \problem{\code{gh is not installed}, o \code{gh is not logged in}}{Instala
 \code{gh} y ejecuta \code{gh auth login} con la cuenta que tiene acceso al
 repositorio.}
@@ -969,6 +1002,9 @@ tiene sesión no puede leer el repositorio. Compruébalo con \code{gh auth statu
 y pide acceso.}
 \problem{\code{the jar downloaded does not match its checksum}}{La descarga se
 cortó. Repite la línea.}
+\problem{\code{The MCP server does not start: FAIL}}{El instalador arrancó el
+servidor con el Java que encontró, como lo arrancará tu asistente, y no
+respondió. Detrás va lo que dijo el servidor; con eso, repite la línea.}
 \problem{\code{Docker is not installed. The install goes on}\ldots}{Las
 herramientas quedan instaladas, pero no analizarán nada hasta que haya Docker.
 Instálalo, o repite la línea con \code{--install-docker}.}
@@ -992,8 +1028,15 @@ configuración de ningún asistente: Sheriff queda solo como comprobación de CI
 \subsection{Al abrir una sesión}
 
 \problem{\code{Failed to connect} en \code{claude mcp list}, o \code{connection closed}}{El
-jar no está donde dice el registro, o \code{java} es anterior a la 17. Repite la
-línea de instalación, que lo comprueba.}
+jar no está donde dice el registro, o el Java registrado ya no está: al
+actualizar Java en Windows, la carpeta del JDK cambia de nombre. Repite la
+línea de instalación, que vuelve a buscar Java y comprueba que el servidor
+arranca.}
+\problem{En Windows, los hooks fallan con un error \code{non-blocking} y
+\code{java: command not found}}{Los escribió un instalador anterior, que ponía
+\code{java} sin ruta, y Claude Code ejecuta los hooks en Git Bash, donde Java
+puede no estar en el \code{PATH}. Repite la línea de instalación: ahora escribe
+la ruta completa de \code{java.exe}.}
 \problem{Claude Code pide permiso cada vez que usa \tool{sheriff_fix}}{Los
 permisos no se escribieron: repite la instalación. \tool{sheriff_autofix}
 pregunta siempre, a propósito.}
@@ -1078,7 +1121,12 @@ herramienta desde la terminal con la misma respuesta que da el servidor.}
 
 \textbf{Para actualizar}, repite la línea de instalación: descarga la última
 versión y vuelve a escribir la configuración. Después, reinicia las sesiones
-abiertas.
+abiertas. Repítela también si actualizas o cambias de Java: los asistentes lo
+llaman por su ruta completa, y la del Java anterior puede desaparecer.
+
+En los comandos de desinstalación, si \code{java} no está en el \code{PATH},
+pon en su lugar la ruta que el instalador mostró en su primera línea
+(\code{Using Java ... at ...}).
 
 \textbf{Para desinstalar}, en este orden, porque los primeros pasos usan el
 jar. En Linux y macOS:
