@@ -342,7 +342,7 @@ directory name is the component.
 <plugin>
   <groupId>com.kaizten</groupId>
   <artifactId>sheriff-maven-plugin</artifactId>
-  <version>1.0.0</version>
+  <version>1.0.1</version>
   <executions><execution><goals><goal>check</goal></goals></execution></executions>
 </plugin>
 ```
