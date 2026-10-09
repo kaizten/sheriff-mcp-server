@@ -96,9 +96,12 @@ function Test-Native([scriptblock]$Command) {
 # A native program run without PowerShell in between, for its exit code and
 # both its streams: Windows PowerShell turns a redirected stderr into errors,
 # and java writes its version there. Text, when given, is its standard input,
-# which is then closed. One that has not ended after Seconds is killed. With
-# NoPath it runs with an empty PATH, so that it can start nothing found there.
-function Invoke-Captured([string]$File, [string]$Arguments, [string]$Directory, [string]$Text, [int]$Seconds = 30, [switch]$NoPath) {
+# which is then closed, after an empty line: Windows PowerShell's .NET puts a
+# byte order mark before what it writes when the console is UTF-8, and a
+# server that read it glued to the first message answered "Invalid JSON".
+# Environment adds to or replaces its variables. One that has not ended, or
+# whose output has not, after Seconds is killed.
+function Invoke-Captured([string]$File, [string]$Arguments, [string]$Directory, [string]$Text, [int]$Seconds = 30, [hashtable]$Environment = @{}) {
     $start = New-Object System.Diagnostics.ProcessStartInfo
     $start.FileName = $File
     $start.Arguments = $Arguments
@@ -108,21 +111,26 @@ function Invoke-Captured([string]$File, [string]$Arguments, [string]$Directory, 
     $start.RedirectStandardOutput = $true
     $start.RedirectStandardError = $true
     if ($Directory) { $start.WorkingDirectory = $Directory }
-    if ($NoPath) { $start.EnvironmentVariables['PATH'] = '' }
+    foreach ($variable in $Environment.Keys) { $start.EnvironmentVariables[$variable] = $Environment[$variable] }
     $process = [System.Diagnostics.Process]::Start($start)
     $output = $process.StandardOutput.ReadToEndAsync()
     $errors = $process.StandardError.ReadToEndAsync()
     # A program that ends before reading its input, as java does when the jar
     # cannot be opened, breaks the pipe: its exit code and stderr say why.
     try {
-        if ($Text) { $process.StandardInput.WriteLine($Text) }
+        if ($Text) {
+            $process.StandardInput.WriteLine()
+            $process.StandardInput.WriteLine($Text)
+        }
         $process.StandardInput.Close()
     } catch { }
     if (-not $process.WaitForExit($Seconds * 1000)) {
         try { $process.Kill() } catch { }
         return [pscustomobject]@{ ExitCode = $null; Output = ''; Errors = '' }
     }
-    $process.WaitForExit()
+    if (-not $output.Wait($Seconds * 1000) -or -not $errors.Wait($Seconds * 1000)) {
+        return [pscustomobject]@{ ExitCode = $null; Output = ''; Errors = '' }
+    }
     return [pscustomobject]@{ ExitCode = $process.ExitCode; Output = $output.Result; Errors = $errors.Result }
 }
 
@@ -351,28 +359,25 @@ function Join-Names([string[]]$Names) {
     if ($Names.Count -le 1) { return ($Names -join '') }
     return (($Names[0..($Names.Count - 2)]) -join ', ') + ' and ' + $Names[-1]
 }
-# The server started as an assistant starts it, in an empty folder, and asked
-# to initialize: its answer must name it sheriff. Returns why it failed, or
-# nothing when it answered. With no PATH, so that it cannot start Docker: at
-# startup it makes sure of Sheriff's image in the background, and a docker it
-# left running pulled 4 GB after a -NoPull, and held the folder on Windows.
+# The server started as an assistant starts it and asked to initialize: its
+# answer must name it sheriff. Returns why it failed, or nothing when it
+# answered. In the install folder, which holds nothing to analyze. And kept
+# from Docker: at startup it makes sure of Sheriff's image in the background,
+# and on the Windows runner the docker it started pulled after a -NoPull, held
+# the folder it ran in, and on Windows holds the server's output open until it
+# ends. With no PATH and a Docker host that does not exist, any docker it still
+# finds, as Windows looks in System32 too, fails at once.
 function Test-Server {
-    $folder = Join-Path ([System.IO.Path]::GetTempPath()) ('sheriff-' + [guid]::NewGuid())
-    New-Item -ItemType Directory -Path $folder | Out-Null
     $initialize = '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"install","version":"1"}}}'
+    $nowhere = if ($IsLinux -or $IsMacOS) { 'unix:///nonexistent/sheriff-install-check.sock' } else { 'npipe:////./pipe/sheriff_install_check' }
     try {
-        $run = Invoke-Captured $java "-jar `"$jar`"" $folder $initialize 60 -NoPath
+        $run = Invoke-Captured $java "-jar `"$jar`"" $homeDir $initialize 60 @{ PATH = ''; DOCKER_HOST = $nowhere }
     } catch {
         return "$java could not be started: $($_.Exception.Message)"
-    } finally {
-        Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $folder
     }
     if ($null -eq $run.ExitCode) { return "it did not answer within 60 s" }
-    foreach ($line in ($run.Output -split "`n")) {
-        try { $message = $line | ConvertFrom-Json } catch { continue }
-        if ($message.result.serverInfo.name -eq 'sheriff') { return $null }
-    }
-    $said = (($run.Errors.Trim() -split "`n") | Select-Object -Last 3) -join ' '
+    if ($run.Output -match '"serverInfo":\{"name":"sheriff"') { return $null }
+    $said = (($run.Output.Trim() + "`n" + $run.Errors.Trim()).Trim() -split "`n" | Select-Object -Last 4) -join ' '
     return "it gave no answer to initialize naming it sheriff (exit code $($run.ExitCode)). $said".Trim()
 }
 # Only the assistants this machine has are set up, and the run ends saying

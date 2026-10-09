@@ -356,16 +356,22 @@ docker_setup() {
   fi
 }
 
-# The server started as an assistant starts it, in an empty folder, and asked
-# to initialize: its answer must name it sheriff. It ends when its input does.
-# With no PATH, so that it cannot start Docker: at startup it makes sure of
-# Sheriff's image in the background, and a docker it left running pulled 4 GB
-# after a --no-pull, and on Windows held the folder, which could not be removed.
+# The server started as an assistant starts it and asked to initialize: its
+# answer must name it sheriff. It ends when its input does. In the install
+# folder, which holds nothing to analyze. And kept from Docker: at startup it
+# makes sure of Sheriff's image in the background, and on the Windows runner
+# the docker it started pulled after a --no-pull, held the folder it ran in,
+# and on Windows holds the server's output open until it ends. With no PATH
+# and a Docker host that does not exist, any docker it still finds, as
+# Windows looks in System32 too, fails at once.
 check_server() {
-  local java="$1" jar="$2" folder="$scratch/server" answer
+  local java="$1" jar="$2" folder="$3" answer nowhere="unix:///nonexistent/sheriff-install-check.sock"
   local initialize='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"install","version":"1"}}}'
-  mkdir -p "$folder"
-  answer="$(cd "$folder" && printf '%s\n' "$initialize" | PATH="" "$java" -jar "$jar" 2>"$scratch/server.err")" || true
+  if command -v cygpath >/dev/null 2>&1; then
+    nowhere="npipe:////./pipe/sheriff_install_check"
+  fi
+  answer="$(cd "$folder" && printf '%s\n' "$initialize" \
+    | PATH="" DOCKER_HOST="$nowhere" "$java" -jar "$jar" 2>"$scratch/server.err")" || true
   if [[ "$answer" == *'"serverInfo":{"name":"sheriff"'* ]]; then
     echo "The MCP server starts: OK, it answers as sheriff."
     return 0
@@ -529,7 +535,7 @@ main() {
   # What every assistant set up will run, run once here: a server that does
   # not start shows only "connection closed" once a session opens.
   if (( ${#set_up[@]} > 0 )); then
-    check_server "$java_bin" "$jar_native"
+    check_server "$java_bin" "$jar_native" "$home_dir"
   fi
   # Each assistant left out says so above, among everything else; this is the
   # line that says what the install amounts to.
