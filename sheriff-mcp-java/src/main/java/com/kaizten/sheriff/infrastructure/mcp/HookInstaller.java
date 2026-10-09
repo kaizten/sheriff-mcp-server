@@ -103,6 +103,7 @@ public final class HookInstaller {
               when a turn ends   refuse to finish while what the turn changed has errors
               when a turn starts note what was already changed, so that it is not the turn's
             Codex runs them once you approve them: it asks the first time a session starts, or use /hooks.
+            Until then a turn can end with errors left: approve them in your first session.
             """;
     private static final String UNINSTALLED = "Sheriff's hooks are no longer in %s.%n";
     private static final int SUCCESS = 0;

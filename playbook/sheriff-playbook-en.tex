@@ -258,6 +258,7 @@ Sheriff's hooks are in /home/ana/.codex/hooks.json, for every project Codex open
   when a turn ends   refuse to finish while what the turn changed has errors
   when a turn starts note what was already changed, so that it is not the turn's
 Codex runs them once you approve them: it asks the first time a session starts, or use /hooks.
+Until then a turn can end with errors left: approve them in your first session.
 Restart open Codex sessions to pick it up; the first one asks you to review the new hooks.
 Antigravity is set up for every project agy opens:
   MCP server     'sheriff' in /home/ana/.gemini/config/mcp_config.json
@@ -851,6 +852,12 @@ the rest of those files as they were:
 \textbf{Approve the hooks once.} Codex asks before it runs a new hook: you see
 \code{Hooks need review} in the first session, or you can do it with
 \code{/hooks}. Until you approve them, the Stop hook does not run.
+
+\begin{warning}
+Without the Stop hook, Codex can call the work done with errors left. On
+PetClinic, asked for a single method, it stopped halfway twice, with 133 and
+120 errors to go; the Stop hook is what kept it going down to 0.
+\end{warning}
 
 \subsection{Four things worth knowing}
 

@@ -260,6 +260,7 @@ Sheriff's hooks are in /home/ana/.codex/hooks.json, for every project Codex open
   when a turn ends   refuse to finish while what the turn changed has errors
   when a turn starts note what was already changed, so that it is not the turn's
 Codex runs them once you approve them: it asks the first time a session starts, or use /hooks.
+Until then a turn can end with errors left: approve them in your first session.
 Restart open Codex sessions to pick it up; the first one asks you to review the new hooks.
 Antigravity is set up for every project agy opens:
   MCP server     'sheriff' in /home/ana/.gemini/config/mcp_config.json
@@ -856,6 +857,12 @@ tocar el resto de esos archivos:
 \textbf{Aprobar los hooks una vez.} Codex pregunta antes de ejecutar un hook
 nuevo: en la primera sesión verás \code{Hooks need review}, o puedes hacerlo con
 \code{/hooks}. Hasta que los apruebes, el fin de turno no se ejecuta.
+
+\begin{warning}
+Sin el fin de turno, Codex puede dar el trabajo por terminado con errores. En
+PetClinic, con una petición de un solo método, paró dos veces a mitad, con 133
+y 120 errores pendientes; fue el fin de turno lo que le hizo seguir hasta 0.
+\end{warning}
 
 \subsection{Cuatro cosas que conviene saber}
 

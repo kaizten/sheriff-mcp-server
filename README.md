@@ -364,7 +364,10 @@ project when `codex` is on the PATH, as it does Claude Code. Tested on
 `codex-cli` 0.157, in `codex exec` and in the interactive session. What is
 left for you is one review: Codex asks before it runs a new hook, the first
 time a session starts ("Hooks need review"), or with `/hooks`. Approve it once;
-until then the Stop hook does not run.
+until then the Stop hook does not run, and that hook is what holds Codex to the
+work: on PetClinic (`codex-cli` 0.160, 9 October), asked for one method, it
+twice called the work done with 133 and 120 errors left, and only the Stop
+hook sent it on to 0. The installer's output says so.
 
 ```bash
 scripts/install.sh               # Claude Code and Codex
