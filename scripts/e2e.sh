@@ -403,6 +403,10 @@ check "and the record was written whole, with nothing half-written beside it" \
   '! grep -q "partial" "$work/15.out" && grep -q "^FILES .*task.json" "$work/15.out"'
 
 echo "16. The same code gets the same answer and the same repair, whoever asks"
+# Compared without the task's id and the notice that a newer Sheriff image is
+# published: that notice is about the machine, not the code, and it comes from
+# a Docker Hub lookup the server starts in the background, so one answer had it
+# and the other not when Kaizten published an image during the run (9 October).
 answer() {
   printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' \
     "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"$2\",\"arguments\":{}}}" \
@@ -411,7 +415,8 @@ answer() {
 for line in sys.stdin:
     m = json.loads(line)
     if m.get("id") == 2:
-        print("".join(c.get("text", "") for c in m["result"]["content"]))' | grep -v '^Task '
+        print("".join(c.get("text", "") for c in m["result"]["content"]))' \
+    | grep -v -e '^Task ' -e '^Note: a newer ' -e '^$'
 }
 for copy in one two; do
   component "$work/same/$copy/app"
