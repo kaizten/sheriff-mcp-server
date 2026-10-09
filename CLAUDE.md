@@ -65,6 +65,7 @@ mvn install                                   # both, in order, with their tests
 scripts/install.sh                            # the same, then installs the jar and registers the MCP
 curl -fsSL https://github.com/kaizten/sheriff-mcp-server/releases/latest/download/install.sh | bash   # a release, no clone
 scripts/e2e.sh                                # against real Sheriff and git, no model: needs Docker
+scripts/ci-local.sh                           # before every push: CI's own steps, here (--no-build, --e2e)
 scripts/playbook.sh                           # the user's playbook, both languages: needs TeX
 ```
 
@@ -74,6 +75,18 @@ sees a module-that-is-a-repository, whether the MCP's stdout is clean, whether
 a timed-out container is really gone. A stand-in `claude` plays the model, so
 it costs nothing. Every scenario in it was a real bug; run it after touching
 the loop, git, the hooks, the MCP entry point or how containers are launched.
+
+**Run `scripts/ci-local.sh` before pushing, and push only when it passes.**
+It reads the steps out of `ci.yml` by name and runs them as written, in a
+HOME, a Java `user.home` and a PATH of their own (one step removes
+`~/.claude`; with the real `claude` the installers would set this machine
+up), plus `install.ps1` in PowerShell 7 in a container, `install.sh` under
+bash 3.2, the workflows' syntax and the playbook. It exists because PR #10
+found three Windows failures in a row on GitHub, each one a round trip. It
+cannot reach Windows PowerShell 5.1, cmd, Git Bash, winget or macOS, and says
+so: a step for those is still tried first on GitHub, and that is the only
+thing CI should be the first to see. A new CI step that can run on Linux
+belongs in it too.
 
 `scripts/install.sh` copies the runnable jar and the catalog into
 `~/.local/share/sheriff-agent/` and **sets up only the assistants the machine
