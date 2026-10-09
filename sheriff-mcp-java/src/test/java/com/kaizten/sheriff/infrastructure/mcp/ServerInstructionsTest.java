@@ -43,6 +43,15 @@ final class ServerInstructionsTest {
     }
 
     @Test
+    @DisplayName("Haiku undid with git what sheriff_fix had repaired, and then offered to, as not what the request named")
+    void keepWhatTheRepairChanged() throws Exception {
+        String instructions = McpServer.instructions();
+
+        assertTrue(instructions.contains("What sheriff_fix changes is part of that work"));
+        assertTrue(instructions.contains("never undo it, with git or by hand, nor offer to"));
+    }
+
+    @Test
     @DisplayName("Codex asks for the first 512 characters to stand on their own")
     void openWithTheRuleAboutTheErrorsAlreadyThere() throws Exception {
         String opening = McpServer.instructions().substring(0, 512);
