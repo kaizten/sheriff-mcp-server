@@ -96,8 +96,9 @@ function Test-Native([scriptblock]$Command) {
 # A native program run without PowerShell in between, for its exit code and
 # both its streams: Windows PowerShell turns a redirected stderr into errors,
 # and java writes its version there. Text, when given, is its standard input,
-# which is then closed. One that has not ended after Seconds is killed.
-function Invoke-Captured([string]$File, [string]$Arguments, [string]$Directory, [string]$Text, [int]$Seconds = 30) {
+# which is then closed. One that has not ended after Seconds is killed. With
+# NoPath it runs with an empty PATH, so that it can start nothing found there.
+function Invoke-Captured([string]$File, [string]$Arguments, [string]$Directory, [string]$Text, [int]$Seconds = 30, [switch]$NoPath) {
     $start = New-Object System.Diagnostics.ProcessStartInfo
     $start.FileName = $File
     $start.Arguments = $Arguments
@@ -107,11 +108,16 @@ function Invoke-Captured([string]$File, [string]$Arguments, [string]$Directory, 
     $start.RedirectStandardOutput = $true
     $start.RedirectStandardError = $true
     if ($Directory) { $start.WorkingDirectory = $Directory }
+    if ($NoPath) { $start.EnvironmentVariables['PATH'] = '' }
     $process = [System.Diagnostics.Process]::Start($start)
     $output = $process.StandardOutput.ReadToEndAsync()
     $errors = $process.StandardError.ReadToEndAsync()
-    if ($Text) { $process.StandardInput.WriteLine($Text) }
-    $process.StandardInput.Close()
+    # A program that ends before reading its input, as java does when the jar
+    # cannot be opened, breaks the pipe: its exit code and stderr say why.
+    try {
+        if ($Text) { $process.StandardInput.WriteLine($Text) }
+        $process.StandardInput.Close()
+    } catch { }
     if (-not $process.WaitForExit($Seconds * 1000)) {
         try { $process.Kill() } catch { }
         return [pscustomobject]@{ ExitCode = $null; Output = ''; Errors = '' }
@@ -347,13 +353,15 @@ function Join-Names([string[]]$Names) {
 }
 # The server started as an assistant starts it, in an empty folder, and asked
 # to initialize: its answer must name it sheriff. Returns why it failed, or
-# nothing when it answered.
+# nothing when it answered. With no PATH, so that it cannot start Docker: at
+# startup it makes sure of Sheriff's image in the background, and a docker it
+# left running pulled 4 GB after a -NoPull, and held the folder on Windows.
 function Test-Server {
     $folder = Join-Path ([System.IO.Path]::GetTempPath()) ('sheriff-' + [guid]::NewGuid())
     New-Item -ItemType Directory -Path $folder | Out-Null
     $initialize = '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"install","version":"1"}}}'
     try {
-        $run = Invoke-Captured $java "-jar `"$jar`"" $folder $initialize 60
+        $run = Invoke-Captured $java "-jar `"$jar`"" $folder $initialize 60 -NoPath
     } catch {
         return "$java could not be started: $($_.Exception.Message)"
     } finally {

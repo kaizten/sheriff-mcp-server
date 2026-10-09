@@ -358,11 +358,14 @@ docker_setup() {
 
 # The server started as an assistant starts it, in an empty folder, and asked
 # to initialize: its answer must name it sheriff. It ends when its input does.
+# With no PATH, so that it cannot start Docker: at startup it makes sure of
+# Sheriff's image in the background, and a docker it left running pulled 4 GB
+# after a --no-pull, and on Windows held the folder, which could not be removed.
 check_server() {
   local java="$1" jar="$2" folder="$scratch/server" answer
   local initialize='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"install","version":"1"}}}'
   mkdir -p "$folder"
-  answer="$(cd "$folder" && printf '%s\n' "$initialize" | "$java" -jar "$jar" 2>"$scratch/server.err")" || true
+  answer="$(cd "$folder" && printf '%s\n' "$initialize" | PATH="" "$java" -jar "$jar" 2>"$scratch/server.err")" || true
   if [[ "$answer" == *'"serverInfo":{"name":"sheriff"'* ]]; then
     echo "The MCP server starts: OK, it answers as sheriff."
     return 0
@@ -398,7 +401,9 @@ main() {
   done
 
   scratch="$(mktemp -d)"
-  trap 'rm -rf "$scratch"' EXIT
+  # A scratch folder that cannot be removed is no reason to fail an install
+  # that worked: the exit status would be the trap's.
+  trap 'rm -rf "$scratch" 2>/dev/null || true' EXIT
   local repo
   repo="$(checkout)"
   if [[ -z "$repo" ]]; then
