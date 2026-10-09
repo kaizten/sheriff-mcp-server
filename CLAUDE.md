@@ -63,7 +63,7 @@ it cannot build until that is installed. From the root, Maven works that out:
 ```bash
 mvn install                                   # both, in order, with their tests
 scripts/install.sh                            # the same, then installs the jar and registers the MCP
-gh release download -R kaizten/sheriff-mcp-server -p install.sh -O - | bash   # a release, no clone
+curl -fsSL https://github.com/kaizten/sheriff-mcp-server/releases/latest/download/install.sh | bash   # a release, no clone
 scripts/e2e.sh                                # against real Sheriff and git, no model: needs Docker
 scripts/playbook.sh                           # the user's playbook, both languages: needs TeX
 ```
@@ -120,7 +120,7 @@ its version; but Claude Code runs hooks in Git Bash, where a Temurin installed
 without its PATH entry is not found, and every hook failed as "non-blocking"
 (9 October). A Java update that removes the old folder now needs the install
 run again, which the playbook says. With no Java, `install.ps1` installs
-Temurin 21 with winget, and gh when a release is installed without it. Under
+Temurin 21 with winget. Under
 Git Bash, `install.sh` writes paths as `C:/x` (`cygpath -m`). Both end by
 starting the server as registered and sending it `initialize`, and fail
 unless `serverInfo.name` is `sheriff`. A project's own
@@ -130,8 +130,12 @@ with nothing done and 0.
 
 **The same script installs a release**, which is how anyone without a clone
 gets the tools: read from a pipe, or with `--release[=TAG]`, it has no
-checkout, so it downloads the release's jar and checksum with `gh`, logged
-in to any GitHub account, instead of building.
+checkout, so it downloads the release's jar and checksum by their public URLs
+(`releases/latest/download/`, or `releases/download/<tag>/`), with curl or
+wget, instead of building. It used `gh`, logged in to any account, while the
+repository was private; public, that was a login and a tool every user had to
+set up for nothing, and on Windows a new window too. Those URLs never name a
+prerelease, and `release.yml` runs the line with no token to keep it so.
 Everything runs from `main()` on its last line, so bash has read the whole
 script before any of it runs, and nothing in it reads standard input, which
 in `curl | bash` style is the script itself. By default it then pulls Sheriff's
@@ -140,8 +144,11 @@ Docker from Docker itself (`get.docker.com`, `pacman` on Arch, Docker Desktop's
 installer from docker.com on macOS and, per user, on Windows) and never accepts
 Docker Desktop's terms for the user. `install.ps1` mirrors it, with two rules
 of its own: it never calls `exit`, which run as a script block closes the
-window, and it is ASCII only, as Windows PowerShell decodes `gh`'s output in
-the console's code page. Its native commands run for an exit code go through
+window, and it is ASCII only, as its line fetches it with `irm`, and GitHub
+serves it as `application/octet-stream`, with no charset to decode it by. It
+is run as a script block rather than `irm | iex`, which would run it in the
+user's session and leave its variables and its `$ErrorActionPreference`
+there. Its native commands run for an exit code go through
 `Test-Native`: Windows PowerShell turns a redirected stderr into errors, and
 `claude mcp remove ... *> $null` used to abort a first install there.
 

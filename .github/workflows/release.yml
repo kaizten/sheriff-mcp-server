@@ -1,13 +1,15 @@
 # Publishes a release when a tag v<version> is pushed: the runnable jar,
 # built and tested here rather than on someone's machine, its checksum, the
-# two installers, which download that jar with gh, and the user's playbook in Spanish and English, with the release's
+# two installers, which download that jar by its public URL, with no GitHub
+# account, and the user's playbook in Spanish and English, with the release's
 # version on its cover. A tag with a suffix (v1.0.0-rc.1) becomes a
 # prerelease, which is how the whole path is tried before the real tag: the
 # one line a user runs never picks a prerelease.
 #
 # Then each installer is run as a user runs it, on Linux, macOS and Windows
 # (Windows PowerShell and PowerShell 7), against what was just published,
-# with no checkout. A red there means the release does not install.
+# with no checkout and no GitHub token. A red there means the release does not
+# install.
 #
 # Never with the rule catalog: it is Kaizten's content, read out of their
 # image. The checkout has none, and the jar is checked for one anyway.
@@ -73,23 +75,23 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           cat > notes.md <<'EOF'
-          Install or update, with [gh](https://cli.github.com) logged in to any GitHub account. Docker is needed to analyze; the installer pulls Sheriff's image.
+          Install or update with one line; no GitHub account is needed. Java 17+ and Docker are needed to analyze: the installer finds Java even off the PATH (on Windows it installs it with winget when there is none) and pulls Sheriff's image.
 
           Linux and macOS:
 
           ```bash
-          gh release download -R kaizten/sheriff-mcp-server -p install.sh -O - | bash
+          curl -fsSL https://github.com/kaizten/sheriff-mcp-server/releases/latest/download/install.sh | bash
           ```
 
           Windows (PowerShell):
 
           ```powershell
-          & ([scriptblock]::Create((gh release download -R kaizten/sheriff-mcp-server -p install.ps1 -O - | Out-String)))
+          & ([scriptblock]::Create((irm https://github.com/kaizten/sheriff-mcp-server/releases/latest/download/install.ps1)))
           ```
 
           Options (`--pull-always`, `--install-docker`, `--no-pull`, ...) go after `bash -s --`, or after the script block as `-PullAlways`, `-InstallDocker`, `-NoPull`: see the README's Install section. The jar carries no rule catalog; the tools extract it from Sheriff's image on first use.
 
-          The user's playbook, for this version: `sheriff-playbook-es.pdf` (Spanish) and `sheriff-playbook-en.pdf` (English), below, or `gh release download -R kaizten/sheriff-mcp-server -p 'sheriff-playbook-*.pdf'`.
+          The user's playbook, for this version: `sheriff-playbook-es.pdf` (Spanish) and `sheriff-playbook-en.pdf` (English), below.
           EOF
           prerelease=()
           case "$GITHUB_REF_NAME" in *-*) prerelease=(--prerelease) ;; esac
@@ -105,8 +107,6 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
-    env:
-      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/setup-java@v5
         with:
@@ -117,7 +117,7 @@ jobs:
         shell: bash
         run: |
           export SHERIFF_HOME="$RUNNER_TEMP/sheriff"
-          gh release download "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" -p install.sh -O - \
+          curl -fsSL --retry 3 "https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME/install.sh" \
             | bash -s -- --release="$GITHUB_REF_NAME" --no-mcp --no-pull
           test "$(java -jar "$SHERIFF_HOME/sheriff-mcp.jar" --version)" = "sheriff-mcp $(echo "${GITHUB_REF_NAME#v}" | cut -d- -f1)"
       - name: The one line, as a user runs it (Windows PowerShell)
@@ -125,7 +125,7 @@ jobs:
         shell: powershell
         run: |
           $env:SHERIFF_HOME = Join-Path $env:RUNNER_TEMP 'sheriff-windows-powershell'
-          & ([scriptblock]::Create((gh release download $env:GITHUB_REF_NAME -R $env:GITHUB_REPOSITORY -p install.ps1 -O - | Out-String))) -Tag $env:GITHUB_REF_NAME -NoMcp -NoPull
+          & ([scriptblock]::Create((irm "https://github.com/$env:GITHUB_REPOSITORY/releases/download/$env:GITHUB_REF_NAME/install.ps1"))) -Tag $env:GITHUB_REF_NAME -NoMcp -NoPull
           & java -jar (Join-Path $env:SHERIFF_HOME 'sheriff-mcp.jar') --version
           if ($LASTEXITCODE -ne 0) { exit 1 }
       - name: The one line, as a user runs it (PowerShell 7)
@@ -133,6 +133,6 @@ jobs:
         shell: pwsh
         run: |
           $env:SHERIFF_HOME = Join-Path $env:RUNNER_TEMP 'sheriff-pwsh'
-          & ([scriptblock]::Create((gh release download $env:GITHUB_REF_NAME -R $env:GITHUB_REPOSITORY -p install.ps1 -O - | Out-String))) -Tag $env:GITHUB_REF_NAME -NoMcp -NoPull
+          & ([scriptblock]::Create((irm "https://github.com/$env:GITHUB_REPOSITORY/releases/download/$env:GITHUB_REF_NAME/install.ps1"))) -Tag $env:GITHUB_REF_NAME -NoMcp -NoPull
           & java -jar (Join-Path $env:SHERIFF_HOME 'sheriff-mcp.jar') --version
           if ($LASTEXITCODE -ne 0) { exit 1 }
