@@ -35,9 +35,16 @@
 #   sheriff-mcp.jar      the MCP server, the hooks, the CI gate and the agent
 #   rules_catalog.json   from a checkout that has one
 #
+# Java 17 or newer is looked for in JAVA_HOME, on the PATH and where JDKs are
+# installed, and every assistant is set up to run it by its absolute path.
+# With none, Temurin 21 is installed with winget, and so is gh when a release
+# is installed without it. A Java update that removes the folder of the old
+# one breaks that path: run this again after it.
+#
 # Only the assistants this machine has are set up, and the run ends saying
-# which. With Claude Code (claude on the PATH, or %USERPROFILE%\.claude, which
-# its desktop app and IDE extensions use), the hooks go into
+# which, after starting the server once as they will. With Claude Code
+# (claude on the PATH, or %USERPROFILE%\.claude, which its desktop app and IDE
+# extensions use), the hooks go into
 # %USERPROFILE%\.claude\settings.json: they guard every project Claude Code
 # opens, and let everything through where there is nothing Sheriff analyzes;
 # with claude on the PATH the server is registered too. With codex on the
@@ -86,29 +93,133 @@ function Test-Native([scriptblock]$Command) {
     }
 }
 
+# A native program run without PowerShell in between, for its exit code and
+# both its streams: Windows PowerShell turns a redirected stderr into errors,
+# and java writes its version there. Text, when given, is its standard input,
+# which is then closed. One that has not ended after Seconds is killed.
+function Invoke-Captured([string]$File, [string]$Arguments, [string]$Directory, [string]$Text, [int]$Seconds = 30) {
+    $start = New-Object System.Diagnostics.ProcessStartInfo
+    $start.FileName = $File
+    $start.Arguments = $Arguments
+    $start.UseShellExecute = $false
+    $start.CreateNoWindow = $true
+    $start.RedirectStandardInput = $true
+    $start.RedirectStandardOutput = $true
+    $start.RedirectStandardError = $true
+    if ($Directory) { $start.WorkingDirectory = $Directory }
+    $process = [System.Diagnostics.Process]::Start($start)
+    $output = $process.StandardOutput.ReadToEndAsync()
+    $errors = $process.StandardError.ReadToEndAsync()
+    if ($Text) { $process.StandardInput.WriteLine($Text) }
+    $process.StandardInput.Close()
+    if (-not $process.WaitForExit($Seconds * 1000)) {
+        try { $process.Kill() } catch { }
+        return [pscustomobject]@{ ExitCode = $null; Output = ''; Errors = '' }
+    }
+    $process.WaitForExit()
+    return [pscustomobject]@{ ExitCode = $process.ExitCode; Output = $output.Result; Errors = $errors.Result }
+}
+
+# The major version of a Java, or 0 when it does not run or says none.
+function Get-JavaMajor([string]$Java) {
+    try { $run = Invoke-Captured $Java '-version' } catch { return 0 }
+    if ($run.ExitCode -ne 0 -or ($run.Errors + $run.Output) -notmatch 'version "(\d+)(\.(\d+))?') { return 0 }
+    $major = [int]$Matches[1]
+    if ($major -eq 1) { $major = [int]$Matches[3] }
+    return $major
+}
+
+# The Java every assistant is set up with, by its absolute path, or nothing.
+# Not "java": Claude Code runs the hooks in Git Bash, and an editor started
+# from the desktop can have another PATH, so a Java the terminal finds can be
+# missing there, and the server then only showed "connection closed" and the
+# hooks a "non-blocking" error. JAVA_HOME first, then the PATH, then the
+# folders JDK installers use, newest there first: a JDK installed without
+# touching the PATH, as Temurin's MSI can be, is found all the same.
+# $IsWindows does not exist in Windows PowerShell, which only runs on Windows.
+function Find-Java {
+    $executable = if ($IsLinux -or $IsMacOS) { 'java' } else { 'java.exe' }
+    $first = @()
+    if ($env:JAVA_HOME) { $first += Join-Path (Join-Path $env:JAVA_HOME 'bin') $executable }
+    $first += Get-Command java -CommandType Application -All -ErrorAction SilentlyContinue | ForEach-Object { $_.Source }
+    if ($IsMacOS -and (Test-Path '/usr/libexec/java_home')) {
+        $run = Invoke-Captured '/usr/libexec/java_home' "-v $minimumJava+"
+        if ($run.ExitCode -eq 0) { $first += Join-Path $run.Output.Trim() 'bin/java' }
+    }
+    foreach ($java in $first) {
+        if ((Test-Path -PathType Leaf $java) -and (Get-JavaMajor $java) -ge $minimumJava) { return $java }
+    }
+    $folders = @()
+    if ($IsLinux) {
+        $folders += Get-ChildItem -Directory -ErrorAction SilentlyContinue '/usr/lib/jvm'
+    } elseif (-not $IsMacOS) {
+        $roots = @($env:ProgramFiles, ${env:ProgramFiles(x86)})
+        if ($env:LOCALAPPDATA) { $roots += Join-Path $env:LOCALAPPDATA 'Programs' }
+        foreach ($root in ($roots | Where-Object { $_ })) {
+            foreach ($vendor in 'Eclipse Adoptium', 'Java', 'Microsoft', 'Amazon Corretto', 'Zulu', 'BellSoft') {
+                $folders += Get-ChildItem -Directory -ErrorAction SilentlyContinue (Join-Path $root $vendor)
+            }
+        }
+        $folders += Get-ChildItem -Directory -ErrorAction SilentlyContinue (Join-Path $HOME '.jdks')
+    }
+    $found = foreach ($folder in $folders) {
+        $java = Join-Path (Join-Path $folder.FullName 'bin') $executable
+        if (Test-Path -PathType Leaf $java) {
+            $major = Get-JavaMajor $java
+            if ($major -ge $minimumJava) { [pscustomobject]@{ Path = $java; Major = $major; Name = $folder.Name } }
+        }
+    }
+    $newest = $found | Sort-Object -Property @{ Expression = 'Major'; Descending = $true }, @{ Expression = 'Name'; Descending = $true } | Select-Object -First 1
+    if ($newest) { return $newest.Path }
+    return $null
+}
+
+# Installs what is missing with winget, when this is Windows and it has
+# winget, and adds to this session's PATH what the install added to the
+# user's: a new window would see it, this one does not. Returns whether winget
+# ran; whether it worked is for the caller to look for.
+function Install-WithWinget([string]$Id, [string]$What) {
+    if ($IsLinux -or $IsMacOS -or -not (Get-Command winget -ErrorAction SilentlyContinue)) { return $false }
+    Write-Host "$What is not installed; installing it with winget ($Id)..."
+    & winget install --id $Id --exact --source winget --silent
+    $known = $env:Path -split ';'
+    foreach ($scope in 'Machine', 'User') {
+        foreach ($entry in ([Environment]::GetEnvironmentVariable('Path', $scope) -split ';')) {
+            if ($entry -and $known -notcontains $entry) {
+                $env:Path = "$env:Path;$entry"
+                $known += $entry
+            }
+        }
+    }
+    $global:LASTEXITCODE = 0
+    return $true
+}
+
 # Checked before anything is built: an MCP server that cannot start shows only
 # "connection closed" in Claude Code, so the reason has to be given here.
-if (-not (Get-Command java -ErrorAction SilentlyContinue)) {
-    Write-Error "Java is not installed. These tools need Java 17 or newer: https://adoptium.net, then run this again."
+$minimumJava = 17
+$java = Find-Java
+if (-not $java -and (Install-WithWinget 'EclipseAdoptium.Temurin.21.JDK' "Java $minimumJava or newer")) {
+    $java = Find-Java
 }
-# Through a shell, as java writes its version to stderr. $IsWindows does not
-# exist in Windows PowerShell, which only runs on Windows.
-$javaVersion = if ($IsLinux -or $IsMacOS) { & sh -c 'java -version 2>&1' } else { & cmd /c 'java -version 2>&1' }
-$versionLine = ($javaVersion | Select-String 'version' | Select-Object -First 1).ToString()
-if ($versionLine -notmatch '"(\d+)(\.(\d+))?') {
-    Write-Error "Could not read the Java version from: $versionLine"
+if (-not $java) {
+    Write-Error ("No Java $minimumJava or newer was found: not in JAVA_HOME, not on the PATH, and not where JDKs are installed. " +
+        "Install one (https://adoptium.net, or 'winget install EclipseAdoptium.Temurin.21.JDK') and run this again.")
 }
-$major = [int]$Matches[1]
-if ($major -eq 1) { $major = [int]$Matches[3] }
-if ($major -lt 17) {
-    Write-Error "Java $major is on the PATH, but these tools need 17 or newer. Install Java 17+ (https://adoptium.net) and make it the one 'java -version' reports."
-}
+Write-Host "Using Java $(Get-JavaMajor $java) at $java"
 if ($fromRelease) {
-    if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
+    if (-not (Get-Command gh -ErrorAction SilentlyContinue) -and -not (Install-WithWinget 'GitHub.cli' 'gh')) {
         Write-Error "gh is not installed, and it is what downloads a release: https://cli.github.com, then 'gh auth login', and run this again."
     }
+    if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
+        Write-Error "gh could not be installed with winget (see above): https://cli.github.com, then 'gh auth login', and run this again."
+    }
     if (-not (Test-Native { gh auth status })) {
-        Write-Error "gh is not logged in. Run 'gh auth login' with any GitHub account."
+        Write-Host "gh is not logged in; log in with any GitHub account:"
+        & gh auth login
+        if (-not (Test-Native { gh auth status })) {
+            Write-Error "gh is not logged in. Run 'gh auth login' with any GitHub account, and run this again."
+        }
     }
 } elseif (-not (Get-Command mvn -ErrorAction SilentlyContinue)) {
     Write-Error "Maven (mvn) is not installed, and it is what builds these tools: https://maven.apache.org/install.html, or install a release instead: -Release"
@@ -138,7 +249,17 @@ if ($fromRelease) {
     }
 } else {
     Write-Host "Building and testing both modules..."
-    & mvn -B -q '-Dmaven.test.redirectTestOutputToFile=true' -f (Join-Path $repo 'pom.xml') install
+    # Maven runs the Java JAVA_HOME names, or else the one on the PATH, which
+    # can be none: then it is given the one found above, for the build only.
+    $savedJavaHome = $env:JAVA_HOME
+    if (-not $env:JAVA_HOME -and -not (Get-Command java -ErrorAction SilentlyContinue)) {
+        $env:JAVA_HOME = Split-Path -Parent (Split-Path -Parent $java)
+    }
+    try {
+        & mvn -B -q '-Dmaven.test.redirectTestOutputToFile=true' -f (Join-Path $repo 'pom.xml') install
+    } finally {
+        $env:JAVA_HOME = $savedJavaHome
+    }
     if ($LASTEXITCODE -ne 0) { Write-Error "The build failed; see Maven's output above." }
     Copy-Item -Force (Join-Path $repo 'sheriff-mcp-java\target\sheriff-mcp.jar') $jar
     $catalog = Join-Path $repo 'sheriff-mcp-java\rules_catalog.json'
@@ -151,7 +272,7 @@ if ($fromRelease) {
 # The agent used to be a jar of its own; a copy left from before would be
 # stale code that nothing updates any more.
 Remove-Item -Force -ErrorAction SilentlyContinue (Join-Path $homeDir 'sheriff-agent.jar')
-$installed = & java -jar $jar --version
+$installed = & $java -jar $jar --version
 if ($LASTEXITCODE -ne 0) { Write-Error "The jar installed does not start; see the message above." }
 Write-Host "Installed $installed into $homeDir"
 
@@ -217,77 +338,120 @@ if ($PullAlways) {
     $serverOptions += @('-e', 'SHERIFF_PULL=always')
     $codexOptions += '--pull-always'
 }
+# How a line printed for the user runs the Java found, in PowerShell.
+$javaCommand = "& `"$java`""
 # A list of names as a sentence says it: "A", "A and B", "A, B and C".
 function Join-Names([string[]]$Names) {
     if ($Names.Count -le 1) { return ($Names -join '') }
     return (($Names[0..($Names.Count - 2)]) -join ', ') + ' and ' + $Names[-1]
 }
+# The server started as an assistant starts it, in an empty folder, and asked
+# to initialize: its answer must name it sheriff. Returns why it failed, or
+# nothing when it answered.
+function Test-Server {
+    $folder = Join-Path ([System.IO.Path]::GetTempPath()) ('sheriff-' + [guid]::NewGuid())
+    New-Item -ItemType Directory -Path $folder | Out-Null
+    $initialize = '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"install","version":"1"}}}'
+    try {
+        $run = Invoke-Captured $java "-jar `"$jar`"" $folder $initialize 60
+    } catch {
+        return "$java could not be started: $($_.Exception.Message)"
+    } finally {
+        Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $folder
+    }
+    if ($null -eq $run.ExitCode) { return "it did not answer within 60 s" }
+    foreach ($line in ($run.Output -split "`n")) {
+        try { $message = $line | ConvertFrom-Json } catch { continue }
+        if ($message.result.serverInfo.name -eq 'sheriff') { return $null }
+    }
+    $said = (($run.Errors.Trim() -split "`n") | Select-Object -Last 3) -join ' '
+    return "it gave no answer to initialize naming it sheriff (exit code $($run.ExitCode)). $said".Trim()
+}
 # Only the assistants this machine has are set up, and the run ends saying
 # which: found is every one there, setUp the ones this run wrote into.
 $found = @()
 $setUp = @()
-# Claude Code is there when its command is, or its folder: the desktop app
-# and the IDE extensions read .claude\settings.json without putting claude on
-# the PATH, so the hooks go in for them too. With neither, nothing is written:
-# a settings file used to be created for an assistant nobody had.
-$claudeCli = [bool](Get-Command claude -ErrorAction SilentlyContinue)
-$claudeFound = $claudeCli -or (Test-Path (Join-Path $HOME '.claude'))
-if (-not $claudeFound) {
-    Write-Host "claude is not on the PATH and there is no .claude folder, so Claude Code was left alone. Once it is installed:"
-    Write-Host "  claude mcp add --scope user $name -- java -jar `"$jar`""
-    Write-Host "  java -jar `"$jar`" --install-hooks --user"
-} else {
-    $found += 'Claude Code'
-    $claudeSetUp = $false
-    if ($NoHooks) {
-        Write-Host "The hooks were left out (-NoHooks). For every project, or in one project's folder without --user:"
-        Write-Host "  java -jar `"$jar`" --install-hooks --user"
+# The jar's installers write the Java found into the hooks and the servers
+# they set up, rather than "java" (Find-Java says why). For this run only:
+# the script runs in the user's own session.
+$savedSheriffJava = $env:SHERIFF_JAVA
+$env:SHERIFF_JAVA = $java
+try {
+    # Claude Code is there when its command is, or its folder: the desktop app
+    # and the IDE extensions read .claude\settings.json without putting claude on
+    # the PATH, so the hooks go in for them too. With neither, nothing is written:
+    # a settings file used to be created for an assistant nobody had.
+    $claudeCli = [bool](Get-Command claude -ErrorAction SilentlyContinue)
+    $claudeFound = $claudeCli -or (Test-Path (Join-Path $HOME '.claude'))
+    if (-not $claudeFound) {
+        Write-Host "claude is not on the PATH and there is no .claude folder, so Claude Code was left alone. Once it is installed:"
+        Write-Host "  claude mcp add --scope user $name -- `"$java`" -jar `"$jar`""
+        Write-Host "  $javaCommand -jar `"$jar`" --install-hooks --user"
     } else {
-        & java -jar $jar --install-hooks --user @hookOptions
-        if ($LASTEXITCODE -ne 0) { Write-Error "The hooks could not be written; see the message above." }
-        $claudeSetUp = $true
+        $found += 'Claude Code'
+        $claudeSetUp = $false
+        if ($NoHooks) {
+            Write-Host "The hooks were left out (-NoHooks). For every project, or in one project's folder without --user:"
+            Write-Host "  $javaCommand -jar `"$jar`" --install-hooks --user"
+        } else {
+            & $java -jar $jar --install-hooks --user @hookOptions
+            if ($LASTEXITCODE -ne 0) { Write-Error "The hooks could not be written; see the message above." }
+            $claudeSetUp = $true
+        }
+        if ($claudeCli) {
+            # Removed first, so that running this again replaces it.
+            $null = Test-Native { claude mcp remove --scope user $name }
+            # Quoted, or PowerShell takes -- as its own end of parameters and drops it.
+            & claude mcp add --scope user $name @serverOptions '--' $java -jar $jar
+            if ($LASTEXITCODE -ne 0) { Write-Error "The MCP server could not be registered; see the message above." }
+            Write-Host "Registered the MCP server as '$name'. Restart open Claude Code sessions to pick it up."
+            $claudeSetUp = $true
+        } else {
+            Write-Host "claude is not on the PATH, so the MCP server was not registered. By hand:"
+            Write-Host "  claude mcp add --scope user $name -- `"$java`" -jar `"$jar`""
+        }
+        if ($claudeSetUp) { $setUp += 'Claude Code' }
     }
-    if ($claudeCli) {
-        $null = Test-Native { claude mcp remove --scope user $name }
-        # Quoted, or PowerShell takes -- as its own end of parameters and drops it.
-        & claude mcp add --scope user $name @serverOptions '--' java -jar $jar
-        if ($LASTEXITCODE -ne 0) { Write-Error "The MCP server could not be registered; see the message above." }
-        Write-Host "Registered the MCP server as '$name'. Restart open Claude Code sessions to pick it up."
-        $claudeSetUp = $true
-    } else {
-        Write-Host "claude is not on the PATH, so the MCP server was not registered. By hand:"
-        Write-Host "  claude mcp add --scope user $name -- java -jar `"$jar`""
+    if (Get-Command codex -ErrorAction SilentlyContinue) { $found += 'Codex' }
+    if (Get-Command agy -ErrorAction SilentlyContinue) { $found += 'Antigravity' }
+    if (-not $NoCodex) {
+        if (-not (Get-Command codex -ErrorAction SilentlyContinue)) {
+            Write-Host "codex is not on the PATH, so Codex was left alone. Once it is installed:"
+            Write-Host "  $javaCommand -jar `"$jar`" --install-codex"
+        } else {
+            if ($NoHooks) { $codexOptions += '--no-hooks' }
+            & $java -jar $jar --install-codex @hookOptions @codexOptions
+            if ($LASTEXITCODE -ne 0) { Write-Error "Codex could not be set up; see the message above." }
+            Write-Host "Restart open Codex sessions to pick it up; the first one asks you to review the new hooks."
+            $setUp += 'Codex'
+        }
     }
-    if ($claudeSetUp) { $setUp += 'Claude Code' }
+    # Antigravity takes the same -PullAlways as Codex, and nothing about hooks: it
+    # has none of Sheriff's.
+    if (-not $NoAntigravity) {
+        if (-not (Get-Command agy -ErrorAction SilentlyContinue)) {
+            Write-Host "agy is not on the PATH, so Antigravity was left alone. Once it is installed:"
+            Write-Host "  $javaCommand -jar `"$jar`" --install-antigravity"
+        } else {
+            $antigravityOptions = @()
+            if ($PullAlways) { $antigravityOptions += '--pull-always' }
+            & $java -jar $jar --install-antigravity @antigravityOptions
+            if ($LASTEXITCODE -ne 0) { Write-Error "Antigravity could not be set up; see the message above." }
+            Write-Host "Restart open agy sessions to pick it up."
+            $setUp += 'Antigravity'
+        }
+    }
+} finally {
+    $env:SHERIFF_JAVA = $savedSheriffJava
 }
-if (Get-Command codex -ErrorAction SilentlyContinue) { $found += 'Codex' }
-if (Get-Command agy -ErrorAction SilentlyContinue) { $found += 'Antigravity' }
-if (-not $NoCodex) {
-    if (-not (Get-Command codex -ErrorAction SilentlyContinue)) {
-        Write-Host "codex is not on the PATH, so Codex was left alone. Once it is installed:"
-        Write-Host "  java -jar `"$jar`" --install-codex"
-    } else {
-        if ($NoHooks) { $codexOptions += '--no-hooks' }
-        & java -jar $jar --install-codex @hookOptions @codexOptions
-        if ($LASTEXITCODE -ne 0) { Write-Error "Codex could not be set up; see the message above." }
-        Write-Host "Restart open Codex sessions to pick it up; the first one asks you to review the new hooks."
-        $setUp += 'Codex'
+# What every assistant set up will run, run once here: a server that does not
+# start shows only "connection closed" once a session opens.
+if ($setUp.Count -gt 0) {
+    $failure = Test-Server
+    if ($failure) {
+        Write-Error "The MCP server does not start: FAIL. $failure"
     }
-}
-# Antigravity takes the same -PullAlways as Codex, and nothing about hooks: it
-# has none of Sheriff's.
-if (-not $NoAntigravity) {
-    if (-not (Get-Command agy -ErrorAction SilentlyContinue)) {
-        Write-Host "agy is not on the PATH, so Antigravity was left alone. Once it is installed:"
-        Write-Host "  java -jar `"$jar`" --install-antigravity"
-    } else {
-        $antigravityOptions = @()
-        if ($PullAlways) { $antigravityOptions += '--pull-always' }
-        & java -jar $jar --install-antigravity @antigravityOptions
-        if ($LASTEXITCODE -ne 0) { Write-Error "Antigravity could not be set up; see the message above." }
-        Write-Host "Restart open agy sessions to pick it up."
-        $setUp += 'Antigravity'
-    }
+    Write-Host "The MCP server starts: OK, it answers as sheriff."
 }
 # Each assistant left out says so above, among everything else; this is the
 # line that says what the install amounts to.
@@ -297,7 +461,7 @@ if ($setUp.Count -gt 0) {
 } elseif ($found.Count -eq 0) {
     Write-Host "No assistant was found (Claude Code, Codex or Antigravity), so Sheriff is installed only as"
     Write-Host "the CI check and the Maven plugin:"
-    Write-Host "  java -jar `"$jar`" --check"
+    Write-Host "  $javaCommand -jar `"$jar`" --check"
     Write-Host "Install one of them and run this again to set it up."
 } else {
     Write-Host "Sheriff is set up for no assistant: the options left out $(Join-Names $found)."

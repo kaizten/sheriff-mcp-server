@@ -76,21 +76,25 @@ jobs:
       # for claude, codex and agy that only record how they were called. The
       # runner is thrown away after, so its own home serves as the user's. mvn
       # is a stand-in too, as the jar was built above, and the script runs
-      # under /bin/bash, which on macOS is the 3.2 a piped install gets there.
-      - name: The installer sets up the assistants there are, and only those (Linux, macOS)
-        if: runner.os != 'Windows'
+      # under /bin/bash, which on macOS is the 3.2 a piped install gets there,
+      # and on Windows Git Bash's, the shell Claude Code runs hooks in. Every
+      # assistant must be given Java by its absolute path, and the server
+      # started once with it.
+      - name: The installer sets up the assistants there are, and only those (bash)
         shell: bash
         run: |
           set -euo pipefail
-          tools="$RUNNER_TEMP/stand-ins"; build="$RUNNER_TEMP/stand-in-mvn"; calls="$RUNNER_TEMP/calls"
-          none="$RUNNER_TEMP/none.log"; all="$RUNNER_TEMP/all.log"
+          temp="$RUNNER_TEMP"
+          if command -v cygpath >/dev/null 2>&1; then temp="$(cygpath -u "$RUNNER_TEMP")"; fi
+          tools="$temp/stand-ins"; build="$temp/stand-in-mvn"; calls="$temp/calls"
+          none="$temp/none.log"; all="$temp/all.log"
           mkdir -p "$tools" "$build"
           printf '#!/bin/sh\nexit 0\n' > "$build/mvn"
           for tool in claude codex agy; do
             printf '#!/bin/sh\necho "%s $*" >> "%s"\n' "$tool" "$calls" > "$tools/$tool"
           done
           chmod +x "$build/mvn" "$tools"/*
-          export SHERIFF_HOME="$RUNNER_TEMP/sheriff-assistants"
+          export SHERIFF_HOME="$temp/sheriff-assistants"
           PATH="$build:$PATH" /bin/bash scripts/install.sh --no-pull > "$none" 2>&1 || { cat "$none"; exit 1; }
           cat "$none"
           grep -q "No assistant was found" "$none"
@@ -101,7 +105,11 @@ jobs:
           grep -q -- "--hook-stop" "$HOME/.claude/settings.json"
           grep -q "mcp_servers.sheriff" "$HOME/.codex/config.toml"
           grep -q "sheriff-mcp.jar" "$HOME/.gemini/config/mcp_config.json"
-          grep -q "claude mcp add --scope user sheriff" "$calls"
+          grep -q "claude mcp add --scope user sheriff -- /" "$calls" || grep -q "claude mcp add --scope user sheriff -- [A-Z]:/" "$calls"
+          grep -q "The MCP server starts: OK" "$all"
+          if grep -q '"command" : "java ' "$HOME/.claude/settings.json"; then echo "the hooks run java from the PATH"; exit 1; fi
+          # The Windows steps below start from a machine with no assistant.
+          rm -rf "$HOME/.claude" "$HOME/.codex" "$HOME/.gemini"
       # The same in Windows PowerShell, run through cmd so that the
       # installer's stderr reaches the log as text rather than as errors.
       - name: The installer sets up the assistants there are, and only those (Windows)
@@ -140,7 +148,36 @@ jobs:
           if (-not (Select-String -Quiet -SimpleMatch -Path (Join-Path $HOME '.codex\config.toml') -Pattern 'mcp_servers.sheriff')) { throw 'no server for Codex' }
           if (-not (Test-Path (Join-Path $HOME '.gemini\config\mcp_config.json'))) { throw 'no server for Antigravity' }
           if (-not (Select-String -Quiet -SimpleMatch -Path $calls -Pattern 'claude mcp add --scope user sheriff')) { throw 'the server was not registered' }
+          if (-not (Select-String -Quiet -SimpleMatch -Path $calls -Pattern 'java.exe -jar')) { throw 'the server was registered without the path of java.exe' }
+          if (Select-String -Quiet -SimpleMatch -Path (Join-Path $HOME '.claude\settings.json') -Pattern '"command" : "java ') { throw 'the hooks run java from the PATH' }
+          if (-not (Select-String -Quiet -SimpleMatch -Path $all -Pattern 'The MCP server starts: OK')) { throw 'the server was not started once' }
           Write-Host 'The installer set up the assistants there were, and only those.'
+      # The case of a Java installed with no PATH entry and no JAVA_HOME, as
+      # Temurin's MSI can leave it: the installer must find it where JDKs are
+      # installed and give the hooks and the server its absolute path. Every
+      # folder with a java.exe leaves the PATH, and Program Files is a folder
+      # whose Eclipse Adoptium holds this runner's JDK.
+      - name: The installer finds a Java that is not on the PATH (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $programs = Join-Path $env:RUNNER_TEMP 'programs'
+          $log = Join-Path $env:RUNNER_TEMP 'hidden-java.log'
+          New-Item -ItemType Directory -Force -Path (Join-Path $programs 'Eclipse Adoptium') | Out-Null
+          New-Item -ItemType Junction -Path (Join-Path $programs 'Eclipse Adoptium\jdk-17-ci') -Target $env:JAVA_HOME | Out-Null
+          $env:PATH = (Join-Path $env:RUNNER_TEMP 'stand-ins') + ';' + (Join-Path $env:RUNNER_TEMP 'stand-in-mvn') + ';' + (($env:PATH -split ';' | Where-Object { $_ -and -not (Test-Path (Join-Path $_ 'java.exe')) }) -join ';')
+          Remove-Item Env:JAVA_HOME
+          $env:ProgramFiles = $programs
+          $env:SHERIFF_HOME = Join-Path $env:RUNNER_TEMP 'sheriff-hidden-java'
+          if (Get-Command java -ErrorAction SilentlyContinue) { throw 'java is still on the PATH' }
+          cmd /c "powershell -NoProfile -ExecutionPolicy Bypass -File scripts\install.ps1 -NoPull -NoCodex -NoAntigravity > `"$log`" 2>&1"
+          $code = $LASTEXITCODE
+          Get-Content $log
+          if ($code -ne 0) { throw "the installer failed with Java off the PATH ($code)" }
+          if (-not (Select-String -Quiet -SimpleMatch -Path (Join-Path $HOME '.claude\settings.json') -Pattern 'Eclipse Adoptium/jdk-17-ci/bin/java.exe')) { throw 'the hooks do not run the Java found' }
+          if (-not (Select-String -Quiet -SimpleMatch -Path $log -Pattern 'The MCP server starts: OK')) { throw 'the server was not started once' }
+          Write-Host 'The installer found the Java that was not on the PATH.'
 
   e2e:
     needs: build

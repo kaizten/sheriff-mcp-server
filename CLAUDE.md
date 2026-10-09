@@ -109,14 +109,23 @@ Every installer writes an assistant's file through `ConfigFile`: whole, where
 a symbolic link points, and **with the permissions it had**. A `settings.json`
 or a `config.toml` only its owner could read used to come out of an install
 readable by every user, and both can hold tokens. The server, and the hooks of
-every project, run the Java `install.sh` checked, by the path the shell found
-it at (`SHERIFF_JAVA`, read by `--install-hooks --user`, `--install-codex` and
-`--install-antigravity`): an editor started from the desktop can have another
-PATH, and the server then only showed "connection closed". A project's own
-`.claude/settings.json`, which a team commits, keeps `java`, and `install.ps1`
-passes none, as Windows installs each JDK update in a folder named after its
-version. An option the jar does not know is refused with exit code 2; it used
-to start the MCP server, so `--instal-hooks` waited on standard input or ended
+every project, run the Java the installer found, by its absolute path
+(`SHERIFF_JAVA`, read by `--install-hooks --user`, `--install-codex` and
+`--install-antigravity`, and given to `claude mcp add`): an editor started
+from the desktop can have another PATH, and the server then only showed
+"connection closed". Both installers look in `JAVA_HOME`, then the PATH, then
+where JDKs are installed, so a JDK that is on no PATH is found. `install.ps1`
+used to pass none, as Windows installs each JDK update in a folder named after
+its version; but Claude Code runs hooks in Git Bash, where a Temurin installed
+without its PATH entry is not found, and every hook failed as "non-blocking"
+(9 October). A Java update that removes the old folder now needs the install
+run again, which the playbook says. With no Java, `install.ps1` installs
+Temurin 21 with winget, and gh when a release is installed without it. Under
+Git Bash, `install.sh` writes paths as `C:/x` (`cygpath -m`). Both end by
+starting the server as registered and sending it `initialize`, and fail
+unless `serverInfo.name` is `sheriff`. A project's own
+`.claude/settings.json`, which a team commits, keeps `java`. An option the
+jar does not know is refused with exit code 2; it used to start the MCP server, so `--instal-hooks` waited on standard input or ended
 with nothing done and 0.
 
 **The same script installs a release**, which is how anyone without a clone
@@ -155,7 +164,9 @@ image. A red e2e with a green build can be a new image rather than the code.
 On each of the three systems it also runs the installer as a user's would,
 which `--no-mcp` never reaches: with no assistant, when it must write into no
 one's configuration, then with stand-in `claude`, `codex` and `agy` that only
-record their calls, under `/bin/bash` (3.2 on macOS) and Windows PowerShell.
+record their calls, under `/bin/bash` (3.2 on macOS, Git Bash on Windows) and
+Windows PowerShell; and on Windows once more with Java on no PATH and no
+`JAVA_HOME`, where it must be found under Program Files.
 `.github/workflows/image.yml` publishes the agent's image,
 `ghcr.io/kaizten/sheriff-mcp-server`, when CI passes on `main`, and only
 builds it on a pull request. It fails rather than publish the rule catalog:

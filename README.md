@@ -28,8 +28,8 @@ This readme stays the reference: every option, variable and reason.
 
 Java 17 or newer, git and Docker, on Linux, macOS or Windows, and
 [gh](https://cli.github.com) logged in (`gh auth login`) to any GitHub
-account. One line installs the latest
-release, and the same line updates it:
+account (on Windows, `winget install --id GitHub.cli`, then a new window). One
+line installs the latest release, and the same line updates it:
 
 ```bash
 gh release download -R kaizten/sheriff-mcp-server -p install.sh -O - | bash
@@ -55,6 +55,18 @@ carries no rule catalog: the tools extract it from the image on first use
 Windows) does the same after building and testing both modules, which needs
 Maven; re-run it after pulling, as a registration pointing at a jar that moved
 fails at session start with only "connection closed".
+
+Java need not be on the PATH. The installer looks in `JAVA_HOME`, on the PATH
+and where JDKs are installed (`/usr/lib/jvm`, macOS's `java_home`, on Windows
+`Eclipse Adoptium`, `Java`, `Microsoft`, `Amazon Corretto`, `Zulu` and
+`BellSoft` under Program Files, and `~/.jdks`), takes the first 17 or newer,
+and sets every assistant up to run it by that absolute path: Claude Code runs
+the hooks in Git Bash on Windows, and an editor started from the desktop can
+have another PATH, so a bare `java` that works in the terminal failed there.
+With none, `install.ps1` installs Temurin 21 with winget, and gh too when it
+installs a release without it. Run the line again after a Java update that
+removes the old one. Last, it starts the server as the assistants will and
+sends it `initialize`: `The MCP server starts: OK`, or FAIL with the cause.
 
 Options go after `bash -s --` in the one line (`... | bash -s -- --pull-always`),
 after the script block in PowerShell (`& ([scriptblock]::Create(...)) -PullAlways`),
@@ -544,7 +556,7 @@ which no tool reports.
 | `SHERIFF_RULES_CATALOG` | found or extracted | A catalog used as is |
 | `SHERIFF_EXPORT_DIR` | unset | Where the agent copies Sheriff's JSON |
 | `SHERIFF_STOP_MAX_BLOCKS` | `5` | How many times in a row the Stop hook sends a session back while errors remain, before it lets the turn end so as not to loop. A stop with nothing changed since the last block is sent back once more, saying so; a second such stop in a row goes through, as a model whose edits are denied cannot change anything. The installers give the hook 900 s, as with `SHERIFF_STOP_RUNS_TESTS=1` it runs the tests |
-| `SHERIFF_JAVA` | unset | The Java the jar's installers write into the user's configuration (Codex's and Antigravity's server, and the hooks of every project) instead of `java` found on the PATH. `install.sh` sets it to the Java it checked, and registers Claude Code's server with that Java too, so that an editor started from the desktop, with another PATH, still starts it. Ignored when it names nothing that can be run; a project's own hooks always run `java` |
+| `SHERIFF_JAVA` | unset | The Java the jar's installers write into the user's configuration (Codex's and Antigravity's server, and the hooks of every project) instead of `java` found on the PATH. Both installers set it to the Java they found, and register Claude Code's server with that Java too, so that an editor started from the desktop, with another PATH, and the hooks under Git Bash on Windows, still start it. Ignored when it names nothing that can be run; a project's own hooks always run `java` |
 | `SHERIFF_FAIL_FAST` | unset | `1` makes the hooks run Sheriff with `--fail-fast`: it stops at the first error, so the check is quicker and reports one finding. Never used by the loop or `sheriff_fix`, which need all of them. The installers write it as an option of the hook command instead (`install.sh --fail-fast`) |
 | `VERIFICATION_TEST_CMD` | from the build tool | The project's test command |
 | `AI_BACKEND` | `claude_cli` | Who answers in the loop, below |

@@ -17,7 +17,9 @@ set -euo pipefail
 
 readonly releases="kaizten/sheriff-mcp-server"
 readonly docker_desktop="https://desktop.docker.com/mac/main"
+readonly minimum_java=17
 scratch=""
+java_bin=""
 
 usage() {
   cat <<'USAGE'
@@ -92,25 +94,96 @@ join_names() {
   echo "$result"
 }
 
-# An MCP server that does not start shows only "connection closed" in Claude
-# Code, with no reason, so the reason has to be given here.
-check_java() {
-  if ! command -v java >/dev/null 2>&1; then
-    echo "install.sh: Java is not installed. These tools need Java 17 or newer:" >&2
-    echo "  https://adoptium.net (Temurin 17 or 21), then run this again." >&2
-    exit 1
+# The major version of a Java, or nothing when it does not run or says none.
+java_major() {
+  local version major
+  version="$("$1" -version 2>&1 | awk -F'"' '/version/ {print $2; exit}')" || true
+  major="${version%%.*}"
+  if [[ "$major" == "1" ]]; then
+    major="$(echo "$version" | cut -d. -f2)"
   fi
-  local java_version java_major
-  java_version="$(java -version 2>&1 | awk -F'"' '/version/ {print $2; exit}')"
-  java_major="${java_version%%.*}"
-  if [[ "$java_major" == "1" ]]; then
-    java_major="$(echo "$java_version" | cut -d. -f2)"
+  if [[ "$major" =~ ^[0-9]+$ ]]; then
+    echo "$major"
   fi
-  if [[ ! "$java_major" =~ ^[0-9]+$ ]] || (( java_major < 17 )); then
-    echo "install.sh: Java ${java_version:-of unknown version} is on the PATH, but these tools need 17 or newer." >&2
-    echo "  Install Java 17+ (https://adoptium.net) and make it the one 'java -version' reports." >&2
-    exit 1
+}
+
+# A path as this shell writes it, and as the programs it starts read it: the
+# same on Linux and macOS; under Git Bash on Windows, C:/x for what is written
+# into an assistant's configuration and /c/x for this shell's own use.
+native_path() {
+  if command -v cygpath >/dev/null 2>&1; then
+    cygpath -m "$1"
+  else
+    echo "$1"
   fi
+}
+posix_path() {
+  if command -v cygpath >/dev/null 2>&1; then
+    cygpath -u "$1"
+  else
+    echo "$1"
+  fi
+}
+
+# Every java worth trying, best first: JAVA_HOME, the PATH, then the folders
+# JDK installers use, newest there first. A JDK installed without touching
+# the PATH is found all the same.
+java_candidates() {
+  if [[ -n "${JAVA_HOME:-}" ]]; then
+    echo "$(posix_path "$JAVA_HOME")/bin/java"
+    echo "$(posix_path "$JAVA_HOME")/bin/java.exe"
+  fi
+  type -ap java 2>/dev/null || true
+  local root vendor
+  case "$(uname -s)" in
+    Darwin)
+      /usr/libexec/java_home -v "$minimum_java+" 2>/dev/null | sed 's|$|/bin/java|' || true
+      ;;
+    Linux)
+      ls -d /usr/lib/jvm/*/bin/java 2>/dev/null | sort -r -V || true
+      ;;
+    MINGW*|MSYS*|CYGWIN*)
+      for root in "${PROGRAMFILES:-}" "${LOCALAPPDATA:+$LOCALAPPDATA/Programs}"; do
+        if [[ -z "$root" ]]; then
+          continue
+        fi
+        root="$(posix_path "$root")"
+        for vendor in "Eclipse Adoptium" Java Microsoft "Amazon Corretto" Zulu BellSoft; do
+          ls -d "$root/$vendor"/*/bin/java.exe 2>/dev/null | sort -r -V || true
+        done
+      done
+      ls -d "$HOME/.jdks"/*/bin/java.exe 2>/dev/null | sort -r -V || true
+      ;;
+  esac
+}
+
+# The Java every assistant is set up with, by its absolute path, in java_bin.
+# Not "java": an editor started from the desktop can have another PATH, with
+# an older Java or none, and Claude Code on Windows runs the hooks in Git
+# Bash, so a Java this terminal finds can be missing there; the server then
+# only showed "connection closed", with no reason, so it has to be given here.
+# The path is the one found, not where its links lead, so that updating that
+# Java does not break it.
+find_java() {
+  local candidate major
+  while IFS= read -r candidate; do
+    # Git Bash names java.exe without its extension, and Windows needs it.
+    if [[ -n "$candidate" && "$candidate" != *.exe && -f "$candidate.exe" ]]; then
+      candidate="$candidate.exe"
+    fi
+    if [[ -n "$candidate" && -f "$candidate" && -x "$candidate" ]]; then
+      major="$(java_major "$candidate")"
+      if [[ -n "$major" ]] && (( major >= minimum_java )); then
+        java_bin="$candidate"
+        echo "Using Java $major at $(native_path "$java_bin")"
+        return 0
+      fi
+    fi
+  done < <(java_candidates)
+  echo "install.sh: no Java $minimum_java or newer was found: not in JAVA_HOME, not on the PATH," >&2
+  echo "  and not where JDKs are installed. Install one (https://adoptium.net, Temurin 17 or 21)" >&2
+  echo "  and run this again." >&2
+  exit 1
 }
 
 check_maven() {
@@ -136,7 +209,13 @@ check_gh() {
 build_and_copy() {
   local repo="$1" home_dir="$2"
   echo "Building and testing both modules..."
-  mvn -B -q -Dmaven.test.redirectTestOutputToFile=true -f "$repo/pom.xml" install
+  # Maven runs the Java JAVA_HOME names, or else the one on the PATH, which
+  # can be none: then it is given the one found, for the build only.
+  local java_home="${JAVA_HOME:-}"
+  if [[ -z "$java_home" ]] && ! command -v java >/dev/null 2>&1; then
+    java_home="$(dirname "$(dirname "$java_bin")")"
+  fi
+  JAVA_HOME="$java_home" mvn -B -q -Dmaven.test.redirectTestOutputToFile=true -f "$repo/pom.xml" install
   install -m 0644 "$repo/sheriff-mcp-java/target/sheriff-mcp.jar" "$home_dir/sheriff-mcp.jar"
   if [[ -f "$repo/sheriff-mcp-java/rules_catalog.json" ]]; then
     install -m 0644 "$repo/sheriff-mcp-java/rules_catalog.json" "$home_dir/rules_catalog.json"
@@ -277,8 +356,26 @@ docker_setup() {
   fi
 }
 
+# The server started as an assistant starts it, in an empty folder, and asked
+# to initialize: its answer must name it sheriff. It ends when its input does.
+check_server() {
+  local java="$1" jar="$2" folder="$scratch/server" answer
+  local initialize='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"install","version":"1"}}}'
+  mkdir -p "$folder"
+  answer="$(cd "$folder" && printf '%s\n' "$initialize" | "$java" -jar "$jar" 2>"$scratch/server.err")" || true
+  if [[ "$answer" == *'"serverInfo":{"name":"sheriff"'* ]]; then
+    echo "The MCP server starts: OK, it answers as sheriff."
+    return 0
+  fi
+  echo "install.sh: the MCP server does not start: FAIL. It gave no answer to initialize naming it sheriff;" >&2
+  echo "  what it said:" >&2
+  tail -n 5 "$scratch/server.err" >&2
+  exit 1
+}
+
 main() {
-  local home_dir="${SHERIFF_HOME:-$HOME/.local/share/sheriff-agent}"
+  local home_dir
+  home_dir="$(posix_path "${SHERIFF_HOME:-$HOME/.local/share/sheriff-agent}")"
   local name="${SHERIFF_MCP_NAME:-sheriff}"
   local image="${SHERIFF_IMAGE:-kaizten/sheriff:latest}"
   local register=1 hooks=1 codex=1 antigravity=1 fail_fast=0 pull=1 wanted_install=0 pull_always=0
@@ -307,7 +404,7 @@ main() {
   if [[ -z "$repo" ]]; then
     from_release=1
   fi
-  check_java
+  find_java
   if (( from_release == 1 )); then
     check_gh
   else
@@ -323,21 +420,21 @@ main() {
   # The agent used to be a jar of its own; a copy left from before would be
   # stale code that nothing updates any more.
   rm -f "$home_dir/sheriff-agent.jar"
-  echo "Installed $(java -jar "$home_dir/sheriff-mcp.jar" --version) into $home_dir"
+  # Under Git Bash, the jar and the Java as Windows names them, for Java and
+  # for every assistant's configuration; elsewhere the same paths.
+  local java_native jar_native
+  java_native="$(native_path "$java_bin")"
+  jar_native="$(native_path "$home_dir/sheriff-mcp.jar")"
+  echo "Installed $("$java_bin" -jar "$jar_native" --version) into $(native_path "$home_dir")"
 
   docker_setup "$wanted_install" "$pull" "$image"
 
   if (( register == 0 )); then
     return 0
   fi
-  # The Java checked above, by the path the shell found it at, for everything
-  # an assistant starts: an editor started from the desktop can have another
-  # PATH, with an older Java or none, and the server then only showed
-  # "connection closed". The path is the one on the PATH, not where its links
-  # lead, so that updating that Java does not break it.
-  local java_bin
-  java_bin="$(command -v java)"
-  local jar=(java -jar "$home_dir/sheriff-mcp.jar") hook_options=() server_options=() codex_options=()
+  # The Java found above, by its absolute path, for everything an assistant
+  # starts: find_java says why.
+  local jar=("$java_bin" -jar "$jar_native") hook_options=() server_options=() codex_options=()
   if (( fail_fast == 1 )); then
     hook_options+=(--fail-fast)
   fi
@@ -362,26 +459,27 @@ main() {
   fi
   if (( claude_found == 0 )); then
     echo "claude is not on the PATH and there is no ~/.claude, so Claude Code was left alone. Once it is installed:"
-    echo "  claude mcp add --scope user $name -- java -jar $home_dir/sheriff-mcp.jar"
-    echo "  java -jar $home_dir/sheriff-mcp.jar --install-hooks --user"
+    echo "  claude mcp add --scope user $name -- \"$java_native\" -jar \"$jar_native\""
+    echo "  \"$java_native\" -jar \"$jar_native\" --install-hooks --user"
   else
     local claude_set_up=0
     if (( hooks == 1 )); then
-      SHERIFF_JAVA="$java_bin" "${jar[@]}" --install-hooks --user ${hook_options[@]+"${hook_options[@]}"}
+      SHERIFF_JAVA="$java_native" "${jar[@]}" --install-hooks --user ${hook_options[@]+"${hook_options[@]}"}
       claude_set_up=1
     else
       echo "The hooks were left out (--no-hooks). For every project, or in one project's folder without --user:"
-      echo "  java -jar $home_dir/sheriff-mcp.jar --install-hooks --user"
+      echo "  \"$java_native\" -jar \"$jar_native\" --install-hooks --user"
     fi
     if (( claude_cli == 1 )); then
+      # Removed first, so that running this again replaces it.
       claude mcp remove --scope user "$name" >/dev/null 2>&1 || true
       claude mcp add --scope user "$name" ${server_options[@]+"${server_options[@]}"} \
-        -- "$java_bin" -jar "$home_dir/sheriff-mcp.jar"
+        -- "$java_native" -jar "$jar_native"
       echo "Registered the MCP server as '$name'. Restart open Claude Code sessions to pick it up."
       claude_set_up=1
     else
       echo "claude is not on the PATH, so the MCP server was not registered. By hand:" >&2
-      echo "  claude mcp add --scope user $name -- java -jar $home_dir/sheriff-mcp.jar" >&2
+      echo "  claude mcp add --scope user $name -- \"$java_native\" -jar \"$jar_native\"" >&2
     fi
     if (( claude_set_up == 1 )); then
       set_up+=("Claude Code")
@@ -396,12 +494,12 @@ main() {
   if (( codex == 1 )); then
     if ! command -v codex >/dev/null 2>&1; then
       echo "codex is not on the PATH, so Codex was left alone. Once it is installed:"
-      echo "  java -jar $home_dir/sheriff-mcp.jar --install-codex"
+      echo "  \"$java_native\" -jar \"$jar_native\" --install-codex"
     else
       if (( hooks == 0 )); then
         codex_options+=(--no-hooks)
       fi
-      SHERIFF_JAVA="$java_bin" "${jar[@]}" --install-codex ${hook_options[@]+"${hook_options[@]}"} \
+      SHERIFF_JAVA="$java_native" "${jar[@]}" --install-codex ${hook_options[@]+"${hook_options[@]}"} \
         ${codex_options[@]+"${codex_options[@]}"}
       echo "Restart open Codex sessions to pick it up; the first one asks you to review the new hooks."
       set_up+=("Codex")
@@ -412,16 +510,21 @@ main() {
   if (( antigravity == 1 )); then
     if ! command -v agy >/dev/null 2>&1; then
       echo "agy is not on the PATH, so Antigravity was left alone. Once it is installed:"
-      echo "  java -jar $home_dir/sheriff-mcp.jar --install-antigravity"
+      echo "  \"$java_native\" -jar \"$jar_native\" --install-antigravity"
     else
       local antigravity_options=()
       if (( pull_always == 1 )); then
         antigravity_options+=(--pull-always)
       fi
-      SHERIFF_JAVA="$java_bin" "${jar[@]}" --install-antigravity ${antigravity_options[@]+"${antigravity_options[@]}"}
+      SHERIFF_JAVA="$java_native" "${jar[@]}" --install-antigravity ${antigravity_options[@]+"${antigravity_options[@]}"}
       echo "Restart open agy sessions to pick it up."
       set_up+=("Antigravity")
     fi
+  fi
+  # What every assistant set up will run, run once here: a server that does
+  # not start shows only "connection closed" once a session opens.
+  if (( ${#set_up[@]} > 0 )); then
+    check_server "$java_bin" "$jar_native"
   fi
   # Each assistant left out says so above, among everything else; this is the
   # line that says what the install amounts to.
@@ -431,7 +534,7 @@ main() {
   elif (( ${#found[@]} == 0 )); then
     echo "No assistant was found (Claude Code, Codex or Antigravity), so Sheriff is installed only as"
     echo "the CI check and the Maven plugin:"
-    echo "  java -jar $home_dir/sheriff-mcp.jar --check"
+    echo "  \"$java_native\" -jar \"$jar_native\" --check"
     echo "Install one of them and run this again to set it up."
   else
     echo "Sheriff is set up for no assistant: the options left out $(join_names "${found[@]}")."
