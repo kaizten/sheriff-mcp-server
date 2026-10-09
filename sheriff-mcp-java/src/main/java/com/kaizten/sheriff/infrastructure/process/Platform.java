@@ -7,6 +7,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * What differs between Windows and the rest, in one place: the shell a
@@ -44,6 +46,19 @@ public final class Platform {
     private static final String DOT = ".";
     private static final String NOTHING = "";
     private static final int FIRST = 0;
+    private static final String DOCKER_VARIABLE = "SHERIFF_DOCKER";
+    private static final String DOCKER_EXECUTABLE = "docker";
+    private static final String WSL_EXECUTABLE = "wsl.exe";
+    private static final String WSL_VALUE = "wsl";
+    private static final String WSL_DISTRO_PREFIX = "wsl:";
+    private static final String WSL_DISTRO_FLAG = "-d";
+    private static final String WSL_MOUNT_ROOT = "/mnt/";
+    private static final String WINDOWS_SOURCE_REGEX = "(source=)([A-Za-z]):[\\\\/]([^,\"]*)";
+    private static final Pattern WINDOWS_SOURCE = Pattern.compile(WINDOWS_SOURCE_REGEX);
+    private static final int SOURCE_PREFIX_GROUP = 1;
+    private static final int SOURCE_DRIVE_GROUP = 2;
+    private static final int SOURCE_REST_GROUP = 3;
+    private static final int SECOND = 1;
     private static final String ERROR_UTILITY_CLASS = "This is a utility class and cannot be instantiated.";
 
     /**
@@ -112,6 +127,60 @@ public final class Platform {
         }
         String letter = String.valueOf(Character.toLowerCase(slashed.charAt(DRIVE_LETTER)));
         return ROOT + letter + slashed.substring(AFTER_DRIVE);
+    }
+
+    /**
+     * The command, run through the Docker of a WSL distribution when {@code
+     * SHERIFF_DOCKER} says so: for a Windows machine whose Docker is the
+     * command-line engine inside WSL rather than Docker Desktop. The value is
+     * {@code wsl} for the default distribution or {@code wsl:<name>}.
+     *
+     * @param command the command, its executable first
+     * @return the command, unchanged unless it is a {@code docker} one and the variable asks
+     */
+    public static List<String> dockerCommand(List<String> command) {
+        return dockerCommand(command, windows(), System.getenv());
+    }
+
+    /**
+     * The command, run through WSL's Docker, for a given platform and environment.
+     *
+     * <p>A bind mount's source is the one thing the engine reads as a path of
+     * its own, so {@code C:\Users\a} is written {@code /mnt/c/Users/a}.
+     *
+     * @param command the command, its executable first
+     * @param windows whether the platform is Windows
+     * @param environment where {@code SHERIFF_DOCKER} is read
+     * @return the command, unchanged unless it is a {@code docker} one and the variable asks
+     */
+    public static List<String> dockerCommand(List<String> command, boolean windows, Map<String, String> environment) {
+        String setting = environment.getOrDefault(DOCKER_VARIABLE, NOTHING).trim();
+        boolean wanted = windows && !command.isEmpty() && DOCKER_EXECUTABLE.equals(command.get(FIRST))
+                && (setting.equals(WSL_VALUE) || setting.startsWith(WSL_DISTRO_PREFIX));
+        if (!wanted) {
+            return command;
+        }
+        List<String> through = new ArrayList<>(List.of(WSL_EXECUTABLE));
+        if (setting.startsWith(WSL_DISTRO_PREFIX)) {
+            through.addAll(List.of(WSL_DISTRO_FLAG, setting.substring(WSL_DISTRO_PREFIX.length())));
+        }
+        through.add(DOCKER_EXECUTABLE);
+        command.stream().skip(SECOND).map(Platform::wslPath).forEach(through::add);
+        return through;
+    }
+
+    /**
+     * An argument with the Windows directory of a bind mount's source turned
+     * into the path WSL sees it at.
+     *
+     * @param argument one argument of a docker command
+     * @return it, with {@code source=C:\x} as {@code source=/mnt/c/x}
+     */
+    private static String wslPath(String argument) {
+        Matcher matcher = WINDOWS_SOURCE.matcher(argument);
+        return matcher.replaceAll(found -> Matcher.quoteReplacement(found.group(SOURCE_PREFIX_GROUP)
+                + WSL_MOUNT_ROOT + found.group(SOURCE_DRIVE_GROUP).toLowerCase(Locale.ROOT) + ROOT
+                + found.group(SOURCE_REST_GROUP).replace(BACKSLASH, SLASH)));
     }
 
     /**
