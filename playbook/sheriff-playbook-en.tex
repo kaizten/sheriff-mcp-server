@@ -1,0 +1,1213 @@
+% The user playbook, in English. The look is in sheriff-playbook.sty, shared
+% with the Spanish version (sheriff-playbook-es.tex): a change to what the user
+% types or reads goes into both in the same change. scripts/playbook.sh builds
+% both.
+\documentclass[11pt,a4paper]{article}
+\usepackage[english]{sheriff-playbook}
+
+\begin{document}
+
+\makecover{Sheriff}{Kaizten's code standards\\in Claude Code, Codex and Antigravity}{Installation, daily use, continuous integration and troubleshooting.}
+
+\section*{How to use this playbook}
+
+This playbook is for anyone who writes code with Claude Code, Codex or Antigravity and wants
+that code to meet Kaizten's standards from the first line. You do not need to
+know how the tools are built: this is what to install, what to ask for and what
+to expect at each point.
+
+Read sections 1 to 3 once, when you start. From section 4 on, the playbook is
+organised in \emph{plays}: each one is a concrete situation, with when to use
+it, what to ask, what happens and how to tell it is done. The last page is a
+reference card to keep at hand.
+
+\begin{tip}
+\textbf{If you only have five minutes.}
+\begin{enumerate}[topsep=2pt,leftmargin=1.3em]
+  \item Run the install line; no GitHub account is needed. If something is
+        missing, such as Java 17 or Docker, the installer tells you
+        (section~\ref{sec:install}). On Linux and macOS:
+\end{enumerate}
+\begin{command}[basicstyle=\ttfamily\scriptsize]{bash}
+curl -fsSL https://github.com/kaizten/sheriff-mcp-server/releases/latest/download/install.sh \
+  | bash
+\end{command}
+\noindent\hspace*{1.3em}On Windows, in PowerShell:
+\begin{command}[basicstyle=\ttfamily\footnotesize]{PowerShell}
+$u = 'https://github.com/kaizten/sheriff-mcp-server/releases/latest/download'
+& ([scriptblock]::Create((irm "$u/install.ps1")))
+\end{command}
+\begin{enumerate}[resume,leftmargin=1.3em]
+  \item Open Claude Code, Codex or Antigravity in your project and ask
+        \ask{check the code standards}.
+\end{enumerate}
+\end{tip}
+
+\vspace{0.2\baselineskip}
+{\sffamily\bfseries\Large\color{pbbrand}Contents}\par
+\vspace{-0.7\baselineskip}
+{\color{pbrule}\rule{\linewidth}{0.8pt}}
+\makeatletter\@starttoc{toc}\makeatother
+
+\clearpage
+% ---------------------------------------------------------------------------
+\section{What Sheriff is and what it does for you}
+\label{sec:what}
+
+\textbf{Sheriff} is Kaizten's code standards analyzer. It checks, for example,
+that every method has its JavaDoc, that imports are sorted, that every
+\code{if} has braces, or that the code respects the project's architecture
+(hexagonal, DDD). Its rules are compiled into a Docker image,
+\code{kaizten/sheriff}: they are not a style guide to interpret, but checks that
+pass or fail.
+
+These tools bring Sheriff to where you write code. With them, your assistant:
+
+\begin{itemize}
+  \item checks the component \textbf{before} touching it, and clears the errors
+        that were already there;
+  \item reads the rules before writing, so as not to introduce new errors;
+  \item applies Sheriff's own \textbf{automatic repairs} first, which spend no
+        tokens, and fixes by hand only what is left;
+  \item does not call the work done while errors remain or the project's tests
+        fail.
+\end{itemize}
+
+\begin{center}
+\begin{tikzpicture}[node distance=4mm and 7mm]
+  \node[pbstrong,minimum width=17mm,minimum height=13mm] (you) {You};
+  \node[pbbox,right=of you,minimum width=29mm,minimum height=13mm] (assistant) {\textbf{Your assistant}\\[1pt]\scriptsize Claude Code, Codex\\\scriptsize or Antigravity};
+  \node[pbbox,right=15mm of assistant,minimum width=37mm] (server) {\textbf{MCP server}\\[1pt]\scriptsize five tools};
+  \node[pbbox,below=of server,minimum width=37mm] (hooks) {\textbf{Hooks}\\[1pt]\scriptsize before an edit, at the end};
+  \node[pbbox,below=of hooks,minimum width=37mm] (agent) {\textbf{Repair agent}\\[1pt]\scriptsize \code{sheriff_autofix}, \code{--agent}};
+  \node[pbbox,below=of agent,minimum width=37mm] (check) {\textbf{CI check}\\[1pt]\scriptsize \code{--check}};
+  \begin{scope}[on background layer]
+    \node[draw=pbaccent,dashed,line width=0.9pt,fill=pbaccentsoft,rounded corners=5pt,inner sep=3.5mm,fit=(server)(hooks)(agent)(check)] (jar) {};
+  \end{scope}
+  \node[anchor=south,font=\sffamily\scriptsize\bfseries,text=pbaccent] at (jar.north) {sheriff-mcp.jar};
+  \node[pbstrong,right=11mm of jar,minimum width=23mm,minimum height=15mm] (sheriff) {Sheriff\\[1pt]\scriptsize\color{pbaccentsoft}Docker image};
+  \node[pbsoft,minimum width=29mm] (ci) at (assistant |- check) {CI, terminal\\Maven};
+  \draw[pbarrow] (you) -- (assistant);
+  \draw[pbarrow] (assistant) -- node[pblabel,above]{MCP} (server);
+  \draw[pbarrow,draw=pbmuted] (hooks.west) -| node[pblabel,pos=0.3,below,align=center]{stop it while\\errors remain} (assistant.south);
+  \draw[pbarrow,draw=pbmuted] (ci) -- (check);
+  \draw[pbarrow] (jar.east) -- (sheriff.west);
+\end{tikzpicture}
+\end{center}
+
+Everything lives in one file, \code{sheriff-mcp.jar}, installed once per
+machine. Your project copies nothing and needs no configuration: the tools work
+out what to analyze, and with which rules, from the folder you work in.
+
+\subsection{What changes in your daily work}
+
+\begin{itemize}
+  \item \textbf{You ask for changes as always.} The assistant checks the
+        standards on its own; you do not have to ask.
+  \item \textbf{If the component already had errors, it fixes them first},
+        even if you did not introduce them. That is on purpose: the code
+        delivered is clean as a whole. When you do not want it, say so in the
+        request: \ask{leave the errors that were already there}.
+  \item \textbf{Before finishing, it checks again and runs the tests} of the
+        project, and tells you which errors were there before it started.
+  \item \textbf{If it tries to finish with errors} in what it changed, a hook
+        sends the turn back. You do not have to watch for it.
+\end{itemize}
+
+\subsection{Six words worth knowing}
+
+\begin{center}
+\rowcolors{2}{pbcode}{white}
+\begin{tabularx}{\linewidth}{@{\hspace{6pt}}K{33mm}L}
+\headrow \thead{Word} & \thead{What it means here} \\
+Component & The folder Sheriff analyzes: one module of the project, the one
+            with \code{src/}. In a single-module project, the project
+            itself. \\
+Profile & The set of rules applied: \code{JAVA}, \code{JAVA_HEXAGONAL},
+          \code{TYPESCRIPT}\ldots{} Worked out by itself. \\
+Error & A breach of one rule, with its file, its line and its code (for
+        example, \code{SortedImport}). \\
+Automatic repair & One of Sheriff's \emph{fixers}: it repairs a rule with no AI
+        model and no tokens spent. \\
+Hook & A command Claude Code or Codex run by themselves at a set moment:
+       before editing a file, or when a turn ends. \\
+Task & Every analysis is recorded with an id (\code{Task 4047f176.}), useful
+       to look something up or report it. \\
+\end{tabularx}
+\end{center}
+
+% ---------------------------------------------------------------------------
+\section{Installation}
+\label{sec:install}
+
+One line installs the latest release, on Linux, macOS and Windows. \textbf{The
+same line updates} when a new one comes out. The installer checks what it
+needs and, when something is missing, tells you what to do.
+
+\subsection{The only thing you need first}
+\label{sec:requirements}
+
+Nothing: no GitHub account, and none of its tools. The install line downloads
+the script from the repository's public releases page, and the script
+downloads the rest from the same place. Java and Docker need not be there
+first either: the installer looks for them and tells you what to do.
+
+\subsection{The install line}
+
+\needspace{4\baselineskip}
+On Linux and macOS:
+
+\begin{command}[basicstyle=\ttfamily\scriptsize]{bash}
+curl -fsSL https://github.com/kaizten/sheriff-mcp-server/releases/latest/download/install.sh | bash
+\end{command}
+
+Without \code{curl}, \code{wget -qO-} with the same address does the same. On
+Windows, in PowerShell (Windows PowerShell or PowerShell 7):
+
+\begin{command}[basicstyle=\ttfamily\footnotesize]{PowerShell}
+$u = 'https://github.com/kaizten/sheriff-mcp-server/releases/latest/download'
+& ([scriptblock]::Create((irm "$u/install.ps1")))
+\end{command}
+
+\subsection{If you would rather read the script first}
+
+The install line hands the script straight to \code{bash}. If you would rather
+download it, read it and run it afterwards, do it this way; \code{--release}
+tells it to install the release even when you run it inside a repository:
+
+\begin{command}[basicstyle=\ttfamily\scriptsize]{bash}
+curl -fsSLO https://github.com/kaizten/sheriff-mcp-server/releases/latest/download/install.sh
+bash install.sh --release
+\end{command}
+
+\begin{command}[basicstyle=\ttfamily\footnotesize]{PowerShell}
+$u = 'https://github.com/kaizten/sheriff-mcp-server/releases/latest/download'
+irm "$u/install.ps1" -OutFile install.ps1
+.\install.ps1 -Release
+\end{command}
+
+If PowerShell refuses to run the file, allow scripts in that window only with
+\path{Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass}. Both scripts
+can also be downloaded from the repository's releases page on GitHub.
+
+\subsection{What the installer checks}
+
+\begin{center}
+\rowcolors{2}{pbcode}{white}
+\begin{tabularx}{\linewidth}{@{\hspace{6pt}}K{33mm}L}
+\headrow \thead{Checks} & \thead{When it is missing} \\
+Java 17 or newer & It looks in \code{JAVA_HOME}, on the \code{PATH} and in
+  the folders JDKs are installed in, even when it is not on the \code{PATH},
+  and sets the assistants up with its full path. With none, on Windows it
+  installs Temurin 21 with \code{winget}; on Linux and macOS it stops and tells
+  you where to get it (\path{https://adoptium.net}). \\
+Docker & It goes on without it, warning that nothing can be analyzed until you
+  have it. With \code{--install-docker} it installs it (on Linux with Docker's
+  script or, on Arch, \code{pacman}, and adds you to the \code{docker} group;
+  on macOS and Windows, Docker Desktop) and starts it when it is stopped. \\
+Claude Code & If it is there, it registers the MCP server. If not, it prints the
+  command to register it once you install it. \\
+Codex & If it is there, it sets it up (section~\ref{sec:codex}). If not, it
+  prints the command for when you install it. \\
+Antigravity & If \code{agy} is there, it sets it up (section~\ref{sec:antigravity}).
+  If not, it prints the command for when you install it. \\
+The MCP server & At the end it starts it once, as your assistant will, and
+  checks that it answers: \code{OK}, or \code{FAIL} with the cause. \\
+\end{tabularx}
+\end{center}
+
+It writes Claude Code's hooks even when \code{claude} is not on the
+\code{PATH}, as long as the folder \path{~/.claude} exists: they are only a
+settings file, which the desktop app and the editor extensions read too. It
+touches no project. Sheriff's rules (the \emph{catalog}) are not in the
+download: the tools extract them from the image the first time they need them,
+in about 6 seconds.
+
+\begin{warning}
+Docker Desktop asks you to accept its terms the first time it starts, and the
+installer does not accept them for you. In a company of more than 250 people or
+more than \$10 million in annual revenue they require a paid subscription.
+\end{warning}
+
+\subsection{What you will see}
+
+This is the output of a real install on a machine with Claude Code, Codex and
+Antigravity.
+Between the third line and the fourth, the download of Sheriff's image shows
+too: about 4\,GB the first time and, after that, only what changed.
+
+\begin{answer}[Installer output]
+Using Java 17 at /usr/bin/java
+Downloading sheriff-mcp.jar from the latest release of kaizten/sheriff-mcp-server...
+Installed sheriff-mcp 1.0.0 into /home/ana/.local/share/sheriff-agent
+Sheriff's hooks are in /home/ana/.claude/settings.json, for every project Claude Code opens:
+  before an edit     refuse new code on a component that already fails the standards
+  when a turn ends   refuse to finish while what the turn changed has errors
+  when a turn starts note what was already changed, so that it is not the turn's
+sheriff_test, sheriff_fix, sheriff_guidelines and sheriff_task run without asking.
+Where there is nothing Sheriff analyzes, they let everything through.
+Undo with: java -jar sheriff-mcp.jar --uninstall-hooks --user
+Added stdio MCP server sheriff with command: /usr/bin/java -jar /home/ana/.local/share/sheriff-agent/sheriff-mcp.jar to user config
+File modified: /home/ana/.claude.json
+Registered the MCP server as 'sheriff'. Restart open Claude Code sessions to pick it up.
+Codex is set up for every project it opens:
+  MCP server     'sheriff' in /home/ana/.codex/config.toml, with 600 s per call and sheriff_fix approved
+  order of work  in /home/ana/.codex/AGENTS.md
+Undo with: java -jar sheriff-mcp.jar --uninstall-codex
+Sheriff's hooks are in /home/ana/.codex/hooks.json, for every project Codex opens:
+  when a turn ends   refuse to finish while what the turn changed has errors
+  when a turn starts note what was already changed, so that it is not the turn's
+Codex runs them once you approve them: it asks the first time a session starts, or use /hooks.
+Restart open Codex sessions to pick it up; the first one asks you to review the new hooks.
+Antigravity is set up for every project agy opens:
+  MCP server     'sheriff' in /home/ana/.gemini/config/mcp_config.json
+  permissions    sheriff_test, sheriff_fix, sheriff_guidelines and sheriff_task run without asking,
+                 in /home/ana/.gemini/antigravity-cli/settings.json
+It has no Sheriff hooks: a turn there can end with errors left.
+Undo with: java -jar sheriff-mcp.jar --uninstall-antigravity
+Restart open agy sessions to pick it up.
+The MCP server starts: OK, it answers as sheriff.
+
+Sheriff is set up for Claude Code, Codex and Antigravity.
+\end{answer}
+
+It says which Java it will use, which version it installed and where and, for each assistant, which
+hooks it turned on, which tools may run without asking, and how to undo each
+one; then, that the server starts, and in its last line, which assistants it
+set up. It sets up only the ones the
+machine already has, and never installs one: an assistant that is not there
+gets a line saying how to set it up once it is. As it asks,
+\textbf{restart the Claude Code and Codex sessions you had open}. To check that
+your assistants see the server: in Claude Code, \code{claude mcp list} must
+show \code{sheriff:}~\ldots~\textcolor{pbtip}{\faCheck}~\code{Connected} (inside
+a session, \code{/mcp}); in Codex, \code{codex mcp list} must show
+\code{sheriff} as \code{enabled}, and in Antigravity, \code{agy mcp list}, the
+same.
+
+\subsection{Options}
+
+Options go at the end of the install line: in bash, after \code{bash -s --};
+in PowerShell, after the script block. For example:
+
+\begin{command}{bash}
+curl -fsSL .../install.sh | bash -s -- --pull-always
+\end{command}
+\begin{command}{PowerShell}
+& ([scriptblock]::Create((irm "$u/install.ps1"))) -PullAlways
+\end{command}
+
+\begin{center}
+\rowcolors{2}{pbcode}{white}
+\begin{tabularx}{\linewidth}{@{\hspace{6pt}}>{\ttfamily\small}p{31mm}>{\ttfamily\small}p{26mm}L}
+\headrow \thead{bash} & \thead{PowerShell} & \thead{What it does} \\
+-{}-install-docker & -InstallDocker & Installs Docker when it is missing, and
+  starts it when it is stopped. \\
+-{}-pull-always & -PullAlways & Pulls a newer Sheriff image each time the server
+  starts. Without it a newer image is only reported, once per session, so that
+  rules do not change in the middle of someone's work. Give it again on every
+  update. \\
+-{}-no-pull & -NoPull & Does not pull the image now; the server pulls it when
+  it needs it. \\
+-{}-no-hooks & -NoHooks & Installs the MCP server without the hooks. \\
+-{}-no-codex & -NoCodex & Leaves Codex's configuration alone. \\
+-{}-no-antigravity & -NoAntigravity & Leaves Antigravity's configuration alone. \\
+-{}-fail-fast & -FailFast & The hooks stop Sheriff at the first error: quicker,
+  but they report only one. \\
+\end{tabularx}
+\end{center}
+
+% ---------------------------------------------------------------------------
+\section{Your first session}
+\label{sec:first}
+
+This is a real example, from start to finish, on a very small Maven project
+called \code{basket}. Sheriff's answers are copied as they came, cut only where
+\code{[...]} shows.
+
+\subsubsection{1. Open the assistant in the project}
+Open a terminal at the project's root (the folder with the \code{pom.xml}, the
+\code{package.json} or the \code{src/}) and start \code{claude}, \code{codex} or
+\code{agy}: Sheriff's answers and the steps are the same. The editor or
+the desktop app work the same, as long as the folder open is the project's.
+
+\subsubsection{2. Ask for the check}
+Type \ask{check the code standards}. The assistant calls
+\tool{sheriff_test}, which answers with a count:
+
+\begin{answer}
+basket has 4 error(s) under JAVA.
+Paths below are under basket/src/main/java/demo/
+  Basket.java: 4
+
+By rule: JavaJavaDocCommentInMethodMessage6 2, JavaBracesIfStatementsMessage2 1, SortedImport 1
+
+Task 4047f176.
+Next step: call the sheriff_fix tool with component 'basket'. It applies every repair Sheriff has for these errors and lists what it cannot repair.
+\end{answer}
+
+\begin{note}
+\textbf{How to read an answer.} The first line says which component was
+analyzed, how many errors it has and under which profile. Then come the errors
+per file and per rule, the task's id and, always on the last line,
+\textbf{\code{Next step:}}, what the assistant does next. That step is worked
+out from the state of the code, so it is not yours to decide. The assistant
+sums the answer up for you in your own words.
+\end{note}
+
+\subsubsection{3. The automatic repairs}
+The assistant follows the step and calls \tool{sheriff_fix}. Sheriff sorts the
+import by itself and lists what is left, with the code it accepts for each
+rule:
+
+\begin{answer}
+Ran every fixer Sheriff has for these errors on basket: 4 error(s) before, 3 after (1 repaired).
+Files the fixers changed (1): Basket.java, under basket/src/main/java/demo/
+Still outstanding: 3 error(s) in 1 file(s). This answer lists the 3 error(s) of the first 1 file(s), and the work is those files now:
+Paths below are under basket/src/main/java/demo/
+
+Basket.java
+  - Braces are not used in if statement 'if (item == null)
+    return;' (lines 10-10).  [JavaBracesIfStatementsMessage2]
+  - Method 'add' in file 'Basket.java' does not have JavaDoc comment  [JavaJavaDocCommentInMethodMessage6]
+  - Method 'size' in file 'Basket.java' does not have JavaDoc comment  [JavaJavaDocCommentInMethodMessage6]
+
+What Sheriff accepts, for the rules above:
+Every branch and loop body has braces, and its content starts on a line of its own:
+    if (page < FIRST_PAGE) {
+        throw new IllegalArgumentException(UNKNOWN);
+    }
+[...]
+Task a3f3e1be.
+Next step: fix by hand every error listed above, all of them, in basket/src/main/java/demo/Basket.java, each file from the last line up [...] Then call the sheriff_fix tool with component 'basket' again.
+\end{answer}
+
+\subsubsection{4. What is left, by hand}
+The assistant adds the braces and the two JavaDocs, from the last line up (so
+the line numbers do not move under it), and calls \tool{sheriff_fix} again,
+which checks and repairs whatever those edits may have broken:
+
+\begin{answer}
+Ran every fixer Sheriff has for these errors on basket: 0 error(s) before, 0 after (0 repaired).
+
+Task 50828b9f.
+Next step: run the project's tests (cd '/home/ana/projects/basket' && mvn test). If they pass, the component is done. If you change any file to make them pass, call the sheriff_test tool with component 'basket' again.
+\end{answer}
+
+\subsubsection{5. The tests, and done}
+The assistant runs the project's tests. If they pass, the component is done:
+\textbf{0 errors and green tests}. It tells you so in those terms, and which
+errors were there before it started.
+
+\subsection{The work cycle}
+
+Every request that changes code follows the same cycle. You do not have to ask
+for it: the server tells the assistant when it connects, and every answer gives
+it the next step.
+
+\begin{center}
+\begin{tikzpicture}[node distance=14mm and 6mm]
+  \node[pbstrong,minimum width=25mm,minimum height=14mm] (ask) {Your request};
+  \node[pbbox,right=of ask,minimum width=31mm,minimum height=14mm] (test) {\textbf{1 · Check}\\[1pt]\scriptsize\code{sheriff_test}};
+  \node[pbbox,right=of test,minimum width=36mm,minimum height=14mm] (clean) {\textbf{2 · Clear what was there}\\[1pt]\scriptsize\code{sheriff_fix}, then by hand};
+  \node[pbbox,below=of clean,minimum width=36mm,minimum height=14mm] (write) {\textbf{3 · Write the change}\\[1pt]\scriptsize with \code{sheriff_guidelines}};
+  \node[pbbox,left=of write,minimum width=31mm,minimum height=14mm] (again) {\textbf{4 · Check again}\\[1pt]\scriptsize down to 0 errors};
+  \node[pbbox,left=of again,minimum width=25mm,minimum height=14mm] (tests) {\textbf{5 · Tests}\\[1pt]\scriptsize the project's};
+  \node[pbgold,below=9mm of tests,minimum width=25mm] (done) {\textbf{Done}\\[1pt]\scriptsize 0 errors, green tests};
+  \draw[pbarrow] (ask) -- (test);
+  \draw[pbarrow] (test) -- (clean);
+  \draw[pbarrow] (clean) -- node[pblabel,right]{0 errors} (write);
+  \draw[pbarrow] (write) -- (again);
+  \draw[pbarrow] (again) -- (tests);
+  \draw[pbarrow] (tests) -- (done);
+  \path (clean) edge[pbarrow,draw=pbaccent,loop above,min distance=9mm,in=60,out=120] node[pblabel,above]{down to 0 errors} (clean);
+  \draw[pbarrow,draw=pbaccent] ([xshift=-4mm]tests.south east) to[out=-60,in=-120,looseness=1.1] node[pblabel,below]{changed something? again} (again.south);
+\end{tikzpicture}
+\end{center}
+
+% ---------------------------------------------------------------------------
+\clearpage
+\section{Everyday plays}
+\label{sec:plays}
+
+\begin{play}{Add a feature or fix a bug}
+\when Any code change in a component Sheriff analyzes.
+\asks Whatever you need, as always: \ask{add a method to Basket that returns
+how many different items it holds}.
+\happens
+\begin{enumerate}
+  \item The assistant checks the component and, if it has errors, clears them
+        first (section~\ref{sec:first}).
+  \item It reads the rules that bear on what it is about to write, and writes
+        the change.
+  \item It checks again and repairs whatever the change broke.
+  \item It runs the project's tests.
+  \item In Java, if it added a non-private method that no test calls, it writes
+        that test, edge cases included (an empty list, a \code{null}).
+\end{enumerate}
+\done It reports 0 errors and green tests, and which errors were there before
+it started.
+\end{play}
+
+\begin{play}{Review a project without changing anything}
+\when You want to know where a project stands before you start on it.
+\asks \ask{check the code standards, without changing anything}.
+\happens \tool{sheriff_test} analyzes each component and gives the count per
+file and per rule. Since you asked for nothing to change, the assistant stops
+there.
+\done You have the count and the code is as it was (\code{git status} clean).
+\end{play}
+
+\begin{play}{Fix what Sheriff fixes by itself}
+\when A component with many formatting errors: imports, braces, names. It is
+free and quick, so it is worth doing before anything else.
+\asks \ask{fix what Sheriff can fix by itself}.
+\happens \tool{sheriff_fix} applies every automatic repair Sheriff has, round
+after round while the count drops, and reports the errors before and after and
+which files it changed. It uses no model, so it \textbf{spends no tokens}. It
+edits the files in place, with no commit.
+\done The answer says \code{N error(s) before, M after}. Review the change with
+\code{git diff}; to undo it, \code{git restore .}
+\end{play}
+
+\begin{play}{Read the rules before writing}
+\when You are about to write something and want to know what Sheriff expects,
+or an error makes no sense.
+\asks \ask{what are the rules for javadoc?} or \ask{explain the SortedImport
+rule}.
+\happens \tool{sheriff_guidelines} searches the rule catalog. With a word, the
+rules that match; with a rule's code, the whole rule and the code Sheriff
+accepts for it. The first lookup on a machine takes a few seconds more: that is
+when the catalog is extracted from the image.
+\done You have the rule, its explanation and a correct example.
+\end{play}
+
+\begin{play}{One module of a project with several}
+\when The repository has several modules (\code{api}, \code{web},
+\code{core}\ldots) and you care about one.
+\asks \ask{check the code standards of the api module}.
+\happens The component is always the name of the module's folder, never a path
+inside it; if the assistant passes a path, the tool answers with the right
+component. The hooks only look at the components the turn changed.
+\done As in play 1, for that module.
+\end{play}
+
+\begin{play}{Repair a whole component without steering each step}
+\when A component with hundreds of errors, typically the first time an existing
+project is analyzed, and you would rather it repaired itself while you do
+something else.
+\asks \ask{repair the whole component with sheriff\_autofix}.
+\happens The assistant asks for your permission, because this tool
+\textbf{commits and spends tokens}. It answers at once with a task id and works
+in the background:
+\begin{enumerate}
+  \item It creates a branch of its own, \code{sheriff-agent/<date>}.
+  \item It applies Sheriff's automatic repairs, in a commit of their own.
+  \item It hands the model the files with errors in batches of five, one commit
+        per pass, while the count keeps dropping.
+  \item If the model touches a file outside its batch, it stops without
+        committing and leaves that work in the tree for you to review.
+  \item When it ends, however it ends, it runs the project's tests.
+\end{enumerate}
+To see how it is going, ask \ask{how is the task going?}: the assistant calls
+\tool{sheriff_task}.
+\done The task shows as finished. Review the branch (\code{git log},
+\code{git diff main...}) and merge it if you like it.
+\end{play}
+
+\begin{warning}
+Keep the session open while the repair works. In Codex, closing the session
+cuts it short (section~\ref{sec:codex}).
+\end{warning}
+
+\begin{play}{Repair from the terminal, without an assistant}
+\when You want to start the repair loop yourself, for example on a machine
+with no assistant session open.
+\asks From the module's folder:
+\begin{command}[basicstyle=\ttfamily\footnotesize]{bash}
+# The whole loop
+java -jar ~/.local/share/sheriff-agent/sheriff-mcp.jar --agent
+# Only analyze, or only the automatic repairs
+java -jar ~/.local/share/sheriff-agent/sheriff-mcp.jar --agent --check-only
+java -jar ~/.local/share/sheriff-agent/sheriff-mcp.jar --agent --sheriff-fix
+# Search the rules
+java -jar ~/.local/share/sheriff-agent/sheriff-mcp.jar --agent --rules javadoc
+\end{command}
+\happens The loop is the same as in the previous play: a branch of its own, a
+commit per pass and the tests at the end. By default Claude Code answers, on
+your subscription, with no API key. The \code{AI_BACKEND} variable picks
+another: \code{codex_cli}, \code{antigravity_cli} (section~\ref{sec:antigravity}), \code{anthropic_api},
+\code{openai_api} or \code{local} (a server compatible with OpenAI's API, such
+as Ollama).
+\done The final summary says how many errors are left and whether the tests
+pass.
+\end{play}
+
+\begin{play}{Keep errors out in CI}
+\when You want continuous integration to fail when the code does not comply.
+\asks From the project's root:
+\begin{command}{bash}
+java -jar ~/.local/share/sheriff-agent/sheriff-mcp.jar --check
+\end{command}
+\happens It analyzes every component and ends with an exit code:
+
+\begin{center}
+\rowcolors{2}{pbcode}{white}
+\begin{tabularx}{0.9\linewidth}{@{\hspace{6pt}}>{\ttfamily\bfseries}p{12mm}L}
+\headrow \thead{Exit} & \thead{Meaning} \\
+0 & Clean. \\
+1 & There are errors; they are listed. \\
+2 & It could not check: Docker is not available, or there is nothing of the
+    profile's language to analyze. \\
+\end{tabularx}
+\end{center}
+
+If Sheriff's image is not there, it pulls it before analyzing. In GitHub
+Actions, for example, with no token and no account:
+
+\begin{command}{GitHub Actions}
+- uses: actions/setup-java@v5
+  with: { distribution: temurin, java-version: '17' }
+- run: |
+    curl -fsSLO https://github.com/kaizten/sheriff-mcp-server/\
+    releases/latest/download/sheriff-mcp.jar
+- run: java -jar sheriff-mcp.jar --check
+\end{command}
+\done The CI step is green, or red with the list of errors.
+\end{play}
+
+\begin{play}{Keep errors out of the Maven build}
+\when A Maven project where \code{mvn package} must fail on errors.
+\asks Add the plugin to the \code{pom.xml}, with no configuration:
+\begin{command}[escapeinside={(*}{*)}]{pom.xml}
+<plugin>
+  <groupId>com.kaizten</groupId>
+  <artifactId>sheriff-maven-plugin</artifactId>
+  <version>(*\pluginversion*)</version>
+  <executions>
+    <execution><goals><goal>check</goal></goals></execution>
+  </executions>
+</plugin>
+\end{command}
+\happens \code{sheriff:check} runs in the \code{package} phase, after the tests:
+\code{mvn package}, \code{mvn verify} and \code{mvn install} fail on errors.
+\code{mvn sheriff:fix} applies the automatic repairs and fails if anything is
+left. Both leave Sheriff's JSON in \path{target/sheriff/}.
+\done \code{mvn package} passes, or fails naming the errors.
+\end{play}
+
+\begin{note}
+The Maven plugin is not in the release: it is installed into \path{~/.m2} by
+building the tools' repository (\code{mvn install} in a clone). For CI,
+\code{--check} needs nothing but the jar.
+\end{note}
+
+% ---------------------------------------------------------------------------
+\section{The hooks: what you see when they stop you}
+\label{sec:hooks}
+
+The assistant uses the MCP tools when it sees fit. The hooks are different:
+Claude Code and Codex run them at set moments, and they are what makes sure the
+work is not called done with errors left. The installer turns them on in both,
+for all your projects; in Codex, once you approve them (section~\ref{sec:codex}).
+Antigravity has no Sheriff hooks.
+
+\begin{center}
+\rowcolors{2}{pbcode}{white}
+\begin{tabularx}{\linewidth}{@{\hspace{6pt}}K{24mm}>{\raggedright\arraybackslash}p{35mm}L}
+\headrow \thead{Hook} & \thead{When it acts} & \thead{What it does} \\
+Gate & Before the session's first edit to a component &
+  If the component already has errors, it blocks that edit once, with the
+  list, so that they are cleared first. The edits after it go through, and an
+  edit to a file that has errors is never blocked: it is the fix. Claude
+  Code only: Codex edits with patches, and the Stop hook catches the same
+  after. \\
+Stop & When the assistant is about to finish &
+  If what the turn changed has errors, or new methods with no test (in Java),
+  it sends the turn back with the list. \\
+Turn start & When your message arrives &
+  Records how the components looked, so that the Stop hook looks only at what
+  changes in this turn, not at earlier uncommitted work. \\
+\end{tabularx}
+\end{center}
+
+When a hook stops the assistant, you see a message like these in the
+conversation, followed by the same kind of \code{Next step:} the tools give:
+
+\begin{answer}[Gate]
+Blocked: basket already has 4 Sheriff error(s), from before this change, and basket/src/main/java/demo/Discount.java
+has none of them. They are fixed first, in every file of the component, before the
+new code. Edits to the files that have them go through; make this one again once
+they are fixed, or now if it is part of fixing them.
+\end{answer}
+
+\begin{answer}[Stop]
+Not done: what this turn changed has Sheriff errors, those that were already there
+included. All of them are fixed before finishing; only a false positive of the checker
+may stay, named, with the reason.
+\end{answer}
+
+\subsection{How they behave}
+
+\begin{itemize}
+  \item \textbf{They never block you over a failure of their own.} Without Java
+        or Docker, the work goes on and one warning line is left.
+  \item \textbf{Where there is nothing Sheriff analyzes}, they let everything
+        through in a tenth of a second.
+  \item \textbf{They do not loop.} The Stop hook sends the turn back at most
+        five times in a row, and if the assistant cannot change anything, it
+        lets the turn end.
+  \item \textbf{They stand aside for the repair agent}, which runs its own
+        checks.
+\end{itemize}
+
+\subsection{Require the tests at the end too}
+
+By default the Stop hook requires 0 errors but does not run the tests, which can
+take minutes. To require them too, export this variable before opening Claude
+Code. With Codex it cannot be done: Codex does not pass your terminal's
+variables to its hooks.
+
+\begin{command}{bash}
+export SHERIFF_STOP_RUNS_TESTS=1
+claude
+\end{command}
+
+\subsection{See them, remove them, or keep them to one project}
+
+\begin{itemize}
+  \item \textbf{See the active hooks:} \code{/hooks}, inside Claude Code or
+        Codex.
+  \item \textbf{Remove them:}
+\begin{command}{bash}
+java -jar ~/.local/share/sheriff-agent/sheriff-mcp.jar --uninstall-hooks --user
+\end{command}
+        In Codex, \code{--uninstall-codex} removes them together with the server
+        and the order of work (section~\ref{sec:uninstall}).
+  \item \textbf{Have them in one project only}, in Claude Code: install with \code{--no-hooks}
+        and, from that project's root, run:
+\begin{command}{bash}
+java -jar ~/.local/share/sheriff-agent/sheriff-mcp.jar --install-hooks
+\end{command}
+        They are written into its \path{.claude/settings.json}. That file names
+        the jar's path: commit it only if the whole team installs to the same
+        path.
+\end{itemize}
+
+% ---------------------------------------------------------------------------
+\section{Configuring your project}
+\label{sec:configure}
+
+Nothing needs configuring. This section is for when you want something other
+than what the tools work out by themselves.
+
+\subsection{What is analyzed}
+
+\begin{center}
+\rowcolors{2}{pbcode}{white}
+\begin{tabularx}{\linewidth}{@{\hspace{6pt}}>{\bfseries}p{24mm}>{\ttfamily}p{24mm}>{\ttfamily}p{30mm}L}
+\headrow \thead{Language} & \thead{Files} & \thead{Base profile} & \thead{Architectures} \\
+Java & .java & JAVA & \code{JAVA_HEXAGONAL}, \code{JAVA_DDD} \\
+TypeScript & .ts, .tsx & TYPESCRIPT & \code{TYPESCRIPT_HEXAGONAL} \\
+Vue & .vue & VUEJS & \\
+Perl & .pl, .pm & PERL\_FORMAT & \\
+Python & .py & PYTHON & \\
+\end{tabularx}
+\end{center}
+
+A component in any other language is not passed as good: the tools say there
+was nothing to analyze. If the project builds with Maven, Gradle or an npm
+\code{test} script, its tests are run; if not, it is analyzed all the same and
+the tools say that no tests were run.
+
+\subsection{Declare the architecture}
+
+With nothing declared, a Java project is checked under \code{JAVA}: style and
+documentation. If it follows a hexagonal or DDD architecture, declare it once
+and every tool (server, hooks, \code{--check} and Maven plugin) takes it into
+account. In the \code{pom.xml}, which the modules inherit:
+
+\begin{command}{pom.xml}
+<properties>
+  <sheriff.profile>JAVA_HEXAGONAL</sheriff.profile>
+</properties>
+\end{command}
+
+Or, in a project without Maven, in a \code{.sheriff.properties} file beside its
+sources:
+
+\begin{command}{.sheriff.properties}
+profile=TYPESCRIPT_HEXAGONAL
+\end{command}
+
+The architecture's rules \textbf{are added} to the language's, never put in
+their place. Several can be listed, separated by commas
+(\code{JAVA_HEXAGONAL,JAVA_DDD}); each one adds one more analysis.
+
+\subsection{Every profile}
+
+Sheriff has more profiles than the ones above. This is the full list of its
+image of 8 October 2026, with the base profile in bold. Any of them is declared
+like an architecture, and the tools always add its language's base profile:
+declaring \code{JAVA_HEXAGONAL_REST} runs \code{JAVA} and
+\code{JAVA_HEXAGONAL_REST}.
+
+\begin{center}
+\rowcolors{2}{pbcode}{white}
+\begin{tabularx}{\linewidth}{@{\hspace{6pt}}>{\bfseries}p{20mm}L}
+\headrow \thead{Language} & \thead{Profiles} \\
+Java & \textbf{\code{JAVA}}, \code{JAVA_HEXAGONAL}, \code{JAVA_HEXAGONAL_DOMAIN}, \code{JAVA_HEXAGONAL_APPLICATION}, \code{JAVA_HEXAGONAL_REST}, \code{JAVA_HEXAGONAL_MONGODB}, \code{JAVA_HEXAGONAL_TIMESCALE}, \code{JAVA_DDD}, \code{JAVA_DDD_ENTITY}, \code{JAVA_DDD_VALUE_OBJECT}, \code{JAVA_DDD_ENUMERATE}, \code{JAVA_ENTITY}, \code{JAVA_VALUE_OBJECT}, \code{JAVA_ENUMERATE}, \code{JAVA_USE_CASE}, \code{JAVA_POM}, \code{JAVA_COMPILATION} \\
+TypeScript & \textbf{\code{TYPESCRIPT}}, \code{TYPESCRIPT_HEXAGONAL}, \code{TYPESCRIPT_HEXAGONAL_DOMAIN}, \code{TYPESCRIPT_HEXAGONAL_APPLICATION}, \code{TYPESCRIPT_HEXAGONAL_HTTP}, \code{TYPESCRIPT_HEXAGONAL_VUEJS}, \code{TYPESCRIPT_ENTITY}, \code{TYPESCRIPT_VALUE_OBJECT}, \code{TYPESCRIPT_ENUMERATE}, \code{TYPESCRIPT_FILENAME}, \code{TYPESCRIPT_LOCALE}, \code{TYPESCRIPT_PACKAGE}, \code{TYPESCRIPT_COMPILATION} \\
+Vue & \textbf{\code{VUEJS}}, \code{VUEJS_COMPONENT}, \code{VUEJS_VIEW}, \code{VUEJS_FILENAME} \\
+Perl & \textbf{\code{PERL_FORMAT}} \\
+Python & \textbf{\code{PYTHON}} \\
+\end{tabularx}
+\end{center}
+
+To see the list of the Sheriff version you have, ask it for a profile that does
+not exist. After an error line, the longest \code{Possible Values} line is the
+profiles:
+
+\begin{command}{bash}
+docker run --rm kaizten/sheriff:latest test -t LIST
+\end{command}
+
+What each profile checks is Kaizten's to define. The tools know the exact rules
+of 12 of them, the ones Sheriff's own export covers.
+
+To try a profile for one request, without declaring it, name it:
+\ask{check the api module with JAVA\_DDD}. The tools use it for that request,
+and the hooks keep to the profile the project declares.
+
+\subsection{No rule can be switched off}
+
+What the profile holds is what is checked. The one exception is a known false
+positive of Sheriff's, \code{FilenamePascalCase} on \code{package-info.java} and
+\code{module-info.java}, names Java itself requires, which the tools do not
+show. If the assistant finds another false positive, it may only leave it by
+saying which one it is and why.
+
+\subsection{Share the setup with the team}
+
+Each machine has the server registered by the installer. In Claude Code, if
+you would rather the project declared it, commit a \code{.mcp.json} at its root
+with the jar's path. Use one or the other: with both, Claude Code warns of two \code{sheriff}
+servers in different scopes.
+
+\begin{command}[basicstyle=\ttfamily\footnotesize]{.mcp.json}
+{
+  "mcpServers": {
+    "sheriff": {
+      "command": "java",
+      "args": ["-jar", "/home/<your-user>/.local/share/sheriff-agent/sheriff-mcp.jar"]
+    }
+  }
+}
+\end{command}
+
+\subsection{Useful variables}
+
+With Claude Code, exporting them before you open it is enough. With Codex, they
+do not arrive from your terminal (section~\ref{sec:codex}).
+
+\begin{center}
+\rowcolors{2}{pbcode}{white}
+\begin{tabularx}{\linewidth}{@{\hspace{6pt}}>{\ttfamily\small}p{50mm}L}
+\headrow \thead{Variable} & \thead{What for} \\
+SHERIFF\_PULL=always & Pull a newer Sheriff image at startup (with
+  \code{never}, Docker Hub is not even asked). \\
+SHERIFF\_IMAGE & Pin the image by its digest
+  (\code{kaizten/sheriff@sha256:...}), so that the rules do not change until
+  you decide. \\
+SHERIFF\_TIMEOUT & Seconds per analysis; 300 by default. \\
+SHERIFF\_STOP\_RUNS\_TESTS=1 & The Stop hook requires green tests too. \\
+SHERIFF\_STOP\_MAX\_BLOCKS & How many times in a row it sends the turn back; 5
+  by default. \\
+VERIFICATION\_TEST\_CMD & The test command, when it is not the one the build
+  tool gives. \\
+AI\_BACKEND & Who answers in the terminal's repair loop. \\
+\end{tabularx}
+\end{center}
+
+% ---------------------------------------------------------------------------
+\section{Codex}
+\label{sec:codex}
+
+When \code{codex} is installed, the installer sets it up as it does Claude
+Code, for every project. It writes three things into \path{~/.codex/}, leaving
+the rest of those files as they were:
+
+\begin{itemize}
+  \item in \code{config.toml}, the server, with the time limit it needs (Codex
+        cuts a call at 60 seconds) and \tool{sheriff_fix} approved;
+  \item in \code{AGENTS.md}, the order of work, which Codex reads in every
+        project;
+  \item in \code{hooks.json}, the Stop and turn-start hooks. Not the gate,
+        because Codex edits with patches; the Stop hook catches the same errors
+        after the edit.
+\end{itemize}
+
+\subsection{What is left to you}
+
+\textbf{Approve the hooks once.} Codex asks before it runs a new hook: you see
+\code{Hooks need review} in the first session, or you can do it with
+\code{/hooks}. Until you approve them, the Stop hook does not run.
+
+\subsection{Four things worth knowing}
+
+\begin{itemize}
+  \item \textbf{Open Codex in the project's folder.} Codex does not say where the
+        project is, so it is worked out from the folder it runs in.
+  \item \textbf{\code{codex exec} does not write unless told to.} To let it
+        edit: \code{codex exec -s workspace-write "Add a method size() to Basket"}.
+  \item \textbf{\tool{sheriff_autofix} ends with the session.} Codex stops its
+        servers when a session ends, and the repair loop with them, which can
+        leave the repository on the loop's branch with a pass uncommitted. For
+        long repairs, use the terminal:
+\begin{command}[basicstyle=\ttfamily\footnotesize]{bash}
+AI_BACKEND=codex_cli java -jar ~/.local/share/sheriff-agent/sheriff-mcp.jar --agent
+\end{command}
+  \item \textbf{Your terminal's variables do not arrive} at the server or the
+        hooks. Use the installer's options (\code{--pull-always},
+        \code{--fail-fast}) or write them into the server's entry in
+        \code{config.toml}: \texttt{env = \{ SHERIFF\_TIMEOUT = "600" \}}.
+\end{itemize}
+
+% ---------------------------------------------------------------------------
+\section{Antigravity}
+\label{sec:antigravity}
+
+Google's Antigravity can work with Sheriff in two ways: as the assistant, with
+the MCP server, as Claude Code and Codex do, and as one of the repair loop's
+models. Both go through its command line, \code{agy}.
+
+\subsection{As the assistant}
+
+When \code{agy} is installed, the installer sets it up, for every project. It
+writes two things, leaving the rest of those files as they were:
+
+\begin{itemize}
+  \item in \path{~/.gemini/config/mcp_config.json}, the server, the same entry
+        \code{agy mcp add} would register;
+  \item in \path{~/.gemini/antigravity-cli/settings.json}, permission for the
+        four tools that neither commit nor spend tokens to run without asking,
+        as in Claude Code: \code{mcp(sheriff/sheriff_test)} and the other
+        three. \tool{sheriff_autofix} always asks.
+\end{itemize}
+
+If you install Antigravity later, run the install line again, or:
+
+\begin{command}[basicstyle=\ttfamily\footnotesize]{bash}
+java -jar ~/.local/share/sheriff-agent/sheriff-mcp.jar --install-antigravity
+\end{command}
+
+Antigravity reads the server's order of work, so it follows the same cycle as
+Claude Code (section~\ref{sec:first}). What it does not have is the hooks: nothing stops an Antigravity turn from
+ending with errors left; it depends on the model following the steps.
+
+\begin{note}
+Tried on 7 October on Linux, with \code{agy} 1.3.1 and the \code{basket}
+project of section~\ref{sec:first}. Asked to \ask{fix this project's code
+standards errors}, it called \tool{sheriff_test} and \tool{sheriff_fix}, fixed
+by hand what was left, checked again, ran \code{mvn test} and ended with 0
+errors.
+\end{note}
+
+\subsection{In the repair loop}
+
+With \code{agy} logged in, from the module's folder:
+
+\begin{command}[basicstyle=\ttfamily\footnotesize]{bash}
+AI_BACKEND=antigravity_cli java -jar ~/.local/share/sheriff-agent/sheriff-mcp.jar --agent
+\end{command}
+
+The loop is the same as with Claude: a branch of its own, Sheriff's automatic
+repairs first, one commit per pass and the project's tests at the end.
+\needspace{6\baselineskip}
+To pick the model (\code{agy models} lists them):
+
+\begin{command}{bash}
+export ANTIGRAVITY_COMMAND="agy --mode accept-edits --model claude-sonnet-5-5-high"
+\end{command}
+
+In the loop, Antigravity is confined:
+
+\begin{itemize}
+  \item \textbf{It edits only inside the component.} Antigravity itself refuses
+        anything outside it.
+  \item \textbf{It can run two commands only}: the project's tests and
+        \code{git mv}. If it tries another, or a URL, Antigravity refuses it and
+        the pass ends; the loop records it and goes on.
+  \item \textbf{Your Antigravity settings are left alone.} Each pass works with
+        a temporary copy of them, deleted when it ends.
+  \item \textbf{Each pass has 600 seconds.} The
+        \code{SHERIFF_AGENT_ANTIGRAVITY_TIMEOUT} variable changes that limit.
+  \item \textbf{It has not been tried on Windows}, so there it runs no command,
+        not even the tests.
+\end{itemize}
+
+\begin{note}
+Tried on 7 October on Spring PetClinic: from 221 errors to 0 in five passes,
+with the 81 tests and the project's formatter green.
+\end{note}
+
+% ---------------------------------------------------------------------------
+\section{Troubleshooting}
+\label{sec:troubleshooting}
+
+\newcommand\problem[2]{\par\addvspace{0.5\baselineskip}\noindent\textbf{\color{pbbrand}#1}\par\nopagebreak\vspace{-0.45\baselineskip}\noindent\hangindent=1.2em\hangafter=0 #2\par}
+
+\subsection{When installing}
+
+These are the installer's own messages. On the first four it stops; on the rest
+it goes on and warns you.
+
+\problem{\code{No Java 17 or newer was found}}{There is no Java 17 or newer in
+\code{JAVA_HOME}, on the \code{PATH} or in the folders JDKs are installed in.
+Install one (for example, Temurin from \path{https://adoptium.net}; on Windows,
+\code{winget install EclipseAdoptium.Temurin.21.JDK}) and run the line again.
+It need not be on the \code{PATH}.}
+\problem{\code{... could not be downloaded}}{There is no network, or there is
+a proxy \code{curl} or PowerShell does not know about. With
+\code{--release=TAG} (\code{-Tag}), there is no release by that name. Run the
+line again once there is network.}
+\problem{\code{the jar downloaded does not match its checksum}}{The download
+was cut short. Run the line again.}
+\problem{\code{The MCP server does not start: FAIL}}{The installer started the
+server with the Java it found, as your assistant will, and it did not answer.
+What the server said follows; with that fixed, run the line again.}
+\problem{\code{Docker is not installed. The install goes on}\ldots}{The tools
+are installed, but they analyze nothing until there is Docker. Install it, or
+run the line again with \code{--install-docker}.}
+\problem{\code{Docker is not running. The install goes on}\ldots}{Start
+Docker; the server pulls the image when it starts. On Linux, if Docker is in
+fact running, most likely your user cannot use it without \code{sudo}: add
+yourself to the group with \code{sudo usermod -aG docker $USER}, log out of the
+system and back in.}
+\problem{\code{Sheriff's image could not be pulled now}}{There is no network
+or, on Windows, Docker Desktop is set to Windows containers
+(\code{no matching manifest for windows}): switch it to Linux containers, its
+default. The server pulls the image when it starts.}
+\problem{\code{claude}, \code{codex} or \code{agy is not on the PATH}}{That
+assistant was not installed, so the installer did not set it up. Once you
+install it, run the line again, or the command it printed.}
+\problem{\code{No assistant was found}}{None of Claude Code, Codex or
+Antigravity is installed, so the installer wrote nothing into any assistant's
+configuration: Sheriff is there only as the CI check (\code{--check}) and the
+Maven plugin. Install one and run the line again.}
+
+\subsection{When a session opens}
+
+\problem{\code{Failed to connect} in \code{claude mcp list}, or \code{connection closed}}{The
+jar is not where the registration says, or the Java registered is gone: when
+Java is updated on Windows, the JDK's folder changes its name. Run the install
+line again, which looks for Java again and checks that the server starts.}
+\problem{On Windows, the hooks fail with a \code{non-blocking} error and
+\code{java: command not found}}{An earlier installer wrote them, with
+\code{java} and no path, and Claude Code runs the hooks in Git Bash, where Java
+may not be on the \code{PATH}. Run the install line again: it now writes the
+full path of \code{java.exe}.}
+\problem{Claude Code asks for permission every time it uses \tool{sheriff_fix}}{The
+permissions were not written: install again. \tool{sheriff_autofix} always
+asks, on purpose.}
+\problem{The hooks do nothing}{The session has not reloaded its settings.
+Restart it and check them with \code{/hooks}.}
+
+\subsection{When analyzing}
+
+\problem{\code{Sheriff's image ... is being downloaded}}{It is the first use on
+this machine: wait a few minutes.}
+\problem{\code{The analyzer could not run}}{Docker has stopped. Start it and ask
+for the check again.}
+\problem{\code{Nothing was analyzed}}{The component holds no sources of the
+profile's language. Name the component (\ask{check the api module}) or check
+the profile the project declares.}
+\problem{\code{No rule catalog is available}}{There was no Docker when the
+server started. Start Docker: the next rule lookup tries again, at most a
+minute later.}
+\problem{\code{a newer kaizten/sheriff:latest has been published}}{There are new
+rules. Run the install line again to pull them, or install with
+\code{--pull-always}.}
+
+\subsection{With Codex}
+
+\problem{\code{timed out awaiting tools/call}}{The server's entry has no time
+limit. Install again, or run the jar with \code{--install-codex}.}
+\problem{\code{writing is blocked by read-only sandbox}}{\code{codex exec} is
+read-only by default: add \code{-s workspace-write}.}
+\problem{The Stop hook does not act}{The hook has not been approved. Open an
+interactive session and approve it with \code{/hooks}.}
+
+\subsection{How to report a problem}
+
+Include three things: the version (the jar with \code{--version}), the task id
+the answer shows (\code{Task 4047f176.}) and, if you can, the file
+\path{~/.local/state/sheriff-mcp/tasks/<id>/task.json}, which records the jar's
+version and the exact Sheriff image the analysis ran with. The newest 50 tasks
+are kept.
+
+% ---------------------------------------------------------------------------
+\section{Frequently asked questions}
+\label{sec:faq}
+
+\newcommand\faq[2]{\par\addvspace{0.6\baselineskip}\noindent{\sffamily\bfseries\color{pbbrand}#1}\par\nopagebreak\vspace{-0.45\baselineskip}#2\par}
+
+\faq{Does this spend tokens?}{Only \tool{sheriff_autofix} and the terminal's
+loop, which call a model. Analyzing, reading the rules and the automatic
+repairs of \tool{sheriff_fix} use no model. The work your assistant does by
+hand on the errors left is part of your normal session.}
+
+\faq{Is anything copied into my project?}{No. Sheriff leaves a few temporary
+files while it analyzes, and the tools delete them after. The only things that
+change are the files \tool{sheriff_fix} or the assistant repair, and you see
+those with \code{git diff}.}
+
+\faq{Why does it fix errors that were not mine?}{Because the component is
+delivered clean as a whole, and leaving the \emph{old} errors is the most
+common way for them never to be fixed. When you do not want it, say so in the
+request.}
+
+\faq{Why is the first time so slow?}{Sheriff's image takes about 4\,GB and the
+rule catalog is extracted from it (about 6 seconds). After that, an analysis
+takes a few seconds.}
+
+\faq{Do new rules arrive by themselves?}{No, on purpose: rules that change in
+the middle of a piece of work confuse. When there is a newer image, it is
+reported once per session. To pull it, install again; to always pull it,
+install with \code{--pull-always}.}
+
+\faq{What if Docker is not running?}{There is no analysis. The tools say so,
+the assistant goes on with the work and runs the tests, and the hooks let you
+through.}
+
+\faq{Does it work with other assistants?}{Any MCP client can use the server.
+For one that does not read MCP instructions, the jar with
+\code{--instructions} prints the order of work, and \code{--call sheriff_test}
+runs a tool from the terminal with the same answer the server gives.}
+
+% ---------------------------------------------------------------------------
+\section{Update and uninstall}
+\label{sec:uninstall}
+
+\textbf{To update}, run the install line again: it downloads the latest release
+and writes the configuration again. Then restart the open sessions. Run it
+again too when you update or change Java: the assistants call it by its full
+path, and the old Java's may disappear.
+
+In the uninstall commands, if \code{java} is not on the \code{PATH}, put in its
+place the path the installer showed on its first line
+(\code{Using Java ... at ...}).
+
+\textbf{To uninstall}, in this order, as the first steps use the jar. On
+Linux and macOS:
+
+\begin{command}{bash}
+java -jar ~/.local/share/sheriff-agent/sheriff-mcp.jar --uninstall-hooks --user
+# If you use Codex
+java -jar ~/.local/share/sheriff-agent/sheriff-mcp.jar --uninstall-codex
+# If you use Antigravity
+java -jar ~/.local/share/sheriff-agent/sheriff-mcp.jar --uninstall-antigravity
+claude mcp remove --scope user sheriff
+rm -rf ~/.local/share/sheriff-agent ~/.cache/sheriff-mcp ~/.local/state/sheriff-mcp
+# Optional: frees the image's 4 GB
+docker rmi kaizten/sheriff:latest
+\end{command}
+
+On Windows, in PowerShell:
+
+\begin{command}[basicstyle=\ttfamily\footnotesize]{PowerShell}
+$jar = "$HOME\.local\share\sheriff-agent\sheriff-mcp.jar"
+java -jar $jar --uninstall-hooks --user
+# If you use Codex
+java -jar $jar --uninstall-codex
+# If you use Antigravity
+java -jar $jar --uninstall-antigravity
+claude mcp remove --scope user sheriff
+Remove-Item -Recurse -Force -ErrorAction SilentlyContinue "$HOME\.local\share\sheriff-agent"
+Remove-Item -Recurse -Force -ErrorAction SilentlyContinue "$HOME\.cache\sheriff-mcp"
+Remove-Item -Recurse -Force -ErrorAction SilentlyContinue "$HOME\.local\state\sheriff-mcp"
+# Optional: frees the image's 4 GB
+docker rmi kaizten/sheriff:latest
+\end{command}
+
+% ---------------------------------------------------------------------------
+\clearpage
+\section{Quick reference card}
+\label{sec:card}
+
+\begin{minipage}[t]{0.48\linewidth}\raggedright
+\cardhead{What to ask}
+\begin{itemize}[leftmargin=1.1em]
+  \item \ask{check the code standards}
+  \item \ask{fix what Sheriff can fix by itself}
+  \item \ask{what are the rules for javadoc?}
+  \item \ask{check the code standards of the api module}
+  \item \ask{repair the whole component with sheriff\_autofix}
+  \item \ask{how is the task going?}
+  \item \ask{\ldots{} leave the errors that were already there}
+\end{itemize}
+
+\cardhead{The five tools}
+\rowcolors{2}{pbcode}{white}
+\begin{tabularx}{\linewidth}{@{\hspace{4pt}}>{\ttfamily\small}p{33mm}>{\small\raggedright\arraybackslash}X}
+\headrow \thead{Tool} & \thead{What it does} \\
+sheriff\_test & Analyzes: count and next step. \\
+sheriff\_fix & Automatic repairs; lists what is left. \\
+sheriff\_guidelines & The rules and the code accepted. \\
+sheriff\_autofix & Repairs it all on a branch. \textbf{Spends tokens.} \\
+sheriff\_task & A task's state. \\
+\end{tabularx}
+
+\cardhead{Exit codes of \code{--check}}
+\rowcolors{2}{pbcode}{white}
+\begin{tabularx}{\linewidth}{@{\hspace{4pt}}>{\ttfamily\bfseries\small}p{8mm}>{\small}X}
+\headrow \thead{} & \thead{Meaning} \\
+0 & Clean. \\
+1 & There are errors. \\
+2 & Could not check. \\
+\end{tabularx}
+\end{minipage}%
+\hfill
+\begin{minipage}[t]{0.48\linewidth}\raggedright
+\cardhead{Install or update}
+{\ttfamily\footnotesize curl -fsSL https://github.com/\textbackslash\\
+kaizten/sheriff-mcp-server/\textbackslash\\
+releases/latest/download/\textbackslash\\
+install.sh | bash\par}
+{\footnotesize On Windows, the line in section~\ref{sec:install}.\par}
+
+\cardhead{Commands}
+{\ttfamily\footnotesize
+\begin{tabular}{@{}l@{}}
+\textcolor{pbmuted}{J=\textasciitilde/.local/share/sheriff-agent/sheriff-mcp.jar}\\[3pt]
+java -jar \$J -{}-version\\
+java -jar \$J -{}-check\\
+java -jar \$J -{}-call sheriff\_test\\
+java -jar \$J -{}-agent\\
+AI\_BACKEND=antigravity\_cli java -jar \$J -{}-agent\\
+java -jar \$J -{}-install-hooks [-{}-user]\\
+java -jar \$J -{}-uninstall-hooks [-{}-user]\\
+java -jar \$J -{}-install-codex\\
+java -jar \$J -{}-install-antigravity\\
+\end{tabular}\par}
+
+\cardhead{Where things are}
+\rowcolors{2}{pbcode}{white}
+\begin{tabularx}{\linewidth}{@{\hspace{4pt}}>{\ttfamily\scriptsize}p{43mm}>{\small\raggedright\arraybackslash}X}
+\headrow \thead{Path} & \thead{What} \\
+\textasciitilde/.local/share/sheriff-agent & The jar. \\
+\textasciitilde/.cache/sheriff-mcp & The rule catalog. \\
+\textasciitilde/.local/state/sheriff-mcp & The tasks. \\
+\textasciitilde/.claude/settings.json & Hooks and permissions. \\
+\textasciitilde/.codex/ & Codex's configuration. \\
+\textasciitilde/.gemini/config/ & The server in Antigravity. \\
+\end{tabularx}
+
+\cardhead{Done means}
+\begin{itemize}[leftmargin=1.1em]
+  \item \textbf{0 errors} in the component,
+  \item \textbf{green tests},
+  \item and a test for every new method.
+\end{itemize}
+\end{minipage}
+
+\end{document}

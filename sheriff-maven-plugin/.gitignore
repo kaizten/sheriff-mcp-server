@@ -1,0 +1,9 @@
+# Build output. The catalog is copied into target/classes at build time
+# from sheriff-mcp-java, so it is generated here and never committed.
+target/
+
+# The rule catalog, which this module's build copies in from sheriff-mcp-java
+# and bundles into target/. It is Kaizten's content, read out of their image,
+# so it must not be committed here either, in either shape.
+rules_catalog.json
+SHERIFF_RULES.md

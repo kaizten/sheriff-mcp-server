@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Sheriff behind one jar: the MCP server, and the agent inside it.
+
+  The agent's hexagonal core (domain, application, infrastructure) lives here,
+  and the MCP server is one of its driving adapters, under
+  infrastructure/mcp, beside the command line (infrastructure/cli). The
+  interaction this follows is developer -> assistant -> MCP -> agent ->
+  Sheriff: the agent is what the server runs, not a second product beside it.
+  Until September 2026 the agent was its own module, sheriff-agent-java, and
+  this one depended on it; that module is in git history.
+
+  mcp-server/, an independent port of the same tools kept to compare "share
+  the core" against "stay independent", is in history too. Sharing won: it is
+  what makes sheriff_autofix possible at all.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.kaizten</groupId>
+    <artifactId>sheriff-mcp</artifactId>
+    <version>1.0.0</version>
+    <packaging>jar</packaging>
+
+    <properties>
+        <maven.compiler.source>17</maven.compiler.source>
+        <maven.compiler.target>17</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <junit.version>5.10.2</junit.version>
+        <!--
+          The version anthropic-java itself is built against. Pinning an older
+          one here mixed 2.17 core classes with the SDK's 2.18 modules in the
+          same jar; the BOM below keeps every Jackson artifact on one version.
+        -->
+        <jackson.version>2.18.2</jackson.version>
+        <anthropic.version>2.34.0</anthropic.version>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>com.fasterxml.jackson</groupId>
+                <artifactId>jackson-bom</artifactId>
+                <version>${jackson.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.anthropic</groupId>
+            <artifactId>anthropic-java</artifactId>
+            <version>${anthropic.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>${jackson.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>${junit.version}</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <!--
+          Two jars, on purpose. The artifact Maven installs is the plain one,
+          target/sheriff-mcp-core.jar, with its dependencies declared in its
+          pom like any library's, so the Maven plugin gets each class exactly
+          once. The runnable uber jar is written beside it as
+          target/sheriff-mcp.jar, the path every command line, the install
+          script and the Dockerfile use.
+        -->
+        <finalName>sheriff-mcp-core</finalName>
+        <!--
+          Only the version file is filtered: instructions.md is text a model
+          reads, and a ${...} in it must reach the model as it was written.
+        -->
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>false</filtering>
+                <excludes>
+                    <exclude>sheriff-mcp-version.properties</exclude>
+                </excludes>
+            </resource>
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>true</filtering>
+                <includes>
+                    <include>sheriff-mcp-version.properties</include>
+                </includes>
+            </resource>
+        </resources>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.2.5</version>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>3.5.3</version>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                        <configuration>
+                            <!--
+                              Written to its own file rather than replacing the
+                              project's artifact. Replacing it, with a reduced
+                              pom, did not work inside the root reactor: Maven
+                              resolved consumers against the full pom, and
+                              they shaded the uber jar and its libraries again.
+                              Shading in place also re-shaded the previous
+                              build's jar when the sources had not changed.
+                            -->
+                            <outputFile>${project.build.directory}/sheriff-mcp.jar</outputFile>
+                            <createDependencyReducedPom>false</createDependencyReducedPom>
+                            <transformers>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                                    <mainClass>com.kaizten.sheriff.infrastructure.mcp.McpServer</mainClass>
+                                </transformer>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+                            </transformers>
+                            <filters>
+                                <filter>
+                                    <artifact>*:*</artifact>
+                                    <excludes>
+                                        <exclude>META-INF/*.SF</exclude>
+                                        <exclude>META-INF/*.DSA</exclude>
+                                        <exclude>META-INF/*.RSA</exclude>
+                                    </excludes>
+                                </filter>
+                            </filters>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

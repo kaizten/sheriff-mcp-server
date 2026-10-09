@@ -1,0 +1,101 @@
+# Publishes the agent's image (sheriff-mcp-java/Dockerfile) to GitHub's
+# container registry as ghcr.io/kaizten/sheriff-mcp-server. Whether pulling it
+# takes a login is the package's own visibility setting on GitHub.
+#
+# Only code that passed CI is published: this runs when CI finishes green on
+# main, and builds the commit CI tested, not whatever main is by then. On a
+# pull request that touches the image it builds and checks without
+# publishing, so a broken Dockerfile shows up before the merge.
+#
+# Never with the rule catalog. It is Kaizten's content, read out of their
+# image, and the Dockerfile copies it when it sits beside the Dockerfile, as
+# it does in a checkout that ran the extractor. Here it cannot, since it is
+# not in version control, and two checks below fail the run if it ever does.
+# The published image extracts its own on first use, through the host's
+# Docker, into its cache.
+name: Image
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  pull_request:
+    paths:
+      - 'sheriff-mcp-java/**'
+      - '.github/workflows/image.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE: ghcr.io/kaizten/sheriff-mcp-server
+
+# One publish at a time, never cancelled halfway through a push. Pull
+# requests get a group each, so they neither wait for a publish nor hold one.
+concurrency:
+  group: image-${{ github.event_name == 'pull_request' && github.ref || 'main' }}
+  cancel-in-progress: false
+
+jobs:
+  image:
+    # A workflow_run's branches filter matches the head branch by name, and a
+    # pull request from a fork whose branch is called main matches it too:
+    # this would then build the fork's commit and push it, with this
+    # repository's token, as one of Kaizten's tags. So only a push to main of
+    # this repository is published; pull requests are built by the
+    # pull_request trigger, which never publishes.
+    if: >-
+      github.event_name != 'workflow_run' || (
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event == 'push' &&
+        github.event.workflow_run.head_repository.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+      # By hand only from main: a branch that CI has not passed on main is
+      # not published.
+      PUBLISH: ${{ github.event_name == 'workflow_run' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.SHA }}
+      - name: No rule catalog in the build context
+        run: |
+          for file in rules_catalog.json SHERIFF_RULES.md; do
+            if [ -e "sheriff-mcp-java/$file" ]; then
+              echo "::error::sheriff-mcp-java/$file would be copied into the image"
+              exit 1
+            fi
+          done
+      - name: Build
+        run: |
+          docker build \
+            --label "org.opencontainers.image.source=https://github.com/${{ github.repository }}" \
+            --label "org.opencontainers.image.revision=$SHA" \
+            -t "$IMAGE:latest" -t "$IMAGE:sha-${SHA::12}" \
+            sheriff-mcp-java
+      - name: No rule catalog in the image
+        run: |
+          docker run --rm --entrypoint sh "$IMAGE:latest" -c \
+            'test ! -e /agent/rules_catalog.json && test ! -e /agent/SHERIFF_RULES.md' \
+            || { echo "::error::the image carries the rule catalog"; exit 1; }
+      - name: It starts
+        run: docker run --rm "$IMAGE:latest" --help
+      # latest only from the commit main is on now. Two merges in a row start
+      # two runs, and CI can finish them in either order: pushing latest
+      # blindly left it on whichever came last, not on the newest commit.
+      - name: Publish
+        if: env.PUBLISH == 'true'
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          docker push "$IMAGE:sha-${SHA::12}"
+          head="$(git ls-remote origin refs/heads/main | cut -f1)"
+          if [ "$head" = "$SHA" ]; then
+            docker push "$IMAGE:latest"
+          else
+            echo "main is on ${head::12} now, so latest is left to that commit's run."
+          fi

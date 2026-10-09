@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  An aggregator, and nothing more. The two Java modules stay standalone:
+  neither declares this as its parent, so `cd sheriff-mcp-java && mvn package`
+  keeps working exactly as its readme says.
+
+  What this buys is build order. The Maven plugin depends on the MCP module's
+  artifact, which carries the agent's core, so a clean clone cannot build the
+  plugin until that is installed, and without this file nothing says so: the
+  failure is "Could not find artifact com.kaizten:sheriff-mcp:jar:1.0.0 in
+  central", which reads like a missing release rather than a missing step.
+  Maven works the order out from the dependencies, so from here "mvn install"
+  does both, in the right order, with one command.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.kaizten</groupId>
+    <artifactId>sheriff-tools</artifactId>
+    <version>1.0.0</version>
+    <packaging>pom</packaging>
+
+    <name>Sheriff tools</name>
+    <description>The Java tooling around Kaizten's Sheriff: the MCP server with the agent inside it, and the Maven plugin.</description>
+
+    <modules>
+        <module>sheriff-mcp-java</module>
+        <module>sheriff-maven-plugin</module>
+    </modules>
+</project>

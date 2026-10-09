@@ -1,0 +1,301 @@
+# Two jobs, because they need different things and fail for different reasons.
+#
+# build: both modules and every unit suite, on Linux, macOS and Windows. None
+# of them needs Docker, so a red here is always the code, and a red on one
+# system only is that system's paths, shells or executables.
+#
+# e2e: scripts/e2e.sh against the real kaizten/sheriff image and real git,
+# with a stand-in for the model, so it costs no tokens. It is the only check
+# of what the unit suites cannot see: which branch the loop edits, whether the
+# MCP's stdout stays clean, whether a timed-out container is really gone. A
+# red here with a green build can also be a new image: compare against the
+# last green run before touching the code.
+#
+# Nothing is uploaded. The e2e job extracts the rule catalog from the image,
+# which is Kaizten's content, and it stays on the runner.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+      - name: Build and test both modules
+        run: mvn -B install
+        shell: bash
+      # --no-pull: the Linux runner has Docker, and the image is 4 GB.
+      - name: Install as a user would (Linux, macOS)
+        if: runner.os != 'Windows'
+        run: SHERIFF_HOME="$RUNNER_TEMP/sheriff" scripts/install.sh --no-mcp --no-pull
+        shell: bash
+      # Windows PowerShell, the one Windows ships with: it treats a native
+      # command's stderr differently from PowerShell 7, which the release
+      # workflow runs the installer under.
+      - name: Install as a user would (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          $env:SHERIFF_HOME = Join-Path $env:RUNNER_TEMP 'sheriff'
+          ./scripts/install.ps1 -NoMcp -NoPull
+        shell: powershell
+      - name: The installed jar starts
+        run: java -jar "$RUNNER_TEMP/sheriff/sheriff-mcp.jar" --tools | head -c 200
+        shell: bash
+      # No Docker for Linux containers on these runners: the real "Sheriff's
+      # image cannot be had" case. The check must say so and exit 2, not hang.
+      - name: With no Sheriff image, --check fails clearly
+        if: runner.os != 'Linux'
+        run: |
+          set +e
+          java -jar "$RUNNER_TEMP/sheriff/sheriff-mcp.jar" --check --component sheriff-mcp-java 2> err.txt
+          code=$?
+          cat err.txt
+          test "$code" -eq 2 && grep -q "could not be downloaded" err.txt
+        shell: bash
+      # The installers set up only the assistants a machine has, and say which
+      # at the end; the steps above give them --no-mcp, which returns before
+      # any of that. So each runs here as a user's would: with no assistant,
+      # when it must write into no one's configuration, then with stand-ins
+      # for claude, codex and agy that only record how they were called. The
+      # runner is thrown away after, so its own home serves as the user's. mvn
+      # is a stand-in too, as the jar was built above, and the script runs
+      # under /bin/bash, which on macOS is the 3.2 a piped install gets there,
+      # and on Windows Git Bash's, the shell Claude Code runs hooks in. Every
+      # assistant must be given Java by its absolute path, and the server
+      # started once with it.
+      - name: The installer sets up the assistants there are, and only those (bash)
+        shell: bash
+        run: |
+          set -euo pipefail
+          temp="$RUNNER_TEMP"
+          if command -v cygpath >/dev/null 2>&1; then temp="$(cygpath -u "$RUNNER_TEMP")"; fi
+          tools="$temp/stand-ins"; build="$temp/stand-in-mvn"; calls="$temp/calls"
+          none="$temp/none.log"; all="$temp/all.log"
+          mkdir -p "$tools" "$build"
+          printf '#!/bin/sh\nexit 0\n' > "$build/mvn"
+          for tool in claude codex agy; do
+            printf '#!/bin/sh\necho "%s $*" >> "%s"\n' "$tool" "$calls" > "$tools/$tool"
+          done
+          chmod +x "$build/mvn" "$tools"/*
+          export SHERIFF_HOME="$temp/sheriff-assistants"
+          PATH="$build:$PATH" /bin/bash scripts/install.sh --no-pull > "$none" 2>&1 || { cat "$none"; exit 1; }
+          cat "$none"
+          grep -q "No assistant was found" "$none"
+          test ! -e "$HOME/.claude" && test ! -e "$HOME/.codex" && test ! -e "$HOME/.gemini"
+          PATH="$tools:$build:$PATH" /bin/bash scripts/install.sh --no-pull > "$all" 2>&1 || { cat "$all"; exit 1; }
+          cat "$all"
+          grep -q "Sheriff is set up for Claude Code, Codex and Antigravity." "$all"
+          grep -q -- "--hook-stop" "$HOME/.claude/settings.json"
+          grep -q "mcp_servers.sheriff" "$HOME/.codex/config.toml"
+          grep -q "sheriff-mcp.jar" "$HOME/.gemini/config/mcp_config.json"
+          grep -q "claude mcp add --scope user sheriff -- /" "$calls" || grep -q "claude mcp add --scope user sheriff -- [A-Z]:/" "$calls"
+          grep -q "The MCP server starts: OK" "$all"
+          if grep -q '"command" : "java ' "$HOME/.claude/settings.json"; then echo "the hooks run java from the PATH"; exit 1; fi
+          # The Windows steps below start from a machine with no assistant.
+          rm -rf "$HOME/.claude" "$HOME/.codex" "$HOME/.gemini"
+      # The same in Windows PowerShell, run through cmd so that the
+      # installer's stderr reaches the log as text rather than as errors.
+      - name: The installer sets up the assistants there are, and only those (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $tools = Join-Path $env:RUNNER_TEMP 'stand-ins'
+          $build = Join-Path $env:RUNNER_TEMP 'stand-in-mvn'
+          $calls = Join-Path $env:RUNNER_TEMP 'calls.txt'
+          $none = Join-Path $env:RUNNER_TEMP 'none.log'
+          $all = Join-Path $env:RUNNER_TEMP 'all.log'
+          New-Item -ItemType Directory -Force -Path $tools, $build | Out-Null
+          Set-Content -Encoding ASCII -Path (Join-Path $build 'mvn.cmd') -Value '@exit /b 0'
+          foreach ($tool in 'claude', 'codex', 'agy') {
+              Set-Content -Encoding ASCII -Path (Join-Path $tools "$tool.cmd") -Value "@echo $tool %*>>`"$calls`""
+          }
+          $env:SHERIFF_HOME = Join-Path $env:RUNNER_TEMP 'sheriff-assistants'
+          $install = 'powershell -NoProfile -ExecutionPolicy Bypass -File scripts\install.ps1 -NoPull'
+          $env:PATH = "$build;$env:PATH"
+          cmd /c "$install > `"$none`" 2>&1"
+          $code = $LASTEXITCODE
+          Get-Content $none
+          if ($code -ne 0) { throw "the installer failed with no assistant ($code)" }
+          if (-not (Select-String -Quiet -Path $none -Pattern 'No assistant was found')) { throw 'no summary for no assistant' }
+          foreach ($folder in '.claude', '.codex', '.gemini') {
+              if (Test-Path (Join-Path $HOME $folder)) { throw "$folder was written with no assistant" }
+          }
+          $env:PATH = "$tools;$env:PATH"
+          cmd /c "$install > `"$all`" 2>&1"
+          $code = $LASTEXITCODE
+          Get-Content $all
+          if ($code -ne 0) { throw "the installer failed with the stand-ins ($code)" }
+          if (-not (Select-String -Quiet -SimpleMatch -Path $all -Pattern 'Sheriff is set up for Claude Code, Codex and Antigravity.')) { throw 'no summary for three assistants' }
+          if (-not (Select-String -Quiet -SimpleMatch -Path (Join-Path $HOME '.claude\settings.json') -Pattern '--hook-stop')) { throw 'no hooks for Claude Code' }
+          if (-not (Select-String -Quiet -SimpleMatch -Path (Join-Path $HOME '.codex\config.toml') -Pattern 'mcp_servers.sheriff')) { throw 'no server for Codex' }
+          if (-not (Test-Path (Join-Path $HOME '.gemini\config\mcp_config.json'))) { throw 'no server for Antigravity' }
+          if (-not (Select-String -Quiet -SimpleMatch -Path $calls -Pattern 'claude mcp add --scope user sheriff')) { throw 'the server was not registered' }
+          if (-not (Select-String -Quiet -SimpleMatch -Path $calls -Pattern 'java.exe -jar')) { throw 'the server was registered without the path of java.exe' }
+          if (Select-String -Quiet -SimpleMatch -Path (Join-Path $HOME '.claude\settings.json') -Pattern '"command" : "java ') { throw 'the hooks run java from the PATH' }
+          if (-not (Select-String -Quiet -SimpleMatch -Path $all -Pattern 'The MCP server starts: OK')) { throw 'the server was not started once' }
+          Write-Host 'The installer set up the assistants there were, and only those.'
+      # A Java installed with no PATH entry and no JAVA_HOME, as Temurin's MSI
+      # can leave it: the installer must find it where JDKs are installed and
+      # give the hooks and the server its absolute path. Every folder with a
+      # java.exe leaves the PATH, and this runner's JDK is linked into ~\.jdks,
+      # IntelliJ's folder. Not into a Program Files of the step's own: Windows
+      # gives every process its own ProgramFiles, whatever its parent's says.
+      - name: The installer finds a Java that is not on the PATH (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $log = Join-Path $env:RUNNER_TEMP 'hidden-java.log'
+          New-Item -ItemType Directory -Force -Path (Join-Path $HOME '.jdks') | Out-Null
+          New-Item -ItemType Junction -Path (Join-Path $HOME '.jdks\jdk-17-ci') -Target $env:JAVA_HOME | Out-Null
+          $env:PATH = (Join-Path $env:RUNNER_TEMP 'stand-ins') + ';' + (Join-Path $env:RUNNER_TEMP 'stand-in-mvn') + ';' + (($env:PATH -split ';' | Where-Object { $_ -and -not (Test-Path (Join-Path $_ 'java.exe')) }) -join ';')
+          Remove-Item Env:JAVA_HOME
+          $env:SHERIFF_HOME = Join-Path $env:RUNNER_TEMP 'sheriff-hidden-java'
+          if (Get-Command java -ErrorAction SilentlyContinue) { throw 'java is still on the PATH' }
+          cmd /c "powershell -NoProfile -ExecutionPolicy Bypass -File scripts\install.ps1 -NoPull -NoCodex -NoAntigravity > `"$log`" 2>&1"
+          $code = $LASTEXITCODE
+          Get-Content $log
+          if ($code -ne 0) { throw "the installer failed with Java off the PATH ($code)" }
+          if (Select-String -Quiet -SimpleMatch -Path $log -Pattern 'winget') { throw 'it installed a Java instead of finding the one there was' }
+          if (-not (Select-String -Quiet -SimpleMatch -Path (Join-Path $HOME '.claude\settings.json') -Pattern '.jdks/jdk-17-ci/bin/java.exe')) { throw 'the hooks do not run the Java found' }
+          if (-not (Select-String -Quiet -SimpleMatch -Path $log -Pattern 'The MCP server starts: OK')) { throw 'the server was not started once' }
+          # rmdir takes out the link alone; Remove-Item can follow it into the JDK.
+          cmd /c rmdir (Join-Path $HOME '.jdks\jdk-17-ci')
+          if (Test-Path (Join-Path $HOME '.jdks\jdk-17-ci')) { throw 'the link to the JDK is still there' }
+          Write-Host 'The installer found the Java that was not on the PATH.'
+      # A release installs with no GitHub account: the one line reads the
+      # script from a pipe, so it has no checkout and downloads the latest
+      # release's jar by its public URL. A gh that fails and records its calls
+      # comes first on the PATH, and must not be called. A tag installs that
+      # release, and one that does not exist fails with the URL it tried.
+      - name: A release installs with no gh (bash)
+        shell: bash
+        run: |
+          set -euo pipefail
+          temp="$RUNNER_TEMP"
+          if command -v cygpath >/dev/null 2>&1; then temp="$(cygpath -u "$RUNNER_TEMP")"; fi
+          stand="$temp/no-gh"; calls="$temp/gh-calls"
+          mkdir -p "$stand"
+          printf '#!/bin/sh\necho "gh $*" >> "%s"\nexit 1\n' "$calls" > "$stand/gh"
+          chmod +x "$stand/gh"
+          export PATH="$stand:$PATH"
+          latest="$(curl -fsSLI -o /dev/null -w '%{url_effective}' https://github.com/kaizten/sheriff-mcp-server/releases/latest)"
+          tag="${latest##*/tag/}"
+          SHERIFF_HOME="$temp/no-gh-latest" bash -s -- --no-mcp --no-pull < scripts/install.sh
+          test "$(java -jar "$temp/no-gh-latest/sheriff-mcp.jar" --version)" = "sheriff-mcp ${tag#v}"
+          SHERIFF_HOME="$temp/no-gh-tag" bash -s -- --release="$tag" --no-mcp --no-pull < scripts/install.sh
+          test "$(java -jar "$temp/no-gh-tag/sheriff-mcp.jar" --version)" = "sheriff-mcp ${tag#v}"
+          if SHERIFF_HOME="$temp/no-gh-none" bash -s -- --release=v0.0.0-none --no-mcp --no-pull < scripts/install.sh 2> "$temp/none.err"; then
+            echo "a release that does not exist installed"; exit 1
+          fi
+          grep -q "releases/download/v0.0.0-none/sheriff-mcp.jar could not be downloaded" "$temp/none.err"
+          if [ -s "$calls" ]; then echo "gh was called:"; cat "$calls"; exit 1; fi
+      - name: A release installs with no gh (Windows PowerShell)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $stand = Join-Path $env:RUNNER_TEMP 'no-gh-ps'
+          $calls = Join-Path $stand 'calls.txt'
+          New-Item -ItemType Directory -Force -Path $stand | Out-Null
+          Set-Content -Encoding ASCII -Path (Join-Path $stand 'gh.cmd') -Value "@echo gh %*>>`"$calls`"`r`n@exit /b 1"
+          $env:PATH = "$stand;$env:PATH"
+          # The one line fetches the script with irm, which must give it as
+          # text although GitHub serves it as application/octet-stream.
+          $published = irm https://github.com/kaizten/sheriff-mcp-server/releases/latest/download/install.ps1
+          if (-not ($published -is [string]) -or -not $published.StartsWith('#')) { throw "irm did not give the script as text: $($published.GetType().FullName)" }
+          $script = Get-Content -Raw scripts\install.ps1
+          $env:SHERIFF_HOME = Join-Path $stand 'latest'
+          & ([scriptblock]::Create($script)) -NoMcp -NoPull
+          $version = & java -jar (Join-Path $env:SHERIFF_HOME 'sheriff-mcp.jar') --version
+          if ($LASTEXITCODE -ne 0 -or $version -notmatch '^sheriff-mcp ') { throw "the latest release did not install: $version" }
+          $env:SHERIFF_HOME = Join-Path $stand 'none'
+          $failed = $false
+          try { & ([scriptblock]::Create($script)) -Tag v0.0.0-none -NoMcp -NoPull } catch {
+              if ($_.Exception.Message -notmatch 'v0.0.0-none/sheriff-mcp.jar could not be downloaded') { throw }
+              $failed = $true
+          }
+          if (-not $failed) { throw 'a release that does not exist installed' }
+          if (Test-Path $calls) { Get-Content $calls; throw 'gh was called' }
+          Write-Host 'A release installed with no gh.'
+      - name: A release installs with no gh (PowerShell 7)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $stand = Join-Path $env:RUNNER_TEMP 'no-gh-ps'
+          $calls = Join-Path $stand 'calls.txt'
+          New-Item -ItemType Directory -Force -Path $stand | Out-Null
+          Set-Content -Encoding ASCII -Path (Join-Path $stand 'gh.cmd') -Value "@echo gh %*>>`"$calls`"`r`n@exit /b 1"
+          $env:PATH = "$stand;$env:PATH"
+          # The one line fetches the script with irm, which must give it as
+          # text although GitHub serves it as application/octet-stream.
+          $published = irm https://github.com/kaizten/sheriff-mcp-server/releases/latest/download/install.ps1
+          if (-not ($published -is [string]) -or -not $published.StartsWith('#')) { throw "irm did not give the script as text: $($published.GetType().FullName)" }
+          $script = Get-Content -Raw scripts\install.ps1
+          $env:SHERIFF_HOME = Join-Path $stand 'latest'
+          & ([scriptblock]::Create($script)) -NoMcp -NoPull
+          $version = & java -jar (Join-Path $env:SHERIFF_HOME 'sheriff-mcp.jar') --version
+          if ($LASTEXITCODE -ne 0 -or $version -notmatch '^sheriff-mcp ') { throw "the latest release did not install: $version" }
+          $env:SHERIFF_HOME = Join-Path $stand 'none'
+          $failed = $false
+          try { & ([scriptblock]::Create($script)) -Tag v0.0.0-none -NoMcp -NoPull } catch {
+              if ($_.Exception.Message -notmatch 'v0.0.0-none/sheriff-mcp.jar could not be downloaded') { throw }
+              $failed = $true
+          }
+          if (-not $failed) { throw 'a release that does not exist installed' }
+          if (Test-Path $calls) { Get-Content $calls; throw 'gh was called' }
+          Write-Host 'A release installed with no gh.'
+      # With no Java at all, install.ps1 installs Temurin 21 with winget, which
+      # the runner has, finds it in Program Files and sets everything up with
+      # it. Last, as it leaves that JDK installed on the runner.
+      - name: The installer installs a Java with winget when there is none (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $log = Join-Path $env:RUNNER_TEMP 'winget-java.log'
+          if (Test-Path (Join-Path $env:ProgramFiles 'Eclipse Adoptium')) { throw 'this runner already has a JDK in Program Files' }
+          $env:PATH = (Join-Path $env:RUNNER_TEMP 'stand-ins') + ';' + (Join-Path $env:RUNNER_TEMP 'stand-in-mvn') + ';' + (($env:PATH -split ';' | Where-Object { $_ -and -not (Test-Path (Join-Path $_ 'java.exe')) }) -join ';')
+          Remove-Item Env:JAVA_HOME
+          $env:SHERIFF_HOME = Join-Path $env:RUNNER_TEMP 'sheriff-winget-java'
+          cmd /c "powershell -NoProfile -ExecutionPolicy Bypass -File scripts\install.ps1 -NoPull -NoCodex -NoAntigravity > `"$log`" 2>&1"
+          $code = $LASTEXITCODE
+          Get-Content $log
+          if ($code -ne 0) { throw "the installer failed with no Java ($code)" }
+          if (-not (Select-String -Quiet -SimpleMatch -Path $log -Pattern 'installing it with winget')) { throw 'winget was not used' }
+          if (-not (Select-String -Quiet -SimpleMatch -Path (Join-Path $HOME '.claude\settings.json') -Pattern 'Eclipse Adoptium/jdk-21')) { throw 'the hooks do not run the Java winget installed' }
+          if (-not (Select-String -Quiet -SimpleMatch -Path $log -Pattern 'The MCP server starts: OK')) { throw 'the server was not started once' }
+          Write-Host 'The installer installed a Java with winget and set everything up with it.'
+
+  e2e:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+      - name: Pull Sheriff
+        run: docker pull kaizten/sheriff:latest
+      - name: End-to-end checks
+        run: scripts/e2e.sh

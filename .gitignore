@@ -1,0 +1,20 @@
+# Scratch space for demos and experiments: fixtures, clones of other people's
+# repositories, run logs, and the write-ups that are about Kaizten's tool
+# rather than about this one.
+demo/
+.demo-work/
+
+# Kaizten Analytics' own helpers, not part of this project: a generic commit
+# script, and the one that pulls or refreshes the Sheriff image. Nothing here
+# calls either; the agent runs the image through Docker directly.
+script-github-commit.sh
+sheriff.sh
+
+# Sheriff drops these at the root of whatever it mounts, on every run.
+sheriff_errors.json
+sheriff_summary.json
+sheriff_tracked_files.json
+
+# The playbook's PDF files and LaTeX's own files: scripts/playbook.sh makes
+# them, and the release attaches the PDF files it builds itself.
+playbook/build/

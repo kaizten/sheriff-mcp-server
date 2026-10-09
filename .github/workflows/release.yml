@@ -1,0 +1,138 @@
+# Publishes a release when a tag v<version> is pushed: the runnable jar,
+# built and tested here rather than on someone's machine, its checksum, the
+# two installers, which download that jar by its public URL, with no GitHub
+# account, and the user's playbook in Spanish and English, with the release's
+# version on its cover. A tag with a suffix (v1.0.0-rc.1) becomes a
+# prerelease, which is how the whole path is tried before the real tag: the
+# one line a user runs never picks a prerelease.
+#
+# Then each installer is run as a user runs it, on Linux, macOS and Windows
+# (Windows PowerShell and PowerShell 7), against what was just published,
+# with no checkout and no GitHub token. A red there means the release does not
+# install.
+#
+# Never with the rule catalog: it is Kaizten's content, read out of their
+# image. The checkout has none, and the jar is checked for one anyway.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+      - name: Build and test both modules
+        run: mvn -B install
+      - name: The tag names the version the jar reports
+        run: |
+          reported="$(java -jar sheriff-mcp-java/target/sheriff-mcp.jar --version)"
+          tagged="${GITHUB_REF_NAME#v}"
+          if [ "$reported" != "sheriff-mcp ${tagged%%-*}" ]; then
+            echo "::error::the tag is $GITHUB_REF_NAME, but the jar says '$reported'"
+            exit 1
+          fi
+      # The Maven plugin bundles the catalog when one sits beside the MCP
+      # module at build time. The release does not publish the plugin, but a
+      # jar built here is the one anyone would take from it.
+      - name: No rule catalog in the jars
+        run: |
+          for jar in sheriff-mcp-java/target/sheriff-mcp.jar sheriff-maven-plugin/target/sheriff-maven-plugin-*.jar; do
+            if unzip -l "$jar" | grep -E 'rules_catalog\.json|SHERIFF_RULES\.md'; then
+              echo "::error::$jar carries the rule catalog"
+              exit 1
+            fi
+          done
+      - name: The user's playbook, in Spanish and English
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            latexmk texlive-latex-extra texlive-fonts-extra texlive-lang-spanish texlive-pictures
+          scripts/playbook.sh "${GITHUB_REF_NAME#v}"
+      - name: Assets
+        run: |
+          mkdir dist
+          cp sheriff-mcp-java/target/sheriff-mcp.jar scripts/install.sh scripts/install.ps1 dist/
+          cp playbook/build/sheriff-playbook-es.pdf playbook/build/sheriff-playbook-en.pdf dist/
+          (cd dist && sha256sum sheriff-mcp.jar > sheriff-mcp.jar.sha256)
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat > notes.md <<'EOF'
+          Install or update with one line; no GitHub account is needed. Java 17+ and Docker are needed to analyze: the installer finds Java even off the PATH (on Windows it installs it with winget when there is none) and pulls Sheriff's image.
+
+          Linux and macOS:
+
+          ```bash
+          curl -fsSL https://github.com/kaizten/sheriff-mcp-server/releases/latest/download/install.sh | bash
+          ```
+
+          Windows (PowerShell):
+
+          ```powershell
+          & ([scriptblock]::Create((irm https://github.com/kaizten/sheriff-mcp-server/releases/latest/download/install.ps1)))
+          ```
+
+          Options (`--pull-always`, `--install-docker`, `--no-pull`, ...) go after `bash -s --`, or after the script block as `-PullAlways`, `-InstallDocker`, `-NoPull`: see the README's Install section. The jar carries no rule catalog; the tools extract it from Sheriff's image on first use.
+
+          The user's playbook, for this version: `sheriff-playbook-es.pdf` (Spanish) and `sheriff-playbook-en.pdf` (English), below.
+          EOF
+          prerelease=()
+          case "$GITHUB_REF_NAME" in *-*) prerelease=(--prerelease) ;; esac
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag \
+            --title "Sheriff tools $GITHUB_REF_NAME" --notes-file notes.md --generate-notes \
+            "${prerelease[@]}" dist/*
+
+  install:
+    needs: publish
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: The one line, as a user runs it (Linux, macOS)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          export SHERIFF_HOME="$RUNNER_TEMP/sheriff"
+          curl -fsSL --retry 3 "https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME/install.sh" \
+            | bash -s -- --release="$GITHUB_REF_NAME" --no-mcp --no-pull
+          test "$(java -jar "$SHERIFF_HOME/sheriff-mcp.jar" --version)" = "sheriff-mcp $(echo "${GITHUB_REF_NAME#v}" | cut -d- -f1)"
+      - name: The one line, as a user runs it (Windows PowerShell)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $env:SHERIFF_HOME = Join-Path $env:RUNNER_TEMP 'sheriff-windows-powershell'
+          & ([scriptblock]::Create((irm "https://github.com/$env:GITHUB_REPOSITORY/releases/download/$env:GITHUB_REF_NAME/install.ps1"))) -Tag $env:GITHUB_REF_NAME -NoMcp -NoPull
+          & java -jar (Join-Path $env:SHERIFF_HOME 'sheriff-mcp.jar') --version
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+      - name: The one line, as a user runs it (PowerShell 7)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $env:SHERIFF_HOME = Join-Path $env:RUNNER_TEMP 'sheriff-pwsh'
+          & ([scriptblock]::Create((irm "https://github.com/$env:GITHUB_REPOSITORY/releases/download/$env:GITHUB_REF_NAME/install.ps1"))) -Tag $env:GITHUB_REF_NAME -NoMcp -NoPull
+          & java -jar (Join-Path $env:SHERIFF_HOME 'sheriff-mcp.jar') --version
+          if ($LASTEXITCODE -ne 0) { exit 1 }

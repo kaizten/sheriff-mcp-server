@@ -1,0 +1,333 @@
+% The look shared by both languages of the user's playbook: page, type,
+% colours, the boxes and the cover. Each language's .tex holds only the text,
+% and loads this with its language as the option:
+%
+%   \usepackage[spanish]{sheriff-playbook}
+%
+% The version on the cover and in the footer is \playbookversion, which
+% scripts/playbook.sh defines from the poms or from the release's tag, and the
+% Maven plugin's example uses \pluginversion, from the plugin's pom.
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{sheriff-playbook}[2026/10/07 The Sheriff tools' user playbook]
+
+\newif\ifpb@spanish
+\DeclareOption{spanish}{\pb@spanishtrue}
+\DeclareOption{english}{\pb@spanishfalse}
+\ProcessOptions\relax
+
+\providecommand\playbookversion{dev}
+% The Maven plugin's own version, for its example: the build reads it from the
+% plugin's pom, as a prerelease tag is not a version the plugin has.
+\providecommand\pluginversion{\playbookversion}
+
+% Type and page.
+\RequirePackage[T1]{fontenc}
+\RequirePackage[utf8]{inputenc}
+\ifpb@spanish
+  \RequirePackage[english,spanish,es-noshorthands,es-tabla,es-nolayout,es-noindentfirst]{babel}
+\else
+  \RequirePackage[spanish,english]{babel}
+\fi
+\RequirePackage[default,semibold]{sourcesanspro}
+\RequirePackage[scale=0.86]{sourcecodepro}
+\RequirePackage[a4paper,top=27mm,bottom=26mm,inner=25mm,outer=25mm,headsep=9mm,footskip=13mm]{geometry}
+\RequirePackage{microtype}
+% Source Code Pro joins -- into a dash, and --check must read as typed.
+\DisableLigatures[-]{encoding=T1,family=tt*}
+\RequirePackage[table]{xcolor}
+\RequirePackage{graphicx}
+\RequirePackage{amssymb}
+\RequirePackage{fontawesome5}
+\RequirePackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,calc,fit,backgrounds,shapes.geometric}
+\RequirePackage[most]{tcolorbox}
+\RequirePackage{listings}
+\RequirePackage{enumitem}
+\RequirePackage{titlesec}
+\RequirePackage{titletoc}
+\RequirePackage{needspace}
+\RequirePackage{etoolbox}
+\RequirePackage{fancyhdr}
+\RequirePackage{booktabs}
+\RequirePackage{tabularx}
+\RequirePackage{array}
+\RequirePackage{lastpage}
+\RequirePackage[obeyspaces,spaces]{url}
+\RequirePackage{hyperref}
+
+\setlength{\parindent}{0pt}
+% A long command or path in a line of prose: a looser line, never one past the margin.
+\setlength{\emergencystretch}{3em}
+\setlength{\parskip}{0.55\baselineskip}
+\linespread{1.08}
+\setlist{itemsep=0.25\baselineskip,topsep=0.2\baselineskip,parsep=0pt}
+\setlist[itemize]{label=\textcolor{pbaccent}{\small\textbullet},leftmargin=1.4em}
+\setlist[enumerate]{label=\textcolor{pbbrand}{\bfseries\arabic*.},leftmargin=1.7em}
+
+% Colours: a deep navy for structure, a slate blue for the small marks, and
+% one colour per kind of callout. Nothing bright: this is a manual.
+\definecolor{pbbrand}{HTML}{14324F}
+\definecolor{pbbranddark}{HTML}{0B1F33}
+\definecolor{pbaccent}{HTML}{4A6785}
+\definecolor{pbaccentsoft}{HTML}{EEF2F6}
+\definecolor{pbink}{HTML}{1F2933}
+\definecolor{pbmuted}{HTML}{5F6B7A}
+\definecolor{pbrule}{HTML}{D5DBE3}
+\definecolor{pbcode}{HTML}{F3F5F8}
+\definecolor{pbtip}{HTML}{0F766E}
+\definecolor{pbtipsoft}{HTML}{E6F4F2}
+\definecolor{pbwarn}{HTML}{B4461B}
+\definecolor{pbwarnsoft}{HTML}{FCEDE6}
+\definecolor{pbnote}{HTML}{2F5D8A}
+\definecolor{pbnotesoft}{HTML}{E8EFF7}
+\color{pbink}
+
+% The words the boxes and the page furniture print, in each language.
+\ifpb@spanish
+  \newcommand\pb@title{Sheriff}
+  \newcommand\pb@date{Fecha}
+  \newcommand\pb@repository{Repositorio}
+  \newcommand\pb@kind{Playbook de usuario}
+  \newcommand\pb@tip{Consejo}
+  \newcommand\pb@warn{Atención}
+  \newcommand\pb@note{Nota}
+  \newcommand\pb@answer{Respuesta de Sheriff}
+  \newcommand\pb@play{Jugada}
+  \newcommand\pb@version{Versión}
+  \newcommand\pb@pageof{de}
+  \newcommand\pb@when{Cuándo}
+  \newcommand\pb@ask{Pide}
+  \newcommand\pb@happens{Qué ocurre}
+  \newcommand\pb@done{Terminado cuando}
+  \newcommand\pb@open{«}
+  \newcommand\pb@close{»}
+\else
+  \newcommand\pb@title{Sheriff}
+  \newcommand\pb@date{Date}
+  \newcommand\pb@repository{Repository}
+  \newcommand\pb@kind{User playbook}
+  \newcommand\pb@tip{Tip}
+  \newcommand\pb@warn{Watch out}
+  \newcommand\pb@note{Note}
+  \newcommand\pb@answer{Sheriff's answer}
+  \newcommand\pb@play{Play}
+  \newcommand\pb@version{Version}
+  \newcommand\pb@pageof{of}
+  \newcommand\pb@when{When}
+  \newcommand\pb@ask{Ask}
+  \newcommand\pb@happens{What happens}
+  \newcommand\pb@done{Done when}
+  \newcommand\pb@open{``}
+  \newcommand\pb@close{''}
+\fi
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=pbbrand,
+  urlcolor=pbbrand,
+  pdftitle={\pb@title. \pb@kind},
+  pdfauthor={Kaizten Analytics},
+  pdfsubject={Sheriff MCP, hooks, CI},
+}
+\urlstyle{tt}
+\g@addto@macro\UrlBreaks{\do\-}
+
+% Inline code and paths. \code is for short tokens, in ASCII, with no backslash,
+% percent sign or hash. \path (from url) is for anything long, as it breaks at
+% spaces and slashes; outside another command's argument it takes those
+% characters too. Neither takes accented letters: write those in \texttt.
+\newcommand\code[1]{\texttt{\detokenize{#1}}}
+\newcommand\tool[1]{\textcolor{pbbrand}{\texttt{\detokenize{#1}}}}
+\newcommand\key[1]{\tikz[baseline=(k.base)]\node[draw=pbrule,fill=pbcode,rounded corners=1.5pt,inner xsep=3pt,inner ysep=1.5pt,font=\footnotesize\ttfamily](k){#1};}
+\newcommand\ask[1]{\textcolor{pbbrand}{\itshape\pb@open#1\pb@close}}
+
+% Headings: the number in grey, the title in navy, a thin rule under it.
+\titleformat{\section}[block]
+  {\sffamily\LARGE\bfseries\color{pbbrand}}
+  {\textcolor{pbmuted}{\thesection}}
+  {0.8em}
+  {}
+  [\vspace{3pt}{\color{pbrule}\titlerule[0.8pt]}]
+\titlespacing*{\section}{0pt}{1.6\baselineskip}{1.0\baselineskip}
+\titleformat{\subsection}
+  {\sffamily\Large\bfseries\color{pbbranddark}}
+  {\textcolor{pbmuted}{\thesubsection}}
+  {0.6em}
+  {}
+\titlespacing*{\subsection}{0pt}{1.3\baselineskip}{0.4\baselineskip}
+\titleformat{\subsubsection}[runin]
+  {\sffamily\normalsize\bfseries\color{pbbrand}}
+  {}
+  {0pt}
+  {}
+  [.]
+\titlespacing*{\subsubsection}{0pt}{0.8\baselineskip}{0.5em}
+
+% A heading never ends a page: it takes its first lines with it.
+\pretocmd{\section}{\needspace{9\baselineskip}}{}{}
+\pretocmd{\subsection}{\needspace{5\baselineskip}}{}{}
+
+% Contents: sections in bold with the page at the right, subsections under them.
+\setcounter{tocdepth}{1}
+\titlecontents{section}[2.2em]
+  {\addvspace{0.3\baselineskip}\sffamily\bfseries\color{pbbrand}}
+  {\contentslabel[\textcolor{pbmuted}{\thecontentslabel}]{2.2em}}
+  {}
+  {\hfill\contentspage}
+\titlecontents{subsection}[4.6em]
+  {\addvspace{1pt}\sffamily\color{pbink}}
+  {\contentslabel[\textcolor{pbmuted}{\thecontentslabel}]{2.4em}}
+  {}
+  {\titlerule*[0.7pc]{\textcolor{pbrule}{.}}\contentspage}
+
+% Header and footer.
+\pagestyle{fancy}
+\fancyhf{}
+\renewcommand\sectionmark[1]{\markboth{#1}{}}
+\fancyhead[L]{\footnotesize\color{pbmuted}\textbf{Sheriff}\enspace·\enspace\pb@kind}
+\fancyhead[R]{\footnotesize\color{pbmuted}\leftmark}
+\fancyfoot[L]{\footnotesize\color{pbmuted}\pb@version{} \playbookversion}
+\fancyfoot[R]{\footnotesize\color{pbmuted}\thepage\enspace\pb@pageof\enspace\pageref*{LastPage}}
+\renewcommand\headrule{{\color{pbrule}\hrule height 0.5pt}}
+\renewcommand\footrulewidth{0pt}
+\fancypagestyle{plain}{\fancyhf{}\fancyfoot[R]{\footnotesize\color{pbmuted}\thepage\enspace\pb@pageof\enspace\pageref*{LastPage}}\renewcommand\headrule{}}
+
+% Code: commands to type, and what the tools answer.
+\lstdefinestyle{pb}{
+  basicstyle=\ttfamily\small\color{pbink},
+  columns=fullflexible,
+  keepspaces=true,
+  breaklines=true,
+  breakatwhitespace=false,
+  postbreak=\mbox{\textcolor{pbmuted}{\ensuremath{\hookrightarrow}}\space},
+  showstringspaces=false,
+  upquote=true,
+  commentstyle=\color{pbmuted},
+  morecomment=[l]{\#},
+  literate=
+    {á}{{\'a}}1 {é}{{\'e}}1 {í}{{\'i}}1 {ó}{{\'o}}1 {ú}{{\'u}}1
+    {Á}{{\'A}}1 {É}{{\'E}}1 {Í}{{\'I}}1 {Ó}{{\'O}}1 {Ú}{{\'U}}1
+    {ñ}{{\~n}}1 {Ñ}{{\~N}}1 {ü}{{\"u}}1 {¿}{{\textquestiondown}}1 {¡}{{\textexclamdown}}1
+    {✔}{{\faCheck}}1 {✗}{{\faTimes}}1 {…}{{...}}3
+}
+\lstdefinestyle{pbanswer}{
+  style=pb,
+  basicstyle=\ttfamily\footnotesize\color{pbink},
+  deletecomment=[l]{\#},
+}
+
+\newtcblisting{command}[2][]{
+  enhanced, listing only, breakable,
+  colback=pbcode, colframe=pbcode, boxrule=0pt, arc=2pt,
+  left=9pt, right=9pt, top=5pt, bottom=5pt,
+  borderline west={2.6pt}{0pt}{pbbrand},
+  listing options={style=pb,#1},
+  overlay={\node[anchor=north east,inner sep=3pt,font=\scriptsize\sffamily\color{pbmuted}] at (frame.north east) {#2};},
+  before skip=0.6\baselineskip, after skip=0.8\baselineskip,
+}
+\newtcblisting{answer}[1][\pb@answer]{
+  enhanced, listing only, breakable,
+  colback=white, colframe=pbrule, boxrule=0.7pt, arc=2pt,
+  left=9pt, right=9pt, top=9pt, bottom=6pt,
+  listing options={style=pbanswer},
+  attach boxed title to top left={xshift=8pt,yshift=-2.2mm},
+  boxed title style={colback=white,colframe=pbrule,arc=1.5pt,boxrule=0.7pt,top=1pt,bottom=1pt,left=4pt,right=4pt},
+  title={#1},
+  fonttitle=\scriptsize\sffamily\bfseries\color{pbmuted},
+  before skip=0.9\baselineskip, after skip=0.8\baselineskip,
+}
+
+% Callouts: a tip, a warning, a note. A rule at the left and a label.
+\newcommand\pb@callout[4]{%
+  \newtcolorbox{#1}{
+    enhanced, breakable,
+    colback=#3, colframe=#3, boxrule=0pt, arc=0pt,
+    left=12pt, right=10pt, top=7pt, bottom=7pt,
+    borderline west={2.6pt}{0pt}{#2},
+    before upper={\textbf{\textcolor{#2}{#4.}}\enspace},
+    before skip=0.8\baselineskip, after skip=0.8\baselineskip,
+  }}
+\pb@callout{tip}{pbtip}{pbtipsoft}{\pb@tip}
+\pb@callout{warning}{pbwarn}{pbwarnsoft}{\pb@warn}
+\pb@callout{note}{pbnote}{pbnotesoft}{\pb@note}
+
+% A play: the situation, what to ask, what happens and how to tell it is done.
+\newtcolorbox[auto counter]{play}[1]{
+  enhanced, breakable,
+  colback=white, colframe=pbbrand, boxrule=0.8pt, arc=0pt,
+  left=12pt, right=12pt, top=8pt, bottom=8pt,
+  colbacktitle=pbbrand, coltitle=white,
+  fonttitle=\sffamily\bfseries,
+  title={\pb@play\ \thetcbcounter.\enspace#1},
+  before skip=1.1\baselineskip, after skip=1.1\baselineskip,
+}
+% Each field is a label, and what follows it up to the next one is its text:
+% a field takes no argument, so that its text can hold a listing.
+\newcommand\pb@field[1]{\par\addvspace{0.35\baselineskip}{\sffamily\bfseries\small\textcolor{pbbrand}{\MakeUppercase{#1}}}\par\nopagebreak[4]\vspace{-0.22\baselineskip}}
+\newcommand\when{\pb@field{\pb@when}}
+\newcommand\asks{\pb@field{\pb@ask}}
+\newcommand\happens{\pb@field{\pb@happens}}
+\newcommand\done{\pb@field{\pb@done}}
+
+% A checklist, with a box to tick by each item.
+\newlist{checklist}{itemize}{1}
+\setlist[checklist]{label=\textcolor{pbbrand}{\large$\square$},leftmargin=1.8em,itemsep=0.35\baselineskip}
+
+% Tables: a navy header row, light rules.
+\newcolumntype{L}{>{\raggedright\arraybackslash}X}
+% A column of names: \leavevmode first, or the colour starts the cell on an
+% empty line of its own.
+\newcolumntype{K}[1]{>{\leavevmode\bfseries\color{pbbrand}\raggedright\arraybackslash}p{#1}}
+\newcommand\thead[1]{\textcolor{white}{\bfseries\small #1}}
+\newcommand\headrow{\rowcolor{pbbrand}}
+\renewcommand\arraystretch{1.32}
+\setlength{\aboverulesep}{0pt}
+\setlength{\belowrulesep}{0pt}
+\arrayrulecolor{pbrule}
+
+% A heading inside the quick reference card.
+\newcommand\cardhead[1]{\par\addvspace{0.7\baselineskip}{\sffamily\bfseries\color{pbbrand}#1}\par\nopagebreak}
+
+% The cover: white, a navy band down the left edge, the title set large, and
+% the edition at the foot. Type and rules only.
+\newcommand\makecover[3]{% title, subtitle, what it covers
+  \thispagestyle{empty}
+  \begin{tikzpicture}[remember picture,overlay]
+    \coordinate (left) at ([xshift=32mm]current page.west);
+    \coordinate (top) at ([yshift=-28mm]current page.north);
+    \coordinate (foot) at ([yshift=30mm]current page.south);
+    \fill[pbbrand] (current page.north west) rectangle ([xshift=10mm]current page.south west);
+    \node[anchor=south west,inner sep=0pt,font=\sffamily\bfseries\small,text=pbbrand]
+      at (left |- top) {\textls[160]{KAIZTEN ANALYTICS}};
+    \draw[pbbrand,line width=0.6pt] ([yshift=-4mm]left |- top) -- ([xshift=-25mm,yshift=-4mm]current page.east |- top);
+    \node[anchor=south west,inner sep=0pt,font=\sffamily\bfseries\small,text=pbmuted]
+      at ([yshift=-96mm]left |- top) {\textls[160]{\MakeUppercase{\pb@kind}}};
+    \node[anchor=north west,inner sep=0pt,font=\sffamily\bfseries\fontsize{60}{64}\selectfont,text=pbbrand]
+      (title) at ([yshift=-102mm]left |- top) {#1};
+    \node[anchor=north west,inner sep=0pt,text width=140mm,align=left,font=\sffamily\fontsize{20}{26}\selectfont,text=pbink]
+      (subtitle) at ([yshift=-9mm]title.south west) {\hyphenpenalty=10000\relax #2\par};
+    \draw[pbbrand,line width=1.4pt] ([yshift=-9mm]subtitle.south west) -- ++(24mm,0);
+    \node[anchor=north west,inner sep=0pt,text width=130mm,align=left,font=\sffamily\normalsize,text=pbmuted]
+      at ([yshift=-15mm]subtitle.south west) {\hyphenpenalty=10000\relax #3\par};
+    \draw[pbrule,line width=0.6pt] ([yshift=22mm]left |- foot) -- ([xshift=-25mm,yshift=22mm]current page.east |- foot);
+    \node[anchor=south west,inner sep=0pt,font=\sffamily\small,text=pbink]
+      at (left |- foot) {%
+        \begin{tabular}{@{}>{\color{pbmuted}}l@{\hspace{8mm}}l@{}}
+          \pb@version & \playbookversion \\[1pt]
+          \pb@date & \today \\[1pt]
+          \pb@repository & kaizten/sheriff-mcp-server \\
+        \end{tabular}};
+  \end{tikzpicture}
+  \null\newpage}
+
+% The figures' boxes.
+\tikzset{
+  pbbox/.style={draw=pbbrand,line width=0.8pt,fill=white,rounded corners=3pt,align=center,inner sep=6pt,font=\sffamily\small,text=pbink},
+  pbstrong/.style={pbbox,fill=pbbrand,text=white,font=\sffamily\small\bfseries},
+  pbsoft/.style={pbbox,draw=pbrule,fill=pbcode},
+  pbgold/.style={pbbox,draw=pbaccent,fill=pbaccentsoft},
+  pbarrow/.style={-{Stealth[length=2.6mm]},line width=0.9pt,draw=pbbrand},
+  pblabel/.style={font=\sffamily\scriptsize,text=pbmuted,align=center},
+}
+
+\endinput
