@@ -50,4 +50,27 @@ class PlatformTests {
         assertEquals(List.of("codex"), Platform.resolved(List.of("codex"), true, environment));
         assertEquals(List.of("java.exe"), Platform.resolved(List.of("java.exe"), true, environment));
     }
+
+    @Test
+    @DisplayName("SHERIFF_DOCKER=wsl runs docker through wsl.exe with a bind mount's source as WSL sees it")
+    void dockerRunsThroughWslWhenAsked() {
+        List<String> run = List.of("docker", "run", "--mount", "type=bind,source=C:\\Users\\a b\\proj,target=/data", "img");
+        assertEquals(
+                List.of("wsl.exe", "docker", "run", "--mount", "type=bind,source=/mnt/c/Users/a b/proj,target=/data",
+                        "img"),
+                Platform.dockerCommand(run, true, Map.of("SHERIFF_DOCKER", "wsl")));
+        assertEquals(
+                List.of("wsl.exe", "-d", "Ubuntu", "docker", "pull", "img"),
+                Platform.dockerCommand(List.of("docker", "pull", "img"), true, Map.of("SHERIFF_DOCKER", "wsl:Ubuntu")));
+    }
+
+    @Test
+    @DisplayName("without the variable, off Windows, or for another program, the command is left alone")
+    void dockerIsLeftAloneOtherwise() {
+        List<String> run = List.of("docker", "pull", "img");
+        assertEquals(run, Platform.dockerCommand(run, true, Map.of()));
+        assertEquals(run, Platform.dockerCommand(run, false, Map.of("SHERIFF_DOCKER", "wsl")));
+        assertEquals(List.of("git", "status"),
+                Platform.dockerCommand(List.of("git", "status"), true, Map.of("SHERIFF_DOCKER", "wsl")));
+    }
 }

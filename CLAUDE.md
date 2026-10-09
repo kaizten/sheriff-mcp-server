@@ -235,6 +235,11 @@ the table, including `SHERIFF_EXPORT_DIR`.
   the module mounts its parent. **Nested components (`a/b`) are rejected.**
   This is the single most common source of confusion here, and it is why the
   Maven plugin needs no configuration: Maven already knows both halves.
+  **Its time grows with the whole mount, not the component.** Measured on 9
+  October, PetClinic under `JAVA` through WSL's Docker: 1.6 s on WSL's own
+  disk, 26 s from `/mnt/c` in a folder holding only it, 7 min 20 s from
+  `/mnt/c` with its parent being a 4.8 GB folder of other repositories, past
+  `SHERIFF_TIMEOUT`'s 300 s.
 - **`test` always exits 0**, however many errors it found, and **`fix` always
   exits 1**, whatever happened. Neither exit code carries information. Decide
   what happened from the output, or by analyzing again.
@@ -514,7 +519,10 @@ differs lives in `Platform`, one place: `cmd.exe /c` instead of `/bin/sh -c`
 for the project's tests (with `mvnw.cmd`, double quotes), paths compared with
 Sheriff's and git's always written with `/`, Claude Code rules in its POSIX
 form (`C:\x` as `//c/x`), and executables such as npm's `claude.cmd` found on
-the `PATH`. The first Windows build found git paths with backslashes, which
+the `PATH`. With `SHERIFF_DOCKER=wsl` (or `wsl:<distro>`; `install.ps1
+-DockerWsl` sets it for the user) every `docker` command becomes `wsl.exe
+docker`, a bind mount's `source=C:\x` written `/mnt/c/x`, for a Windows
+machine whose Docker is the engine inside WSL rather than Docker Desktop. The first Windows build found git paths with backslashes, which
 made every pass look out of scope; do not compare `Path.toString()` with a
 path Sheriff or git wrote. The end-to-end job stays on Linux: GitHub's macOS
 and Windows runners have no Docker for Linux containers.

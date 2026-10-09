@@ -34,7 +34,7 @@ curl -fsSL https://github.com/kaizten/sheriff-mcp-server/releases/latest/downloa
 \end{command}
 \noindent\hspace*{1.3em}On Windows, in PowerShell:
 \begin{command}[basicstyle=\ttfamily\footnotesize]{PowerShell}
-$u = 'https://github.com/kaizten/sheriff-mcp-server/releases/latest/download'
+$u = 'https://github.com/kaizten/sheriff-mcp-server/releases/latest/download';
 & ([scriptblock]::Create((irm "$u/install.ps1")))
 \end{command}
 \begin{enumerate}[resume,leftmargin=1.3em]
@@ -165,7 +165,7 @@ Without \code{curl}, \code{wget -qO-} with the same address does the same. On
 Windows, in PowerShell (Windows PowerShell or PowerShell 7):
 
 \begin{command}[basicstyle=\ttfamily\footnotesize]{PowerShell}
-$u = 'https://github.com/kaizten/sheriff-mcp-server/releases/latest/download'
+$u = 'https://github.com/kaizten/sheriff-mcp-server/releases/latest/download';
 & ([scriptblock]::Create((irm "$u/install.ps1")))
 \end{command}
 
@@ -181,7 +181,7 @@ bash install.sh --release
 \end{command}
 
 \begin{command}[basicstyle=\ttfamily\footnotesize]{PowerShell}
-$u = 'https://github.com/kaizten/sheriff-mcp-server/releases/latest/download'
+$u = 'https://github.com/kaizten/sheriff-mcp-server/releases/latest/download';
 irm "$u/install.ps1" -OutFile install.ps1
 .\install.ps1 -Release
 \end{command}
@@ -303,6 +303,8 @@ curl -fsSL .../install.sh | bash -s -- --pull-always
 \headrow \thead{bash} & \thead{PowerShell} & \thead{What it does} \\
 -{}-install-docker & -InstallDocker & Installs Docker when it is missing, and
   starts it when it is stopped. \\
+ & -DockerWsl & Windows: uses the Docker installed inside WSL, with no Docker
+  Desktop. Restart Claude Code afterwards. \\
 -{}-pull-always & -PullAlways & Pulls a newer Sheriff image each time the server
   starts. Without it a newer image is only reported, once per session, so that
   rules do not change in the middle of someone's work. Give it again on every

@@ -69,7 +69,7 @@ public final class SystemProcessRunner implements ProcessRunner {
     @Override
     public ProcessOutcome run(List<String> command, Path workingDirectory, Map<String, String> environment,
             Duration timeout, String standardInput) {
-        ProcessBuilder builder = new ProcessBuilder(Platform.resolved(command));
+        ProcessBuilder builder = new ProcessBuilder(Platform.resolved(Platform.dockerCommand(command)));
         if (workingDirectory != null) {
             builder.directory(workingDirectory.toFile());
         }
