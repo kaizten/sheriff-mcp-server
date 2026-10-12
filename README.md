@@ -80,6 +80,7 @@ or after the script from a clone:
 |---|---|
 | `--pull-always` (`-PullAlways`) | The MCP server pulls a newer Sheriff image each time it starts. Without it a newer image is only reported, once per session, so that new rules do not arrive in the middle of someone's work unasked. It is written into the server's registration (`SHERIFF_PULL=always`), for Claude Code and for Codex, which passes a server none of your shell's variables. Give it on every run: a run without it puts the default back |
 | `--install-docker` (`-InstallDocker`) | Installs Docker when it is missing, from Docker itself: `get.docker.com` on Linux (`pacman` on Arch, which Docker does not package for), Docker Desktop's installer from docker.com on macOS and on Windows (there per user, with no administrator and WSL 2, as Docker recommends); and starts it when it is stopped. Docker Desktop asks you to accept its terms the first time it starts, and the installer does not accept them for you: they require a paid subscription in a company of more than 250 people or $10 million a year |
+| (`-DockerWsl`) | Windows only: uses the Docker engine installed inside WSL, with no Docker Desktop. It checks `wsl docker info`, pulls the image through WSL and sets `SHERIFF_DOCKER=wsl` for the user, which the server and the hooks read to run every `docker` as `wsl.exe docker`, with the mounted folder written as WSL sees it (`C:\x` as `/mnt/c/x`). `SHERIFF_DOCKER=wsl:<distro>` names a distribution other than the default. Restart Claude Code and terminals afterwards |
 | `--no-pull` (`-NoPull`) | Leaves the image alone; the MCP server pulls it when it starts and finds none |
 | `--release[=TAG]` (`-Release`, `-Tag TAG`) | From a clone, installs a release (the latest, or that one) instead of building |
 | `--no-hooks` (`-NoHooks`) | The MCP server without the hooks |
@@ -342,7 +343,7 @@ directory name is the component.
 <plugin>
   <groupId>com.kaizten</groupId>
   <artifactId>sheriff-maven-plugin</artifactId>
-  <version>1.0.1</version>
+  <version>1.0.2</version>
   <executions><execution><goals><goal>check</goal></goals></execution></executions>
 </plugin>
 ```

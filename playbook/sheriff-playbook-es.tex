@@ -34,7 +34,7 @@ curl -fsSL https://github.com/kaizten/sheriff-mcp-server/releases/latest/downloa
 \end{command}
 \noindent\hspace*{1.3em}En Windows, en PowerShell:
 \begin{command}[basicstyle=\ttfamily\footnotesize]{PowerShell}
-$u = 'https://github.com/kaizten/sheriff-mcp-server/releases/latest/download'
+$u = 'https://github.com/kaizten/sheriff-mcp-server/releases/latest/download';
 & ([scriptblock]::Create((irm "$u/install.ps1")))
 \end{command}
 \begin{enumerate}[resume,leftmargin=1.3em]
@@ -167,7 +167,7 @@ Sin \code{curl}, \code{wget -qO-} con la misma dirección hace lo mismo. En
 Windows, en PowerShell (Windows PowerShell o PowerShell 7):
 
 \begin{command}[basicstyle=\ttfamily\footnotesize]{PowerShell}
-$u = 'https://github.com/kaizten/sheriff-mcp-server/releases/latest/download'
+$u = 'https://github.com/kaizten/sheriff-mcp-server/releases/latest/download';
 & ([scriptblock]::Create((irm "$u/install.ps1")))
 \end{command}
 
@@ -183,7 +183,7 @@ bash install.sh --release
 \end{command}
 
 \begin{command}[basicstyle=\ttfamily\footnotesize]{PowerShell}
-$u = 'https://github.com/kaizten/sheriff-mcp-server/releases/latest/download'
+$u = 'https://github.com/kaizten/sheriff-mcp-server/releases/latest/download';
 irm "$u/install.ps1" -OutFile install.ps1
 .\install.ps1 -Release
 \end{command}
@@ -241,7 +241,7 @@ imagen de Sheriff: unos 4\,GB la primera vez y, después, solo lo que cambie.
 \begin{answer}[Salida del instalador]
 Using Java 17 at /usr/bin/java
 Downloading sheriff-mcp.jar from the latest release of kaizten/sheriff-mcp-server...
-Installed sheriff-mcp 1.0.1 into /home/ana/.local/share/sheriff-agent
+Installed sheriff-mcp 1.0.2 into /home/ana/.local/share/sheriff-agent
 Sheriff's hooks are in /home/ana/.claude/settings.json, for every project Claude Code opens:
   before an edit     refuse new code on a component that already fails the standards
   when a turn ends   refuse to finish while what the turn changed has errors
@@ -305,6 +305,8 @@ curl -fsSL .../install.sh | bash -s -- --pull-always
 \headrow \thead{bash} & \thead{PowerShell} & \thead{Qué hace} \\
 -{}-install-docker & -InstallDocker & Instala Docker si falta y lo arranca si
   está parado. \\
+ & -DockerWsl & Windows: usa el Docker instalado dentro de WSL, sin Docker
+  Desktop. Después, reinicia Claude Code. \\
 -{}-pull-always & -PullAlways & Descarga una imagen de Sheriff más nueva cada vez
   que arranca el servidor. Sin ella, solo se avisa una vez por sesión, para que
   no cambien las reglas a mitad de un trabajo. Hay que repetirla en cada
