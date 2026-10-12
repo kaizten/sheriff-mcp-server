@@ -387,12 +387,14 @@ function Join-Names([string[]]$Names) {
 # and on the Windows runner the docker it started pulled after a -NoPull, held
 # the folder it ran in, and on Windows holds the server's output open until it
 # ends. With no PATH and a Docker host that does not exist, any docker it still
-# finds, as Windows looks in System32 too, fails at once.
+# finds, as Windows looks in System32 too, fails at once; and without
+# SHERIFF_DOCKER, as wsl.exe is in System32 and WSL's docker never sees
+# DOCKER_HOST.
 function Test-Server {
     $initialize = '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"install","version":"1"}}}'
     $nowhere = if ($IsLinux -or $IsMacOS) { 'unix:///nonexistent/sheriff-install-check.sock' } else { 'npipe:////./pipe/sheriff_install_check' }
     try {
-        $run = Invoke-Captured $java "-jar `"$jar`"" $homeDir $initialize 60 @{ PATH = ''; DOCKER_HOST = $nowhere }
+        $run = Invoke-Captured $java "-jar `"$jar`"" $homeDir $initialize 60 @{ PATH = ''; DOCKER_HOST = $nowhere; SHERIFF_DOCKER = '' }
     } catch {
         return "$java could not be started: $($_.Exception.Message)"
     }

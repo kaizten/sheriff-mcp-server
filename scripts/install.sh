@@ -376,7 +376,8 @@ docker_setup() {
 # the docker it started pulled after a --no-pull, held the folder it ran in,
 # and on Windows holds the server's output open until it ends. With no PATH
 # and a Docker host that does not exist, any docker it still finds, as
-# Windows looks in System32 too, fails at once.
+# Windows looks in System32 too, fails at once; and without SHERIFF_DOCKER, as
+# wsl.exe is in System32 and WSL's docker never sees DOCKER_HOST.
 check_server() {
   local java="$1" jar="$2" folder="$3" answer nowhere="unix:///nonexistent/sheriff-install-check.sock"
   local initialize='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"install","version":"1"}}}'
@@ -384,7 +385,7 @@ check_server() {
     nowhere="npipe:////./pipe/sheriff_install_check"
   fi
   answer="$(cd "$folder" && printf '%s\n' "$initialize" \
-    | PATH="" DOCKER_HOST="$nowhere" "$java" -jar "$jar" 2>"$scratch/server.err")" || true
+    | PATH="" DOCKER_HOST="$nowhere" SHERIFF_DOCKER="" "$java" -jar "$jar" 2>"$scratch/server.err")" || true
   if [[ "$answer" == *'"serverInfo":{"name":"sheriff"'* ]]; then
     echo "The MCP server starts: OK, it answers as sheriff."
     return 0

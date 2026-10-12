@@ -60,6 +60,10 @@ class PlatformTests {
                         "img"),
                 Platform.dockerCommand(run, true, Map.of("SHERIFF_DOCKER", "wsl")));
         assertEquals(
+                List.of("wsl.exe", "docker", "run", "--mount", "type=bind,\"source=/mnt/d/a,b/c\",target=/data"),
+                Platform.dockerCommand(List.of("docker", "run", "--mount", "type=bind,\"source=D:\\a,b\\c\",target=/data"),
+                        true, Map.of("SHERIFF_DOCKER", "wsl")));
+        assertEquals(
                 List.of("wsl.exe", "-d", "Ubuntu", "docker", "pull", "img"),
                 Platform.dockerCommand(List.of("docker", "pull", "img"), true, Map.of("SHERIFF_DOCKER", "wsl:Ubuntu")));
     }

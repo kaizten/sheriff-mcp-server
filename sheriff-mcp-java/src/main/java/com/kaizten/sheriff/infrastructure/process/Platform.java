@@ -53,7 +53,7 @@ public final class Platform {
     private static final String WSL_DISTRO_PREFIX = "wsl:";
     private static final String WSL_DISTRO_FLAG = "-d";
     private static final String WSL_MOUNT_ROOT = "/mnt/";
-    private static final String WINDOWS_SOURCE_REGEX = "(source=)([A-Za-z]):[\\\\/]([^,\"]*)";
+    private static final String WINDOWS_SOURCE_REGEX = "(source=)([A-Za-z]):[\\\\/](.*?)(?=\"|,[A-Za-z]+=|$)";
     private static final Pattern WINDOWS_SOURCE = Pattern.compile(WINDOWS_SOURCE_REGEX);
     private static final int SOURCE_PREFIX_GROUP = 1;
     private static final int SOURCE_DRIVE_GROUP = 2;
@@ -146,7 +146,9 @@ public final class Platform {
      * The command, run through WSL's Docker, for a given platform and environment.
      *
      * <p>A bind mount's source is the one thing the engine reads as a path of
-     * its own, so {@code C:\Users\a} is written {@code /mnt/c/Users/a}.
+     * its own, so {@code C:\Users\a} is written {@code /mnt/c/Users/a}. It
+     * ends at the next field or, for a path with a comma, which
+     * {@code SheriffContainer} quotes whole, at the closing quote.
      *
      * @param command the command, its executable first
      * @param windows whether the platform is Windows
