@@ -826,6 +826,8 @@ SHERIFF\_IMAGE & Fijar la imagen por su digest
   (\code{kaizten/sheriff@sha256:...}), para que las reglas no cambien hasta que
   tú lo decidas. \\
 SHERIFF\_TIMEOUT & Segundos por análisis; 300 por defecto. \\
+SHERIFF\_DOCKER=wsl & En Windows, usar el Docker de WSL; lo pone
+  \code{-DockerWsl}. \\
 SHERIFF\_STOP\_RUNS\_TESTS=1 & El fin de turno exige también tests en verde. \\
 SHERIFF\_STOP\_MAX\_BLOCKS & Cuántas veces seguidas devuelve el turno; 5 por
   defecto. \\
@@ -997,7 +999,12 @@ Instálalo, o repite la línea con \code{--install-docker}.}
 Docker; el servidor descargará la imagen al arrancar. En Linux, si Docker sí
 está en marcha, lo más probable es que tu usuario no pueda usarlo sin
 \code{sudo}: añádete al grupo con \code{sudo usermod -aG docker $USER},
-cierra la sesión del sistema y vuelve a entrar.}
+cierra la sesión del sistema y vuelve a entrar. En Windows, si tu Docker es el
+que está instalado dentro de WSL, sin Docker Desktop, repite la línea con
+\code{-DockerWsl}.}
+\problem{\code{'wsl docker info' failed}}{Con \code{-DockerWsl}, el motor de
+Docker de WSL no está en marcha. Arráncalo (por ejemplo,
+\code{wsl sudo service docker start}) y repite la línea.}
 \problem{\code{Sheriff's image could not be pulled now}}{No hay red, o, en
 Windows, Docker Desktop está en modo de contenedores Windows
 (\code{no matching manifest for windows}): cámbialo a contenedores Linux, su
@@ -1034,6 +1041,11 @@ Reiníciala y compruébalos con \code{/hooks}.}
 esta máquina: espera unos minutos.}
 \problem{\code{The analyzer could not run}}{Docker se ha parado. Arráncalo y
 vuelve a pedir la revisión.}
+\problem{\code{did not respond within 300s}}{Sheriff tarda según todo lo que
+monta, y en un proyecto de un solo módulo eso es su carpeta padre: dentro de
+una carpeta con otros repositorios puede tardar minutos, sobre todo en Windows
+con el Docker de WSL. Pon el proyecto en una carpeta propia, o sube
+\code{SHERIFF_TIMEOUT}.}
 \problem{\code{Nothing was analyzed}}{El componente no tiene fuentes del
 lenguaje del perfil. Nombra el componente (\ask{revisa el módulo api}) o revisa
 el perfil que declara el proyecto.}
@@ -1141,7 +1153,9 @@ claude mcp remove --scope user sheriff
 Remove-Item -Recurse -Force -ErrorAction SilentlyContinue "$HOME\.local\share\sheriff-agent"
 Remove-Item -Recurse -Force -ErrorAction SilentlyContinue "$HOME\.cache\sheriff-mcp"
 Remove-Item -Recurse -Force -ErrorAction SilentlyContinue "$HOME\.local\state\sheriff-mcp"
-# Opcional: libera los 4 GB de la imagen
+# Si instalaste con -DockerWsl
+[Environment]::SetEnvironmentVariable('SHERIFF_DOCKER', $null, 'User')
+# Opcional: libera los 4 GB de la imagen (con -DockerWsl, wsl docker rmi ...)
 docker rmi kaizten/sheriff:latest
 \end{command}
 
