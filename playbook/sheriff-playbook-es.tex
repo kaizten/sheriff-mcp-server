@@ -1118,7 +1118,10 @@ herramienta desde la terminal con la misma respuesta que da el servidor.}
 
 \textbf{Para actualizar}, repite la línea de instalación: descarga la última
 versión y vuelve a escribir la configuración. Después, reinicia las sesiones
-abiertas. Repítela también si actualizas o cambias de Java: los asistentes lo
+abiertas. En Windows no es opcional: si una sesión tenía el servidor en marcha,
+el instalador avisa con \code{A Sheriff server was running from the jar this
+replaced}, y en esa sesión las herramientas de Sheriff fallan hasta que la
+reinicies. Repítela también si actualizas o cambias de Java: los asistentes lo
 llaman por su ruta completa, y la del Java anterior puede desaparecer.
 
 En los comandos de desinstalación, si \code{java} no está en el \code{PATH},

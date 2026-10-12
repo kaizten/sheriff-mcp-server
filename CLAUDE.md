@@ -123,6 +123,14 @@ CI uses with `--no-pull`, touches no assistant's configuration at all.
 Under Git Bash `install.sh` overwrites the jar in place, as `install.ps1`
 does: `install` deletes it first, which Windows refuses while a running
 server holds it, and every update with Claude Code open failed (12 October).
+Windows refuses a rename too, so there is no way to leave a running server
+its jar, and one whose jar changes under it dies at the next class it loads
+(`NoClassDefFoundError`, measured). Both installers check first whether
+anything holds the jar (a rename there and back; an open with no sharing) and
+then say that open sessions must be restarted. Under Git Bash, `install.sh`
+uses Git's own `/usr/bin/cygpath`: with conda's base environment active,
+Anaconda's comes first on the PATH and turned `/c/Users/a` into
+`C:/Users/a/anaconda3/Library/c/Users/a`.
 
 Every installer writes an assistant's file through `ConfigFile`: whole, where
 a symbolic link points, and **with the permissions it had**. A `settings.json`
