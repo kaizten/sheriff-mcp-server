@@ -18,3 +18,6 @@ sheriff_tracked_files.json
 # The playbook's PDF files and LaTeX's own files: scripts/playbook.sh makes
 # them, and the release attaches the PDF files it builds itself.
 playbook/build/
+
+# An editor's own settings
+.vscode/
