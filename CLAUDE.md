@@ -128,7 +128,12 @@ does: `install` deletes it first, which Windows refuses while a running
 server holds it, and every update with Claude Code open failed (12 October).
 Windows refuses a rename too, so there is no way to leave a running server
 its jar, and one whose jar changes under it dies at the next class it loads
-(`NoClassDefFoundError`, measured). Both installers check first whether
+(`NoClassDefFoundError`, measured). On a tool call that used to be worse: the
+call runs on a thread of its own, the `Error` ended it with nothing written,
+and the session's tool hung for minutes. `JsonRpcServer.answer` now answers
+any `Error` too, and a `LinkageError` with "cannot load its own code ...
+Restart this session", which reaches the client with the jar replaced
+(measured). Both installers check first whether
 anything holds the jar (a rename there and back; an open with no sharing) and
 then say that open sessions must be restarted. Under Git Bash, `install.sh`
 uses Git's own `/usr/bin/cygpath`: with conda's base environment active,

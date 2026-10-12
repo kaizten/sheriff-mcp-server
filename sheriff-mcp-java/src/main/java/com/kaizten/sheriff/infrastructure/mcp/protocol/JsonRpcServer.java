@@ -85,6 +85,9 @@ public final class JsonRpcServer {
     private static final String ARGUMENTS_FIELD = "arguments";
     private static final String INVALID_JSON = "Invalid JSON: %s";
     private static final String NOT_AN_OBJECT = "A request must be a JSON object.";
+    private static final String FAILURE = "%s: %s";
+    private static final String CODE_REPLACED = "The Sheriff server cannot load its own code (%s): its jar was "
+            + "replaced while it ran, as an update does on Windows. Restart this session, which starts the new one.";
     private static final String INSTRUCTIONS_FIELD = "instructions";
     private static final String NO_INSTRUCTIONS = "";
     private static final String CALL_THREAD = "sheriff-call";
@@ -311,6 +314,13 @@ public final class JsonRpcServer {
      * The response to one parsed message, catching whatever it takes to keep
      * the session alive: one bad call must never end it.
      *
+     * <p>An {@link Error} too: a tool call runs on a thread of its own, and an
+     * error thrown there used to end that thread with nothing written, so the
+     * client waited for an answer forever. Measured on 12 October: an update
+     * on Windows overwrites the jar of a running server, which then fails
+     * with {@code NoClassDefFoundError} at the next class it loads, and the
+     * session's tool hung for minutes instead of saying to restart.
+     *
      * @param message the request, a JSON object
      * @return the response to write, or {@code null} for a notification
      */
@@ -318,9 +328,32 @@ public final class JsonRpcServer {
         try {
             return handle(message);
         } catch (RuntimeException exception) {
-            JsonNode requestId = message.has(ID_FIELD) ? message.get(ID_FIELD) : null;
-            return error(requestId, INTERNAL_ERROR, exception.getClass().getSimpleName() + ": " + exception.getMessage());
+            return error(requestId(message), INTERNAL_ERROR, failure(exception));
+        } catch (LinkageError linkage) {
+            return error(requestId(message), INTERNAL_ERROR, String.format(CODE_REPLACED, failure(linkage)));
+        } catch (Error error) {
+            return error(requestId(message), INTERNAL_ERROR, failure(error));
         }
+    }
+
+    /**
+     * The id a response to a message carries.
+     *
+     * @param message the request
+     * @return its id, or {@code null} when it has none
+     */
+    private static JsonNode requestId(JsonNode message) {
+        return message.has(ID_FIELD) ? message.get(ID_FIELD) : null;
+    }
+
+    /**
+     * What went wrong, as one line: the kind of failure and its message.
+     *
+     * @param failure the exception or error
+     * @return its simple class name and its message
+     */
+    private static String failure(Throwable failure) {
+        return String.format(FAILURE, failure.getClass().getSimpleName(), failure.getMessage());
     }
 
     /**

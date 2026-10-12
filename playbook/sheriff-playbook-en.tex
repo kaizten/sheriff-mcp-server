@@ -1026,6 +1026,9 @@ permissions were not written: install again. \tool{sheriff_autofix} always
 asks, on purpose.}
 \problem{The hooks do nothing}{The session has not reloaded its settings.
 Restart it and check them with \code{/hooks}.}
+\problem{\code{The Sheriff server cannot load its own code}}{You updated with
+the session open, and on Windows that changes the jar under the server that
+was running. Restart the session: it starts the new server.}
 
 \subsection{When analyzing}
 
