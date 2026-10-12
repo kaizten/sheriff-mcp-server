@@ -47,6 +47,43 @@ final class CodexInstallerTest {
         return Files.readString(codexHome().resolve(file));
     }
 
+    private static String unwrapped(String command) {
+        String prefix = "cmd /d /s /c \"";
+        return command.startsWith(prefix) ? command.substring(prefix.length(), command.length() - 1) : command;
+    }
+
+    @Test
+    @DisplayName("on Windows a hook is an argument of cmd /d /s /c, as cmd /c strips the quotes a line starts with")
+    void onWindowsTheHookLineDoesNotStartWithAQuote() throws Exception {
+        PrintStream out = new PrintStream(output, true, StandardCharsets.UTF_8);
+        Path jar = home.resolve("sheriff agent/sheriff-mcp.jar");
+        assertEquals(0, HookInstaller.forCodex(jar, codexHome(), home, out, true)
+                .runningWith(Path.of("/opt/java home/bin/java")).install());
+
+        JsonNode hooks = JSON.readTree(read("hooks.json")).path("hooks");
+        String stop = hooks.at("/Stop/0/hooks/0/command").asText();
+        assertTrue(stop.startsWith("cmd /d /s /c \"\""), stop);
+        assertTrue(stop.contains("/opt/java home/bin/java\" -jar \""), stop);
+        assertTrue(stop.endsWith("sheriff-mcp.jar\" --hook-stop\""), stop);
+        assertTrue(hooks.at("/UserPromptSubmit/0/hooks/0/command").asText().endsWith("--hook-turn\""),
+                hooks.toString());
+
+        assertEquals(0, HookInstaller.forCodex(jar, codexHome(), home, out, true).uninstall());
+        assertFalse(read("hooks.json").contains("--hook-stop"), "an uninstall finds the wrapped hooks too");
+    }
+
+    @Test
+    @DisplayName("elsewhere the hook line is left as it was")
+    void elsewhereTheHookLineIsUnwrapped() throws Exception {
+        PrintStream out = new PrintStream(output, true, StandardCharsets.UTF_8);
+        assertEquals(0, HookInstaller.forCodex(home.resolve("sheriff-mcp.jar"), codexHome(), home, out, false)
+                .install());
+
+        String stop = JSON.readTree(read("hooks.json")).at("/hooks/Stop/0/hooks/0/command").asText();
+        assertFalse(stop.startsWith("cmd "), stop);
+        assertTrue(stop.endsWith("--hook-stop"), stop);
+    }
+
     @Test
     @DisplayName("Codex cuts a call at 60 s, and codex exec refuses sheriff_fix unless the entry approves it")
     void writesTheServerWithItsTimeAndApproval() throws Exception {
@@ -140,8 +177,8 @@ final class CodexInstallerTest {
         assertTrue(written.path("permissions").isMissingNode(), "Claude Code's rules mean nothing to Codex: " + written);
         JsonNode hooks = written.path("hooks");
         assertTrue(hooks.path("PreToolUse").isMissingNode(), hooks.toString());
-        assertTrue(hooks.at("/UserPromptSubmit/0/hooks/0/command").asText().endsWith("--hook-turn"), hooks.toString());
-        assertTrue(hooks.at("/Stop/0/hooks/0/command").asText().endsWith("--hook-stop"), hooks.toString());
+        assertTrue(unwrapped(hooks.at("/UserPromptSubmit/0/hooks/0/command").asText()).endsWith("--hook-turn"), hooks.toString());
+        assertTrue(unwrapped(hooks.at("/Stop/0/hooks/0/command").asText()).endsWith("--hook-stop"), hooks.toString());
         assertFalse(hooks.at("/Stop/0/hooks/0/command").asText().contains("--fail-fast"), hooks.toString());
     }
 
@@ -151,9 +188,9 @@ final class CodexInstallerTest {
         installer(true).install();
 
         JsonNode hooks = JSON.readTree(codexHome().resolve("hooks.json").toFile()).path("hooks");
-        assertTrue(hooks.at("/Stop/0/hooks/0/command").asText().endsWith("--hook-stop --fail-fast"),
+        assertTrue(unwrapped(hooks.at("/Stop/0/hooks/0/command").asText()).endsWith("--hook-stop --fail-fast"),
                 hooks.toString());
-        assertTrue(hooks.at("/UserPromptSubmit/0/hooks/0/command").asText().endsWith("--hook-turn --fail-fast"),
+        assertTrue(unwrapped(hooks.at("/UserPromptSubmit/0/hooks/0/command").asText()).endsWith("--hook-turn --fail-fast"),
                 "the turn's fingerprints must be taken as the Stop hook takes them, or none ever matches");
     }
 

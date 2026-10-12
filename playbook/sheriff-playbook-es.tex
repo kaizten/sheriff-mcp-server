@@ -1061,6 +1061,10 @@ nuevas. Repite la línea de instalación para descargarlas, o instala con
 
 \subsection{Con Codex}
 
+\problem{En Windows, \code{Hook failed} y \code{hook exited with code 1}}{Los
+escribió un instalador anterior, cuya línea empezaba por comillas, y el
+\code{cmd /c} con el que Codex ejecuta los hooks en Windows se las quitaba.
+Repite la línea de instalación y aprueba los hooks de nuevo con \code{/hooks}.}
 \problem{\code{timed out awaiting tools/call}}{La entrada del servidor no tiene
 el tiempo límite. Repite la instalación, o ejecuta
 \code{--install-codex} con el jar.}

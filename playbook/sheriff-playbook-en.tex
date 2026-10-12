@@ -1052,6 +1052,10 @@ rules. Run the install line again to pull them, or install with
 
 \subsection{With Codex}
 
+\problem{On Windows, \code{Hook failed} and \code{hook exited with code 1}}{An
+earlier installer wrote them, with a line that started with a quote, and the
+\code{cmd /c} Codex runs hooks with on Windows stripped it. Run the install
+line again, and approve the hooks again with \code{/hooks}.}
 \problem{\code{timed out awaiting tools/call}}{The server's entry has no time
 limit. Install again, or run the jar with \code{--install-codex}.}
 \problem{\code{writing is blocked by read-only sandbox}}{\code{codex exec} is
