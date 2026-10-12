@@ -178,6 +178,43 @@ final class JsonRpcServerTest {
     }
 
     @Test
+    @DisplayName("a tool that cannot load its own classes is answered, saying to restart, not left hanging")
+    void aCallWhoseCodeWasReplacedIsAnswered() throws Exception {
+        JsonRpcServer server = new JsonRpcServer(List::of, (name, arguments) -> {
+            throw new NoClassDefFoundError("com/fasterxml/jackson/databind/util/TokenBuffer$Parser");
+        }, "sheriff");
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+
+        server.serve(new BufferedReader(new StringReader(
+                "{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"tools/call\",\"params\":{\"name\":\"sheriff_task\"}}\n")),
+                new PrintStream(output, true, StandardCharsets.UTF_8));
+
+        JsonNode response = JSON.readTree(output.toString(StandardCharsets.UTF_8).strip());
+        assertEquals(7, response.path("id").asInt());
+        assertEquals(-32603, response.at("/error/code").asInt());
+        String message = response.at("/error/message").asText();
+        assertTrue(message.contains("NoClassDefFoundError"), message);
+        assertTrue(message.contains("Restart this session"), message);
+    }
+
+    @Test
+    @DisplayName("any other Error in a tool is answered as an internal error")
+    void anyErrorInACallIsAnswered() throws Exception {
+        JsonRpcServer server = new JsonRpcServer(List::of, (name, arguments) -> {
+            throw new AssertionError("broken");
+        }, "sheriff");
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+
+        server.serve(new BufferedReader(new StringReader(
+                "{\"jsonrpc\":\"2.0\",\"id\":8,\"method\":\"tools/call\",\"params\":{\"name\":\"t\"}}\n")),
+                new PrintStream(output, true, StandardCharsets.UTF_8));
+
+        JsonNode answered = JSON.readTree(output.toString(StandardCharsets.UTF_8).strip());
+        assertEquals(8, answered.path("id").asInt());
+        assertEquals("AssertionError: broken", answered.at("/error/message").asText());
+    }
+
+    @Test
     @DisplayName("tool calls keep the order they arrived in, one at a time")
     void callsAreAnsweredInTheirOrder() throws Exception {
         List<String> running = new CopyOnWriteArrayList<>();
