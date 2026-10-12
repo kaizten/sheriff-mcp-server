@@ -127,16 +127,30 @@ place_file() {
 # A path as this shell writes it, and as the programs it starts read it: the
 # same on Linux and macOS; under Git Bash on Windows, C:/x for what is written
 # into an assistant's configuration and /c/x for this shell's own use.
+# Git Bash's own cygpath first: with conda's base environment active,
+# Anaconda's comes earlier on the PATH and writes /c/Users/a as
+# C:/Users/a/anaconda3/Library/c/Users/a (12 October).
+cygpath_bin() {
+  if [[ -x /usr/bin/cygpath ]]; then
+    echo /usr/bin/cygpath
+  elif command -v cygpath >/dev/null 2>&1; then
+    echo cygpath
+  fi
+}
 native_path() {
-  if command -v cygpath >/dev/null 2>&1; then
-    cygpath -m "$1"
+  local converter
+  converter="$(cygpath_bin)"
+  if [[ -n "$converter" ]]; then
+    "$converter" -m "$1"
   else
     echo "$1"
   fi
 }
 posix_path() {
-  if command -v cygpath >/dev/null 2>&1; then
-    cygpath -u "$1"
+  local converter
+  converter="$(cygpath_bin)"
+  if [[ -n "$converter" ]]; then
+    "$converter" -u "$1"
   else
     echo "$1"
   fi
@@ -425,7 +439,7 @@ docker_setup() {
 check_server() {
   local java="$1" jar="$2" folder="$3" answer nowhere="unix:///nonexistent/sheriff-install-check.sock"
   local initialize='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"install","version":"1"}}}'
-  if command -v cygpath >/dev/null 2>&1; then
+  if [[ -n "$(cygpath_bin)" ]]; then
     nowhere="npipe:////./pipe/sheriff_install_check"
   fi
   answer="$(cd "$folder" && printf '%s\n' "$initialize" \
@@ -482,6 +496,22 @@ main() {
   fi
 
   mkdir -p "$home_dir"
+  # place_file overwrites the jar in place under Git Bash, and a running
+  # server whose jar changes under it dies at the next class it loads
+  # (NoClassDefFoundError, measured on 12 October). Windows refuses to rename
+  # a jar a running JVM holds, so a rename there and back says whether one does.
+  local jar_in_use=0
+  case "$(uname -s)" in
+    MINGW*|MSYS*|CYGWIN*)
+      if [[ -f "$home_dir/sheriff-mcp.jar" ]]; then
+        if mv "$home_dir/sheriff-mcp.jar" "$home_dir/sheriff-mcp.jar.probe" 2>/dev/null; then
+          mv "$home_dir/sheriff-mcp.jar.probe" "$home_dir/sheriff-mcp.jar"
+        else
+          jar_in_use=1
+        fi
+      fi
+      ;;
+  esac
   if (( from_release == 1 )); then
     download_release "$tag" "$home_dir"
   else
@@ -495,7 +525,17 @@ main() {
   local java_native jar_native
   java_native="$(native_path "$java_bin")"
   jar_native="$(native_path "$home_dir/sheriff-mcp.jar")"
-  echo "Installed $("$java_bin" -jar "$jar_native" --version) into $(native_path "$home_dir")"
+  local installed
+  installed="$("$java_bin" -jar "$jar_native" --version)" || true
+  if [[ -z "$installed" ]]; then
+    echo "install.sh: the jar installed does not start; see the message above." >&2
+    exit 1
+  fi
+  echo "Installed $installed into $(native_path "$home_dir")"
+  if (( jar_in_use == 1 )); then
+    echo "A Sheriff server was running from the jar this replaced: in a session left open, Sheriff's tools" >&2
+    echo "  fail until it is restarted. Restart open Claude Code, Codex and agy sessions now." >&2
+  fi
 
   if (( docker_wsl == 1 )) || [[ "${SHERIFF_DOCKER:-}" == wsl* ]]; then
     case "$(uname -s)" in

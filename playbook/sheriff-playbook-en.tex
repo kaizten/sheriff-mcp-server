@@ -1108,7 +1108,10 @@ runs a tool from the terminal with the same answer the server gives.}
 \label{sec:uninstall}
 
 \textbf{To update}, run the install line again: it downloads the latest release
-and writes the configuration again. Then restart the open sessions. Run it
+and writes the configuration again. Then restart the open sessions. On
+Windows that is not optional: when a session had the server running, the
+installer warns \code{A Sheriff server was running from the jar this
+replaced}, and in that session Sheriff's tools fail until you restart it. Run it
 again too when you update or change Java: the assistants call it by its full
 path, and the old Java's may disappear.
 

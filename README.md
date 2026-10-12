@@ -224,6 +224,7 @@ fails on errors. For a CI runner, install the plugin there too
 | "... no matching manifest for windows" | Docker Desktop is set to Windows containers: switch it to Linux containers (its default) |
 | "a newer kaizten/sheriff:latest has been published" | Run the install line again, which pulls it; or install with `--pull-always`, and the server pulls it each time it starts |
 | "The analyzer could not run" | Docker stopped after the image was pulled |
+| "A Sheriff server was running from the jar this replaced", while installing on Windows | Windows lets no one delete or rename a jar a running server holds, so the installer overwrites it, and that server fails at its next call: restart the open sessions |
 | "The analyzer could not run: did not respond within 300s" | Sheriff's time grows with the whole folder it mounts, which for a single-module project is its parent: from a folder of other repositories it can take minutes, worst through WSL's `/mnt/c`. Keep the project in a folder of its own, or raise `SHERIFF_TIMEOUT` |
 | "Nothing was analyzed" | The component holds no sources of that profile's language: pass `component`, or check the profile the project declares |
 | "No rule catalog is available" | No Docker when the server first started: start Docker, and the next rule lookup tries again (at most a minute later) |

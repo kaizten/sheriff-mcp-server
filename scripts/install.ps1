@@ -238,6 +238,18 @@ if ($fromRelease) {
 
 New-Item -ItemType Directory -Force -Path $homeDir | Out-Null
 $jar = Join-Path $homeDir 'sheriff-mcp.jar'
+# Windows refuses to delete or rename a jar a running JVM holds, so it is
+# overwritten in place; and a running server whose jar changes under it dies
+# at the next class it loads (NoClassDefFoundError, measured on 12 October).
+# Opened with no sharing, the jar says whether anything holds it.
+$jarInUse = $false
+if (Test-Path $jar) {
+    try {
+        [System.IO.File]::Open($jar, 'Open', 'Read', 'None').Close()
+    } catch {
+        $jarInUse = $true
+    }
+}
 if ($fromRelease) {
     # The jar comes with its checksum, so a download cut short is never
     # installed. A release carries no rule catalog: it is Kaizten's content,
@@ -298,6 +310,9 @@ Remove-Item -Force -ErrorAction SilentlyContinue (Join-Path $homeDir 'sheriff-ag
 $installed = & $java -jar $jar --version
 if ($LASTEXITCODE -ne 0) { Write-Error "The jar installed does not start; see the message above." }
 Write-Host "Installed $installed into $homeDir"
+if ($jarInUse) {
+    Write-Warning "A Sheriff server was running from the jar this replaced: in a session left open, Sheriff's tools fail until it is restarted. Restart open Claude Code, Codex and agy sessions now."
+}
 
 # Pulling here means the first check of a project starts at once instead of
 # waiting minutes for 4 GB, and pulling again updates the image: Docker
