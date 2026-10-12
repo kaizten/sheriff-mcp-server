@@ -37,7 +37,10 @@ of work became the server's MCP instructions and whose hooks became
 
 **Documentation is kept to two files**: `README.md` (install, use,
 configuration) and this one. Do not add module readmes or plans back; put a
-fact in the one whose reader needs it. One more has a reader of
+fact in the one whose reader needs it. `AGENTS.md`, which Codex reads, only
+sends it here: a copy made by replacing "Claude" with "Codex" had turned
+`~/.claude/` into `~/.Claude Code/` and `CodexInstaller` into
+`Claude CodeInstaller`, and was already behind. One more has a reader of
 its own, the person who installs a release and never reads the code:
 `playbook/`, the user's playbook in Spanish and English (LaTeX, one style and
 one `.tex` per language), built by `scripts/playbook.sh` and attached to every
