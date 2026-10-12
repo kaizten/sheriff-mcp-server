@@ -241,7 +241,7 @@ imagen de Sheriff: unos 4\,GB la primera vez y, después, solo lo que cambie.
 \begin{answer}[Salida del instalador]
 Using Java 17 at /usr/bin/java
 Downloading sheriff-mcp.jar from the latest release of kaizten/sheriff-mcp-server...
-Installed sheriff-mcp 1.0.4 into /home/ana/.local/share/sheriff-agent
+Installed sheriff-mcp 1.0.5 into /home/ana/.local/share/sheriff-agent
 Sheriff's hooks are in /home/ana/.claude/settings.json, for every project Claude Code opens:
   before an edit     refuse new code on a component that already fails the standards
   when a turn ends   refuse to finish while what the turn changed has errors
@@ -825,7 +825,8 @@ SHERIFF\_PULL=always & Descargar una imagen nueva de Sheriff al arrancar
 SHERIFF\_IMAGE & Fijar la imagen por su digest
   (\code{kaizten/sheriff@sha256:...}), para que las reglas no cambien hasta que
   tú lo decidas. \\
-SHERIFF\_TIMEOUT & Segundos por análisis; 300 por defecto. \\
+SHERIFF\_TIMEOUT & Segundos por análisis; 300 por defecto, 900 con el Docker
+  de WSL. \\
 SHERIFF\_DOCKER=wsl & En Windows, usar el Docker de WSL; lo pone
   \code{-{}-docker-wsl}. \\
 SHERIFF\_STOP\_RUNS\_TESTS=1 & El fin de turno exige también tests en verde. \\

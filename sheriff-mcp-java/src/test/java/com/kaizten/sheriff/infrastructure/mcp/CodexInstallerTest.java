@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.kaizten.sheriff.infrastructure.process.Platform;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
@@ -73,6 +74,16 @@ final class CodexInstallerTest {
     }
 
     @Test
+    @DisplayName("Codex waits 1800 s a call only through WSL's Docker on Windows; on Linux it stays 600")
+    void theCallTimeoutGrowsOnlyThroughWsl() {
+        Map<String, String> wsl = Map.of("SHERIFF_DOCKER", "wsl");
+        assertEquals(1800, CodexInstaller.toolTimeoutSeconds(true, wsl));
+        assertEquals(600, CodexInstaller.toolTimeoutSeconds(true, Map.of()));
+        assertEquals(600, CodexInstaller.toolTimeoutSeconds(false, wsl), "Linux and macOS are never changed");
+        assertEquals(600, CodexInstaller.toolTimeoutSeconds(false, Map.of()));
+    }
+
+    @Test
     @DisplayName("elsewhere the hook line is left as it was")
     void elsewhereTheHookLineIsUnwrapped() throws Exception {
         PrintStream out = new PrintStream(output, true, StandardCharsets.UTF_8);
@@ -91,7 +102,8 @@ final class CodexInstallerTest {
 
         String config = read("config.toml");
         assertTrue(config.contains("[mcp_servers.sheriff]"), config);
-        assertTrue(config.contains("tool_timeout_sec = 600"), config);
+        int expected = CodexInstaller.toolTimeoutSeconds(Platform.windows(), System.getenv());
+        assertTrue(config.contains("tool_timeout_sec = " + expected), config);
         assertTrue(config.contains("[mcp_servers.sheriff.tools.sheriff_fix]"), config);
         assertTrue(config.contains("approval_mode = \"approve\""), config);
         assertTrue(config.contains("sheriff-mcp.jar\"]"), config);

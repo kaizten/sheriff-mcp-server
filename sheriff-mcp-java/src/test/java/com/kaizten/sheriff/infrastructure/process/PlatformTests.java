@@ -1,6 +1,8 @@
 package com.kaizten.sheriff.infrastructure.process;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -66,6 +68,16 @@ class PlatformTests {
         assertEquals(
                 List.of("wsl.exe", "-d", "Ubuntu", "docker", "pull", "img"),
                 Platform.dockerCommand(List.of("docker", "pull", "img"), true, Map.of("SHERIFF_DOCKER", "wsl:Ubuntu")));
+    }
+
+    @Test
+    @DisplayName("Docker goes through WSL only on Windows with SHERIFF_DOCKER=wsl, never on Linux")
+    void dockerThroughWslOnlyOnWindows() {
+        assertTrue(Platform.dockerThroughWsl(true, Map.of("SHERIFF_DOCKER", "wsl")));
+        assertTrue(Platform.dockerThroughWsl(true, Map.of("SHERIFF_DOCKER", "wsl:Ubuntu")));
+        assertFalse(Platform.dockerThroughWsl(true, Map.of()));
+        assertFalse(Platform.dockerThroughWsl(true, Map.of("SHERIFF_DOCKER", "docker")));
+        assertFalse(Platform.dockerThroughWsl(false, Map.of("SHERIFF_DOCKER", "wsl")));
     }
 
     @Test

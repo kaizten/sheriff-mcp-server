@@ -214,4 +214,15 @@ class ConfigurationTests {
         assertFalse(homes.containsKey("GRADLE_USER_HOME"), "one the environment already sets is left as it is");
         assertEquals(Map.of(), with(Map.of()).buildToolHomes());
     }
+
+    @Test
+    @DisplayName("Sheriff gets 900 s by default only through WSL's Docker on Windows; on Linux it stays 300")
+    void theDefaultTimeoutGrowsOnlyThroughWsl() {
+        Map<String, String> wsl = Map.of("SHERIFF_DOCKER", "wsl");
+        assertEquals(900, Configuration.defaultSheriffTimeout(true, wsl));
+        assertEquals(900, Configuration.defaultSheriffTimeout(true, Map.of("SHERIFF_DOCKER", "wsl:Ubuntu")));
+        assertEquals(300, Configuration.defaultSheriffTimeout(true, Map.of()));
+        assertEquals(300, Configuration.defaultSheriffTimeout(false, wsl), "Linux and macOS are never changed");
+        assertEquals(300, Configuration.defaultSheriffTimeout(false, Map.of()));
+    }
 }

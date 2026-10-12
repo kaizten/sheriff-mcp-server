@@ -157,8 +157,8 @@ public final class Platform {
      */
     public static List<String> dockerCommand(List<String> command, boolean windows, Map<String, String> environment) {
         String setting = environment.getOrDefault(DOCKER_VARIABLE, NOTHING).trim();
-        boolean wanted = windows && !command.isEmpty() && DOCKER_EXECUTABLE.equals(command.get(FIRST))
-                && (setting.equals(WSL_VALUE) || setting.startsWith(WSL_DISTRO_PREFIX));
+        boolean wanted = dockerThroughWsl(windows, environment) && !command.isEmpty()
+                && DOCKER_EXECUTABLE.equals(command.get(FIRST));
         if (!wanted) {
             return command;
         }
@@ -169,6 +169,20 @@ public final class Platform {
         through.add(DOCKER_EXECUTABLE);
         command.stream().skip(SECOND).map(Platform::wslPath).forEach(through::add);
         return through;
+    }
+
+    /**
+     * Whether Sheriff's Docker is the one inside WSL: on Windows, with
+     * {@code SHERIFF_DOCKER} set to {@code wsl} or {@code wsl:<name>}. Never
+     * on Linux or macOS, whatever the variable says.
+     *
+     * @param windows whether the platform is Windows
+     * @param environment where {@code SHERIFF_DOCKER} is read
+     * @return {@code true} when every docker command goes through WSL
+     */
+    public static boolean dockerThroughWsl(boolean windows, Map<String, String> environment) {
+        String setting = environment.getOrDefault(DOCKER_VARIABLE, NOTHING).trim();
+        return windows && (setting.equals(WSL_VALUE) || setting.startsWith(WSL_DISTRO_PREFIX));
     }
 
     /**
