@@ -303,7 +303,7 @@ curl -fsSL .../install.sh | bash -s -- --pull-always
 \headrow \thead{bash} & \thead{PowerShell} & \thead{What it does} \\
 -{}-install-docker & -InstallDocker & Installs Docker when it is missing, and
   starts it when it is stopped. \\
- & -DockerWsl & Windows: uses the Docker installed inside WSL, with no Docker
+-{}-docker-wsl & -DockerWsl & Windows: uses the Docker installed inside WSL, with no Docker
   Desktop. Restart Claude Code afterwards. \\
 -{}-pull-always & -PullAlways & Pulls a newer Sheriff image each time the server
   starts. Without it a newer image is only reported, once per session, so that
@@ -822,6 +822,8 @@ SHERIFF\_IMAGE & Pin the image by its digest
   (\code{kaizten/sheriff@sha256:...}), so that the rules do not change until
   you decide. \\
 SHERIFF\_TIMEOUT & Seconds per analysis; 300 by default. \\
+SHERIFF\_DOCKER=wsl & On Windows, use WSL's Docker; \code{-{}-docker-wsl} sets
+  it. \\
 SHERIFF\_STOP\_RUNS\_TESTS=1 & The Stop hook requires green tests too. \\
 SHERIFF\_STOP\_MAX\_BLOCKS & How many times in a row it sends the turn back; 5
   by default. \\
@@ -991,7 +993,11 @@ run the line again with \code{--install-docker}.}
 Docker; the server pulls the image when it starts. On Linux, if Docker is in
 fact running, most likely your user cannot use it without \code{sudo}: add
 yourself to the group with \code{sudo usermod -aG docker $USER}, log out of the
-system and back in.}
+system and back in. On Windows, if your Docker is the one installed inside
+WSL, with no Docker Desktop, run the line again with \code{-{}-docker-wsl} (\code{-DockerWsl}).}
+\problem{\code{'wsl docker info' failed}}{With \code{-{}-docker-wsl}, WSL's Docker
+engine is not running. Start it (for example,
+\code{wsl sudo service docker start}) and run the line again.}
 \problem{\code{Sheriff's image could not be pulled now}}{There is no network
 or, on Windows, Docker Desktop is set to Windows containers
 (\code{no matching manifest for windows}): switch it to Linux containers, its
@@ -1027,6 +1033,10 @@ Restart it and check them with \code{/hooks}.}
 this machine: wait a few minutes.}
 \problem{\code{The analyzer could not run}}{Docker has stopped. Start it and ask
 for the check again.}
+\problem{\code{did not respond within 300s}}{Sheriff's time grows with all it
+mounts, which for a single-module project is its parent folder: inside a folder
+of other repositories it can take minutes, worst on Windows with WSL's Docker.
+Keep the project in a folder of its own, or raise \code{SHERIFF_TIMEOUT}.}
 \problem{\code{Nothing was analyzed}}{The component holds no sources of the
 profile's language. Name the component (\ask{check the api module}) or check
 the profile the project declares.}
@@ -1134,7 +1144,9 @@ claude mcp remove --scope user sheriff
 Remove-Item -Recurse -Force -ErrorAction SilentlyContinue "$HOME\.local\share\sheriff-agent"
 Remove-Item -Recurse -Force -ErrorAction SilentlyContinue "$HOME\.cache\sheriff-mcp"
 Remove-Item -Recurse -Force -ErrorAction SilentlyContinue "$HOME\.local\state\sheriff-mcp"
-# Optional: frees the image's 4 GB
+# If you installed with -DockerWsl
+[Environment]::SetEnvironmentVariable('SHERIFF_DOCKER', $null, 'User')
+# Optional: frees the image's 4 GB (with -DockerWsl, wsl docker rmi ...)
 docker rmi kaizten/sheriff:latest
 \end{command}
 

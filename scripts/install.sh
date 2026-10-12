@@ -38,6 +38,11 @@ install.sh [options]      from a checkout: build, test and install
                     Desktop's installer from docker.com on macOS. Docker
                     Desktop asks you to accept its terms the first time it
                     starts; this does not accept them for you
+  --docker-wsl      Windows (Git Bash) only: use the Docker command line
+                    installed inside WSL, with no Docker Desktop. Checks
+                    'wsl docker info', pulls the image through it and sets
+                    SHERIFF_DOCKER=wsl for this user (setx), so the server
+                    and the hooks run docker as 'wsl docker'
   --pull-always     have the MCP server pull a newer Sheriff image each time
                     it starts (SHERIFF_PULL=always, written into the server's
                     registration); without it a newer image is only reported.
@@ -106,6 +111,17 @@ java_major() {
   if [[ "$major" =~ ^[0-9]+$ ]]; then
     echo "$major"
   fi
+}
+
+# A file put in the install folder. install unlinks the old one first, which
+# on Linux and macOS leaves a running server its copy; Windows refuses to
+# delete a jar a running server holds open, and failed every update made with
+# Claude Code open, so there it is overwritten in place, as install.ps1 does.
+place_file() {
+  case "$(uname -s)" in
+    MINGW*|MSYS*|CYGWIN*) cp -f "$1" "$2" && chmod 0644 "$2" ;;
+    *) install -m 0644 "$1" "$2" ;;
+  esac
 }
 
 # A path as this shell writes it, and as the programs it starts read it: the
@@ -224,9 +240,9 @@ build_and_copy() {
     java_home="$(dirname "$(dirname "$java_bin")")"
   fi
   JAVA_HOME="$java_home" mvn -B -q -Dmaven.test.redirectTestOutputToFile=true -f "$repo/pom.xml" install
-  install -m 0644 "$repo/sheriff-mcp-java/target/sheriff-mcp.jar" "$home_dir/sheriff-mcp.jar"
+  place_file "$repo/sheriff-mcp-java/target/sheriff-mcp.jar" "$home_dir/sheriff-mcp.jar"
   if [[ -f "$repo/sheriff-mcp-java/rules_catalog.json" ]]; then
-    install -m 0644 "$repo/sheriff-mcp-java/rules_catalog.json" "$home_dir/rules_catalog.json"
+    place_file "$repo/sheriff-mcp-java/rules_catalog.json" "$home_dir/rules_catalog.json"
   else
     echo "No rules_catalog.json to install: the tools extract their own from Sheriff's image on first use."
   fi
@@ -261,7 +277,7 @@ download_release() {
     echo "install.sh: the jar downloaded does not match its checksum. Run this again." >&2
     exit 1
   fi
-  install -m 0644 "$downloads/sheriff-mcp.jar" "$home_dir/sheriff-mcp.jar"
+  place_file "$downloads/sheriff-mcp.jar" "$home_dir/sheriff-mcp.jar"
 }
 
 as_root() {
@@ -324,6 +340,34 @@ start_docker() {
     as_root systemctl enable --now docker.service || true
   fi
   return 0
+}
+
+# Windows with the Docker engine inside WSL and no Docker Desktop: there is no
+# docker on the PATH that reaches it, so the jar runs 'wsl.exe docker' when
+# SHERIFF_DOCKER says so, and setx keeps it for every process the user starts
+# after, the assistants and their hooks included. The same as install.ps1's
+# -DockerWsl.
+docker_wsl_setup() {
+  local register="$1" pull="$2" image="$3"
+  if ! command -v wsl.exe >/dev/null 2>&1 || ! wsl.exe docker info >/dev/null 2>&1; then
+    echo "'wsl docker info' failed: start the Docker engine inside WSL (for example 'wsl sudo service docker start')" >&2
+    echo "  and run this again. The install goes on, but nothing can be analyzed until it is up." >&2
+    return 0
+  fi
+  if [[ "${SHERIFF_DOCKER:-}" != wsl* ]]; then
+    export SHERIFF_DOCKER=wsl
+  fi
+  if (( register == 1 )); then
+    setx SHERIFF_DOCKER "$SHERIFF_DOCKER" >/dev/null
+    echo "Docker runs through WSL (SHERIFF_DOCKER=$SHERIFF_DOCKER, set for this user). Restart open Claude Code sessions and terminals to pick it up."
+  fi
+  if (( pull == 0 )); then
+    return 0
+  fi
+  echo "Pulling $image (about 4 GB the first time, only what changed after that)..."
+  if ! wsl.exe docker pull "$image"; then
+    echo "Sheriff's image could not be pulled now; the MCP server pulls it by itself when it starts." >&2
+  fi
 }
 
 # Pulling here means the first check of a project starts at once instead of
@@ -401,7 +445,7 @@ main() {
   home_dir="$(posix_path "${SHERIFF_HOME:-$HOME/.local/share/sheriff-agent}")"
   local name="${SHERIFF_MCP_NAME:-sheriff}"
   local image="${SHERIFF_IMAGE:-kaizten/sheriff:latest}"
-  local register=1 hooks=1 codex=1 antigravity=1 fail_fast=0 pull=1 wanted_install=0 pull_always=0
+  local register=1 hooks=1 codex=1 antigravity=1 fail_fast=0 pull=1 wanted_install=0 pull_always=0 docker_wsl=0
   local from_release=0 tag="" argument
   for argument in "$@"; do
     case "$argument" in
@@ -409,6 +453,7 @@ main() {
       --release=*) from_release=1; tag="${argument#--release=}" ;;
       --no-pull) pull=0 ;;
       --install-docker) wanted_install=1 ;;
+      --docker-wsl) docker_wsl=1 ;;
       --pull-always) pull_always=1 ;;
       --no-mcp) register=0 ;;
       --no-hooks) hooks=0 ;;
@@ -452,7 +497,17 @@ main() {
   jar_native="$(native_path "$home_dir/sheriff-mcp.jar")"
   echo "Installed $("$java_bin" -jar "$jar_native" --version) into $(native_path "$home_dir")"
 
-  docker_setup "$wanted_install" "$pull" "$image"
+  if (( docker_wsl == 1 )) || [[ "${SHERIFF_DOCKER:-}" == wsl* ]]; then
+    case "$(uname -s)" in
+      MINGW*|MSYS*|CYGWIN*) docker_wsl_setup "$register" "$pull" "$image" ;;
+      *)
+        echo "--docker-wsl is for Windows (Git Bash): elsewhere docker runs as it is." >&2
+        docker_setup "$wanted_install" "$pull" "$image"
+        ;;
+    esac
+  else
+    docker_setup "$wanted_install" "$pull" "$image"
+  fi
 
   if (( register == 0 )); then
     return 0

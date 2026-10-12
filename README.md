@@ -80,7 +80,7 @@ or after the script from a clone:
 |---|---|
 | `--pull-always` (`-PullAlways`) | The MCP server pulls a newer Sheriff image each time it starts. Without it a newer image is only reported, once per session, so that new rules do not arrive in the middle of someone's work unasked. It is written into the server's registration (`SHERIFF_PULL=always`), for Claude Code and for Codex, which passes a server none of your shell's variables. Give it on every run: a run without it puts the default back |
 | `--install-docker` (`-InstallDocker`) | Installs Docker when it is missing, from Docker itself: `get.docker.com` on Linux (`pacman` on Arch, which Docker does not package for), Docker Desktop's installer from docker.com on macOS and on Windows (there per user, with no administrator and WSL 2, as Docker recommends); and starts it when it is stopped. Docker Desktop asks you to accept its terms the first time it starts, and the installer does not accept them for you: they require a paid subscription in a company of more than 250 people or $10 million a year |
-| (`-DockerWsl`) | Windows only: uses the Docker engine installed inside WSL, with no Docker Desktop. It checks `wsl docker info`, pulls the image through WSL and sets `SHERIFF_DOCKER=wsl` for the user, which the server and the hooks read to run every `docker` as `wsl.exe docker`, with the mounted folder written as WSL sees it (`C:\x` as `/mnt/c/x`). `SHERIFF_DOCKER=wsl:<distro>` names a distribution other than the default. Restart Claude Code and terminals afterwards |
+| `--docker-wsl` (`-DockerWsl`) | Windows only (Git Bash or PowerShell): uses the Docker engine installed inside WSL, with no Docker Desktop. It checks `wsl docker info`, pulls the image through WSL and sets `SHERIFF_DOCKER=wsl` for the user, which the server and the hooks read to run every `docker` as `wsl.exe docker`, with the mounted folder written as WSL sees it (`C:\x` as `/mnt/c/x`). `SHERIFF_DOCKER=wsl:<distro>` names a distribution other than the default. Restart Claude Code and terminals afterwards |
 | `--no-pull` (`-NoPull`) | Leaves the image alone; the MCP server pulls it when it starts and finds none |
 | `--release[=TAG]` (`-Release`, `-Tag TAG`) | From a clone, installs a release (the latest, or that one) instead of building |
 | `--no-hooks` (`-NoHooks`) | The MCP server without the hooks |
@@ -224,6 +224,7 @@ fails on errors. For a CI runner, install the plugin there too
 | "... no matching manifest for windows" | Docker Desktop is set to Windows containers: switch it to Linux containers (its default) |
 | "a newer kaizten/sheriff:latest has been published" | Run the install line again, which pulls it; or install with `--pull-always`, and the server pulls it each time it starts |
 | "The analyzer could not run" | Docker stopped after the image was pulled |
+| "The analyzer could not run: did not respond within 300s" | Sheriff's time grows with the whole folder it mounts, which for a single-module project is its parent: from a folder of other repositories it can take minutes, worst through WSL's `/mnt/c`. Keep the project in a folder of its own, or raise `SHERIFF_TIMEOUT` |
 | "Nothing was analyzed" | The component holds no sources of that profile's language: pass `component`, or check the profile the project declares |
 | "No rule catalog is available" | No Docker when the server first started: start Docker, and the next rule lookup tries again (at most a minute later) |
 | The hooks do nothing | The session did not pick up the change to its settings: restart it, and check them with `/hooks` |
@@ -560,6 +561,7 @@ which no tool reports.
 | `SHERIFF_IMAGE` | `kaizten/sheriff:latest` | A digest (`kaizten/sheriff@sha256:...`, as `task.json` records it) keeps the rules from changing until you change it |
 | `SHERIFF_PULL` | reports a newer image | `always` pulls a newer image on start (the installer's `--pull-always` writes it into the server's registration); `never` does not even ask Docker Hub |
 | `SHERIFF_TIMEOUT` | `300` | Seconds per run; the container is removed after |
+| `SHERIFF_DOCKER` | unset | Windows only: `wsl` (or `wsl:<distro>`) runs every `docker` as `wsl.exe docker`, for the engine inside WSL with no Docker Desktop. `--docker-wsl` (`-DockerWsl`) sets it for the user |
 | `SHERIFF_RULES_CATALOG` | found or extracted | A catalog used as is |
 | `SHERIFF_EXPORT_DIR` | unset | Where the agent copies Sheriff's JSON |
 | `SHERIFF_STOP_MAX_BLOCKS` | `5` | How many times in a row the Stop hook sends a session back while errors remain, before it lets the turn end so as not to loop. A stop with nothing changed since the last block is sent back once more, saying so; a second such stop in a row goes through, as a model whose edits are denied cannot change anything. The installers give the hook 900 s, as with `SHERIFF_STOP_RUNS_TESTS=1` it runs the tests |
