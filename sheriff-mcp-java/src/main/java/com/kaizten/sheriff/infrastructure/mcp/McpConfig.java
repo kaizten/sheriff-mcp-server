@@ -3,6 +3,7 @@ package com.kaizten.sheriff.infrastructure.mcp;
 import com.kaizten.sheriff.domain.Rules;
 import com.kaizten.sheriff.infrastructure.catalog.CatalogProvisioning;
 import com.kaizten.sheriff.infrastructure.config.Configuration;
+import com.kaizten.sheriff.infrastructure.process.Platform;
 import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -51,7 +52,6 @@ public final class McpConfig {
     private static final String NOT_CONFIGURED = "";
     private static final String DEFAULT_TOOL_PREFIX = "sheriff";
     private static final String NOT_A_NUMBER = "%s must be a whole number of seconds, but it is '%s'.";
-    private static final int DEFAULT_TIMEOUT_SECONDS = 300;
     private static final int MINIMUM_TIMEOUT_SECONDS = 1;
     private static final String NOT_POSITIVE = "%s must be at least 1 second, but it is '%s'.";
 
@@ -252,7 +252,7 @@ public final class McpConfig {
     public Duration timeout() {
         String configured = environment.get(TIMEOUT);
         if (configured == null || configured.isBlank() || problem().isPresent()) {
-            return Duration.ofSeconds(DEFAULT_TIMEOUT_SECONDS);
+            return Duration.ofSeconds(Configuration.defaultSheriffTimeout(Platform.windows(), environment));
         }
         return Duration.ofSeconds(Integer.parseInt(configured.strip()));
     }

@@ -1,5 +1,6 @@
 package com.kaizten.sheriff.infrastructure.mcp;
 
+import com.kaizten.sheriff.infrastructure.process.Platform;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.file.Files;
@@ -42,6 +43,7 @@ public final class CodexInstaller {
     private static final String SERVER_TABLE = "[mcp_servers." + SERVER_NAME + "]";
     private static final String SERVER_SUBTABLE = "[mcp_servers." + SERVER_NAME + ".";
     private static final int TOOL_TIMEOUT_SECONDS = 600;
+    private static final int WSL_TOOL_TIMEOUT_SECONDS = 1800;
     private static final String SERVER_ENTRY = """
             [mcp_servers.%s]
             command = "%s"
@@ -195,7 +197,8 @@ public final class CodexInstaller {
             return FAILURE;
         }
         String pulling = pullAlways ? PULL_ALWAYS_NOTE : BLANK;
-        output.printf(INSTALLED, SERVER_NAME, configFile(), TOOL_TIMEOUT_SECONDS, agentsFile(), pulling);
+        output.printf(INSTALLED, SERVER_NAME, configFile(), toolTimeoutSeconds(Platform.windows(), System.getenv()),
+                agentsFile(), pulling);
         return hooks.map(HookInstaller::install).orElse(SUCCESS);
     }
 
@@ -271,7 +274,23 @@ public final class CodexInstaller {
     String serverEntry() {
         String path = tomlString(jar.toAbsolutePath().normalize().toString());
         String environment = pullAlways ? PULL_ALWAYS_LINE : BLANK;
-        return String.format(SERVER_ENTRY, SERVER_NAME, java, path, TOOL_TIMEOUT_SECONDS, environment, SERVER_NAME);
+        return String.format(SERVER_ENTRY, SERVER_NAME, java, path,
+                toolTimeoutSeconds(Platform.windows(), System.getenv()), environment, SERVER_NAME);
+    }
+
+    /**
+     * How long Codex waits for one call to the server: 600 s, or 1800 s when
+     * Sheriff's Docker is the one inside WSL on Windows, where one
+     * {@code sheriff_fix} of PetClinic took 511 s (12 October). On Linux and
+     * macOS it is always 600.
+     *
+     * @param windows whether the platform is Windows
+     * @param environment where {@code SHERIFF_DOCKER} is read, as the
+     *     installers leave it
+     * @return the seconds
+     */
+    static int toolTimeoutSeconds(boolean windows, Map<String, String> environment) {
+        return Platform.dockerThroughWsl(windows, environment) ? WSL_TOOL_TIMEOUT_SECONDS : TOOL_TIMEOUT_SECONDS;
     }
 
     /**

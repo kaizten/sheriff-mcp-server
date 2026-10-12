@@ -76,6 +76,7 @@ public final class HookInstaller {
     private static final String HOOK_COMMAND = "%s -jar %s %s%s";
     private static final String JAVA_ON_THE_PATH = "java";
     private static final String QUOTED = "\"%s\"";
+    private static final String THROUGH_CMD = "cmd /d /s /c \"%s\"";
     private static final String HOME_REFERENCE = "$HOME/";
     private static final char BACKSLASH = '\\';
     private static final char SLASH = '/';
@@ -118,6 +119,7 @@ public final class HookInstaller {
     private final boolean withGate;
     private final boolean failFast;
     private final String java;
+    private final boolean throughCmd;
 
     /**
      * Wires an installer for one project.
@@ -129,7 +131,7 @@ public final class HookInstaller {
      */
     public HookInstaller(Path project, Path jar, Path home, PrintStream output) {
         this(project.resolve(SETTINGS_DIRECTORY).resolve(SETTINGS_FILE), jar, home, output, INSTALLED, true, false,
-                JAVA_ON_THE_PATH);
+                JAVA_ON_THE_PATH, false);
     }
 
     /**
@@ -144,9 +146,11 @@ public final class HookInstaller {
      * @param failFast whether the hooks ask Sheriff to stop at the first error
      * @param java the Java the hooks run with: {@code java}, found on the
      *     PATH when they run, or a path to one
+     * @param throughCmd whether each command is written as an argument of
+     *     {@code cmd /d /s /c}, for Codex on Windows
      */
     private HookInstaller(Path settings, Path jar, Path home, PrintStream output, String installed,
-            boolean withGate, boolean failFast, String java) {
+            boolean withGate, boolean failFast, String java, boolean throughCmd) {
         this.settings = settings;
         this.jar = jar;
         this.home = home;
@@ -155,6 +159,7 @@ public final class HookInstaller {
         this.withGate = withGate;
         this.failFast = failFast;
         this.java = java;
+        this.throughCmd = throughCmd;
     }
 
     /**
@@ -166,7 +171,7 @@ public final class HookInstaller {
      * @return that installer
      */
     public HookInstaller failingFast() {
-        return new HookInstaller(settings, jar, home, output, installed, withGate, true, java);
+        return new HookInstaller(settings, jar, home, output, installed, withGate, true, java, throughCmd);
     }
 
     /**
@@ -184,7 +189,7 @@ public final class HookInstaller {
      */
     public HookInstaller runningWith(Path executable) {
         return new HookInstaller(settings, jar, home, output, installed, withGate, failFast,
-                pathReference(executable));
+                pathReference(executable), throughCmd);
     }
 
     /**
@@ -350,8 +355,9 @@ public final class HookInstaller {
         ObjectNode group = json.createObjectNode();
         ObjectNode entry = group.putArray(HOOKS).addObject();
         entry.put(TYPE, COMMAND_TYPE);
-        entry.put(COMMAND, String.format(HOOK_COMMAND, javaReference(), jarReference(), flag,
-                failFast ? FAIL_FAST_OPTION : NO_OPTION));
+        String command = String.format(HOOK_COMMAND, javaReference(), jarReference(), flag,
+                failFast ? FAIL_FAST_OPTION : NO_OPTION);
+        entry.put(COMMAND, throughCmd ? String.format(THROUGH_CMD, command) : command);
         return group;
     }
 
@@ -465,7 +471,7 @@ public final class HookInstaller {
      */
     public static HookInstaller forUser(Path jar, Path home, PrintStream output) {
         return new HookInstaller(home.resolve(SETTINGS_DIRECTORY).resolve(SETTINGS_FILE), jar, home, output,
-                INSTALLED_FOR_USER, true, false, JAVA_ON_THE_PATH);
+                INSTALLED_FOR_USER, true, false, JAVA_ON_THE_PATH, false);
     }
 
     /**
@@ -479,7 +485,28 @@ public final class HookInstaller {
      * @return the installer
      */
     public static HookInstaller forCodex(Path jar, Path codexHome, Path home, PrintStream output) {
+        return forCodex(jar, codexHome, home, output, Platform.windows());
+    }
+
+    /**
+     * The installer for every project Codex opens, for a given platform.
+     *
+     * <p>On Windows Codex runs a hook's command through {@code cmd /c}, which
+     * strips the first and the last quote of a line that starts with one: the
+     * command, which starts with the quoted path of Java, became
+     * {@code C:/Program} and every hook ended with exit code 1 (12 October).
+     * Written as an argument of {@code cmd /d /s /c}, the line starts with
+     * {@code cmd} and the inner shell keeps the quotes.
+     *
+     * @param jar this jar
+     * @param codexHome Codex's home, {@code CODEX_HOME} or {@code ~/.codex}
+     * @param home the user's home
+     * @param output where to report
+     * @param windows whether Codex runs on Windows
+     * @return the installer
+     */
+    static HookInstaller forCodex(Path jar, Path codexHome, Path home, PrintStream output, boolean windows) {
         return new HookInstaller(codexHome.resolve(CODEX_HOOKS_FILE), jar, home, output, INSTALLED_FOR_CODEX, false,
-                false, JAVA_ON_THE_PATH);
+                false, JAVA_ON_THE_PATH, windows);
     }
 }

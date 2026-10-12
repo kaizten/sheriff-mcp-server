@@ -4,6 +4,7 @@ import com.kaizten.sheriff.domain.Rules;
 import com.kaizten.sheriff.domain.valueobject.LoopSettings;
 import com.kaizten.sheriff.infrastructure.catalog.CatalogProvisioning;
 import com.kaizten.sheriff.infrastructure.docker.ImageProvisioning;
+import com.kaizten.sheriff.infrastructure.process.Platform;
 import java.net.URISyntaxException;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -96,6 +97,7 @@ public final class Configuration {
     private static final String DEFAULT_BACKEND = "claude_cli";
     private static final String NO_API_KEY = "";
     private static final int DEFAULT_SHERIFF_TIMEOUT = 300;
+    private static final int WSL_SHERIFF_TIMEOUT = 900;
     private static final int DEFAULT_CLAUDE_TIMEOUT = 600;
     private static final int DEFAULT_VERIFICATION_TIMEOUT = 300;
     private static final int DEFAULT_BATCH = 5;
@@ -292,7 +294,23 @@ public final class Configuration {
      * @return that deadline
      */
     public Duration sheriffTimeout() {
-        return Duration.ofSeconds(positive(SHERIFF_TIMEOUT, DEFAULT_SHERIFF_TIMEOUT));
+        return Duration.ofSeconds(positive(SHERIFF_TIMEOUT, defaultSheriffTimeout(Platform.windows(), environment)));
+    }
+
+    /**
+     * How many seconds one Sheriff run is given when {@code SHERIFF_TIMEOUT}
+     * does not say: 300, or 900 when Sheriff's Docker is the one inside WSL
+     * on Windows, which reads the project through {@code /mnt/c}. Measured
+     * on 12 October, a {@code sheriff_fix} of PetClinic took 511 s there, one
+     * of its runs past 300, and every repair from Codex failed with it. On
+     * Linux and macOS it is always 300.
+     *
+     * @param windows whether the platform is Windows
+     * @param environment where {@code SHERIFF_DOCKER} is read
+     * @return the seconds
+     */
+    public static int defaultSheriffTimeout(boolean windows, Map<String, String> environment) {
+        return Platform.dockerThroughWsl(windows, environment) ? WSL_SHERIFF_TIMEOUT : DEFAULT_SHERIFF_TIMEOUT;
     }
 
     /**

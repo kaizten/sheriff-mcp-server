@@ -107,7 +107,10 @@ With `codex` on the PATH it sets Codex up the same way (`--install-codex`,
 `CodexInstaller`): the server in `~/.codex/config.toml` with the time limit
 and the approval `codex mcp add` cannot write, the order of work in
 `~/.codex/AGENTS.md`, which Codex reads in every project, and the Stop and
-turn hooks, without the gate, in `~/.codex/hooks.json`. The one step left to
+turn hooks, without the gate, in `~/.codex/hooks.json`; on Windows each as an
+argument of `cmd /d /s /c "..."`, because Codex runs a hook through `cmd /c`,
+which strips the quotes of a line that starts with one, and every hook ended
+with exit code 1 (`"C:/Program" is not recognized`, 12 October). The one step left to
 the user is Codex's review of a new hook, and it stays there on purpose; the
 installer and the playbook say what skipping it costs, as on PetClinic
 (9 October) Codex twice stopped with over a hundred errors left and only the
@@ -239,7 +242,7 @@ java -jar target/sheriff-mcp.jar --agent --help
 # The Maven plugin (needs the MCP module installed first)
 cd sheriff-maven-plugin
 mvn install
-mvn com.kaizten:sheriff-maven-plugin:1.0.4:check    # on any Maven module
+mvn com.kaizten:sheriff-maven-plugin:1.0.5:check    # on any Maven module
 ```
 
 The agent is configured entirely by environment variables — `TARGET_REPO`,

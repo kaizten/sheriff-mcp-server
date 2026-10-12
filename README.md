@@ -346,7 +346,7 @@ directory name is the component.
 <plugin>
   <groupId>com.kaizten</groupId>
   <artifactId>sheriff-maven-plugin</artifactId>
-  <version>1.0.4</version>
+  <version>1.0.5</version>
   <executions><execution><goals><goal>check</goal></goals></execution></executions>
 </plugin>
 ```
@@ -562,7 +562,7 @@ which no tool reports.
 | `SHERIFF_PROFILE` / `SHERIFF_TEST_TYPE` | declared, else from the sources / `JAVA` | Rule profile (server / agent), overriding the project's declaration |
 | `SHERIFF_IMAGE` | `kaizten/sheriff:latest` | A digest (`kaizten/sheriff@sha256:...`, as `task.json` records it) keeps the rules from changing until you change it |
 | `SHERIFF_PULL` | reports a newer image | `always` pulls a newer image on start (the installer's `--pull-always` writes it into the server's registration); `never` does not even ask Docker Hub |
-| `SHERIFF_TIMEOUT` | `300` | Seconds per run; the container is removed after |
+| `SHERIFF_TIMEOUT` | `300` (`900` through WSL's Docker) | Seconds per run; the container is removed after. Through WSL (`SHERIFF_DOCKER=wsl`) the default is 900, and Codex is given 1800 s a call instead of 600: a `sheriff_fix` of PetClinic took 511 s there |
 | `SHERIFF_DOCKER` | unset | Windows only: `wsl` (or `wsl:<distro>`) runs every `docker` as `wsl.exe docker`, for the engine inside WSL with no Docker Desktop. `--docker-wsl` (`-DockerWsl`) sets it for the user |
 | `SHERIFF_RULES_CATALOG` | found or extracted | A catalog used as is |
 | `SHERIFF_EXPORT_DIR` | unset | Where the agent copies Sheriff's JSON |
