@@ -120,6 +120,9 @@ almost none of the shell's), `--pull-always` writes `SHERIFF_PULL=always` into
 the server's registration in both assistants (`claude mcp add -e`, and
 `--install-codex --pull-always` as `env` in the entry), and `--no-mcp`, which
 CI uses with `--no-pull`, touches no assistant's configuration at all.
+Under Git Bash `install.sh` overwrites the jar in place, as `install.ps1`
+does: `install` deletes it first, which Windows refuses while a running
+server holds it, and every update with Claude Code open failed (12 October).
 
 Every installer writes an assistant's file through `ConfigFile`: whole, where
 a symbolic link points, and **with the permissions it had**. A `settings.json`
@@ -519,8 +522,8 @@ differs lives in `Platform`, one place: `cmd.exe /c` instead of `/bin/sh -c`
 for the project's tests (with `mvnw.cmd`, double quotes), paths compared with
 Sheriff's and git's always written with `/`, Claude Code rules in its POSIX
 form (`C:\x` as `//c/x`), and executables such as npm's `claude.cmd` found on
-the `PATH`. With `SHERIFF_DOCKER=wsl` (or `wsl:<distro>`; `install.ps1
--DockerWsl` sets it for the user) every `docker` command becomes `wsl.exe
+the `PATH`. With `SHERIFF_DOCKER=wsl` (or `wsl:<distro>`; `install.sh
+--docker-wsl` under Git Bash and `install.ps1 -DockerWsl` set it for the user) every `docker` command becomes `wsl.exe
 docker`, a bind mount's `source=C:\x` written `/mnt/c/x`, for a Windows
 machine whose Docker is the engine inside WSL rather than Docker Desktop. The first Windows build found git paths with backslashes, which
 made every pass look out of scope; do not compare `Path.toString()` with a
