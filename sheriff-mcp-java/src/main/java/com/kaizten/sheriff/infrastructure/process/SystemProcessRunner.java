@@ -12,6 +12,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
 
 /**
  * The real {@link ProcessRunner}, on top of {@link ProcessBuilder}.
@@ -29,7 +30,8 @@ public final class SystemProcessRunner implements ProcessRunner {
     private static final String TIMEOUT_MESSAGE = "did not respond within %ds.";
     private static final String UNAVAILABLE_MESSAGE = "'%s' is not installed or not on the PATH.";
     private static final String COULD_NOT_START = "Could not start '%s': %s";
-    private static final String NO_SUCH_FILE = "error=2,";
+    private static final String NO_SUCH_FILE_PATTERN = "error(=|: )2\\b";
+    private static final Pattern NO_SUCH_FILE = Pattern.compile(NO_SUCH_FILE_PATTERN);
     private static final int STREAM_COUNT = 3;
     private static final String NO_INPUT = "";
 
@@ -123,13 +125,18 @@ public final class SystemProcessRunner implements ProcessRunner {
      * is not executable, and calling those "not installed" sent people
      * looking for a program that was there all along.
      *
+     * <p>A missing executable is error 2, written {@code error=2,} by Java 17
+     * and by every Java on Windows, and {@code Exec failed, error: 2 (No such
+     * file or directory)} on Linux by Temurin 21.0.12, which called a missing
+     * {@code docker} a program that could not start (13 October).
+     *
      * @param executable the program that was asked for
      * @param exception what starting it threw
      * @return the reason, in words a person can act on
      */
-    private static String launchFailure(String executable, IOException exception) {
+    static String launchFailure(String executable, IOException exception) {
         String message = String.valueOf(exception.getMessage());
-        return message.contains(NO_SUCH_FILE)
+        return NO_SUCH_FILE.matcher(message).find()
                 ? String.format(UNAVAILABLE_MESSAGE, executable)
                 : String.format(COULD_NOT_START, executable, message);
     }
