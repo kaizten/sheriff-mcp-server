@@ -75,6 +75,14 @@ class AgentTests {
     }
 
     @Test
+    @DisplayName("a hook's payload is read without the byte order mark .NET Framework writes before it")
+    void aPayloadLosesItsByteOrderMark() {
+        assertEquals("{\"session_id\":\"a\"}", Agent.withoutByteOrderMark("﻿{\"session_id\":\"a\"}"));
+        assertEquals("{}", Agent.withoutByteOrderMark("{}"));
+        assertEquals("", Agent.withoutByteOrderMark(""));
+    }
+
+    @Test
     @DisplayName("with no image here, a hook lets the edit through at once rather than stall on a 4 GB pull")
     void aHookWithNoImageLetsTheEditThrough() {
         assertEquals(0, run(Map.of(), ProcessOutcome.completed(1, "", "Error: No such image"), List.of("--hook-gate")));
@@ -130,6 +138,7 @@ class AgentTests {
                 ProcessOutcome.unavailable("'docker' is not installed or not on the PATH."),
                 List.of("--check-only")));
         assertTrue(printed.contains("could not be downloaded: 'docker' is not installed"), printed);
+        assertTrue(printed.contains("not on the PATH. Check that"), "one full stop, not two: " + printed);
     }
 
     @Test

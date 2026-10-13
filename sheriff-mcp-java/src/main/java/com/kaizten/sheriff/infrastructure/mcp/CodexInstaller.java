@@ -53,7 +53,10 @@ public final class CodexInstaller {
             [mcp_servers.%s.tools.sheriff_fix]
             approval_mode = "approve"
             """;
-    private static final String PULL_ALWAYS_LINE = "env = { SHERIFF_PULL = \"always\" }\n";
+    private static final String ENVIRONMENT_LINE = "env = { %s }\n";
+    private static final String PULL_ALWAYS_PAIR = "SHERIFF_PULL = \"always\"";
+    private static final String DOCKER_PAIR = "SHERIFF_DOCKER = \"%s\"";
+    private static final String PAIR_SEPARATOR = ", ";
     private static final String PULL_ALWAYS_NOTE =
             "  image          pulled again each time the server starts, when a newer one is published\n";
     private static final String BEGIN_MARKER =
@@ -81,10 +84,14 @@ public final class CodexInstaller {
     private final Optional<HookInstaller> hooks;
     private final boolean pullAlways;
     private final String java;
+    private final Map<String, String> environment;
 
     /**
      * Wires the installer.
      *
+     * @param environment where {@code SHERIFF_DOCKER} is read, as the
+     *     installers leave it, rather than from this process: a test given
+     *     none writes what a machine without it would
      * @param codexHome Codex's home, {@code CODEX_HOME} or {@code ~/.codex}
      * @param jar this jar, which the server and the hook will run
      * @param home the user's home
@@ -93,16 +100,17 @@ public final class CodexInstaller {
      * @param failFast whether the Stop hook asks Sheriff to stop at the first
      *     error
      */
-    public CodexInstaller(Path codexHome, Path jar, Path home, PrintStream output, String instructions,
-            boolean failFast) {
+    public CodexInstaller(Map<String, String> environment, Path codexHome, Path jar, Path home, PrintStream output,
+            String instructions, boolean failFast) {
         this.codexHome = codexHome;
         this.jar = jar;
         this.output = output;
         this.instructions = instructions;
-        HookInstaller stopHook = HookInstaller.forCodex(jar, codexHome, home, output);
+        HookInstaller stopHook = HookInstaller.forCodex(jar, codexHome, home, output, Platform.windows(), environment);
         this.hooks = Optional.of(failFast ? stopHook.failingFast() : stopHook);
         this.pullAlways = false;
         this.java = JAVA_ON_THE_PATH;
+        this.environment = environment;
     }
 
     /**
@@ -115,9 +123,10 @@ public final class CodexInstaller {
      * @param hooks what installs the turn and Stop hooks, if anything
      * @param pullAlways whether the server's entry sets {@code SHERIFF_PULL=always}
      * @param java the Java the server runs with: {@code java}, or a path
+     * @param environment where {@code SHERIFF_DOCKER} is read
      */
     private CodexInstaller(Path codexHome, Path jar, PrintStream output, String instructions,
-            Optional<HookInstaller> hooks, boolean pullAlways, String java) {
+            Optional<HookInstaller> hooks, boolean pullAlways, String java, Map<String, String> environment) {
         this.codexHome = codexHome;
         this.jar = jar;
         this.output = output;
@@ -125,6 +134,7 @@ public final class CodexInstaller {
         this.hooks = hooks;
         this.pullAlways = pullAlways;
         this.java = java;
+        this.environment = environment;
     }
 
     /**
@@ -134,7 +144,8 @@ public final class CodexInstaller {
      * @return that installer
      */
     public CodexInstaller withoutStopHook() {
-        return new CodexInstaller(codexHome, jar, output, instructions, Optional.empty(), pullAlways, java);
+        return new CodexInstaller(codexHome, jar, output, instructions, Optional.empty(), pullAlways, java,
+                environment);
     }
 
     /**
@@ -145,7 +156,7 @@ public final class CodexInstaller {
      * @return that installer
      */
     public CodexInstaller pullingAlways() {
-        return new CodexInstaller(codexHome, jar, output, instructions, hooks, true, java);
+        return new CodexInstaller(codexHome, jar, output, instructions, hooks, true, java, environment);
     }
 
     /**
@@ -159,7 +170,7 @@ public final class CodexInstaller {
     public CodexInstaller runningWith(Path executable) {
         return new CodexInstaller(codexHome, jar, output, instructions,
                 hooks.map(installer -> installer.runningWith(executable)), pullAlways,
-                tomlString(executable.toAbsolutePath().normalize().toString()));
+                tomlString(executable.toAbsolutePath().normalize().toString()), environment);
     }
 
     /**
@@ -179,7 +190,7 @@ public final class CodexInstaller {
         String configured = environment.get(CODEX_HOME_VARIABLE);
         Path codexHome = configured == null || configured.isBlank() ? home.resolve(CODEX_DIRECTORY)
                 : Path.of(configured);
-        return new CodexInstaller(codexHome, jar, home, output, instructions, failFast);
+        return new CodexInstaller(environment, codexHome, jar, home, output, instructions, failFast);
     }
 
     /**
@@ -197,7 +208,7 @@ public final class CodexInstaller {
             return FAILURE;
         }
         String pulling = pullAlways ? PULL_ALWAYS_NOTE : BLANK;
-        output.printf(INSTALLED, SERVER_NAME, configFile(), toolTimeoutSeconds(Platform.windows(), System.getenv()),
+        output.printf(INSTALLED, SERVER_NAME, configFile(), toolTimeoutSeconds(Platform.windows(), environment),
                 agentsFile(), pulling);
         return hooks.map(HookInstaller::install).orElse(SUCCESS);
     }
@@ -273,9 +284,33 @@ public final class CodexInstaller {
      */
     String serverEntry() {
         String path = tomlString(jar.toAbsolutePath().normalize().toString());
-        String environment = pullAlways ? PULL_ALWAYS_LINE : BLANK;
         return String.format(SERVER_ENTRY, SERVER_NAME, java, path,
-                toolTimeoutSeconds(Platform.windows(), System.getenv()), environment, SERVER_NAME);
+                toolTimeoutSeconds(Platform.windows(), environment),
+                environmentLine(pullAlways, Platform.windows(), environment), SERVER_NAME);
+    }
+
+    /**
+     * The variables the server's entry gives it, as one TOML line: Codex
+     * starts a server with almost none of the user's, so
+     * {@code SHERIFF_PULL} and {@code SHERIFF_DOCKER} reach it only from
+     * here. Without the second, a server under Codex on Windows with
+     * WSL's Docker ran a {@code docker} that was not there, and its runs
+     * kept the 300 s meant for Docker Desktop.
+     *
+     * @param pullAlways whether the server pulls a newer image each start
+     * @param windows whether the platform is Windows
+     * @param environment where {@code SHERIFF_DOCKER} is read, as the
+     *     installers leave it
+     * @return the line, or nothing when there is no variable to give
+     */
+    static String environmentLine(boolean pullAlways, boolean windows, Map<String, String> environment) {
+        List<String> pairs = new ArrayList<>();
+        if (pullAlways) {
+            pairs.add(PULL_ALWAYS_PAIR);
+        }
+        Platform.dockerSetting(windows, environment)
+                .ifPresent(setting -> pairs.add(String.format(DOCKER_PAIR, tomlString(setting))));
+        return pairs.isEmpty() ? BLANK : String.format(ENVIRONMENT_LINE, String.join(PAIR_SEPARATOR, pairs));
     }
 
     /**

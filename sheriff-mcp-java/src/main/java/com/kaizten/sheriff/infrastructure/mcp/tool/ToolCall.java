@@ -18,25 +18,28 @@ public final class ToolCall {
     private static final String TOOL_CALL_ALONE = "call the %s tool";
     private static final String WITH_PROFILE = " and profile '%s'";
     private static final String COMMAND = "run `cd %s && java -jar %s --call %s%s`";
+    private static final String WINDOWS_COMMAND = "run `cd %s; java -jar %s --call %s%s`";
     private static final String COMPONENT_ARGUMENT = " component=%s";
     private static final String PROFILE_ARGUMENT = " profile=%s";
     private static final String QUOTE = "'";
     private static final String ESCAPED_QUOTE = "'\\''";
-    private static final String WINDOWS_QUOTE = "\"";
     private static final String NOTHING = "";
 
     private final Path directory;
     private final Path jar;
+    private final boolean windows;
 
     /**
      * Wires a way of naming calls.
      *
      * @param directory where a command runs, or {@code null} for tool calls
      * @param jar this jar, or {@code null} for tool calls
+     * @param windows whether the command is run on Windows
      */
-    private ToolCall(Path directory, Path jar) {
+    private ToolCall(Path directory, Path jar, boolean windows) {
         this.directory = directory;
         this.jar = jar;
+        this.windows = windows;
     }
 
     /**
@@ -45,7 +48,7 @@ public final class ToolCall {
      * @return that way of naming them
      */
     public static ToolCall throughMcp() {
-        return new ToolCall(null, null);
+        return new ToolCall(null, null, false);
     }
 
     /**
@@ -56,7 +59,25 @@ public final class ToolCall {
      * @return that way of naming them
      */
     public static ToolCall throughCommandLine(Path directory, Path jar) {
-        return new ToolCall(directory, jar);
+        return throughCommandLine(directory, jar, Platform.windows());
+    }
+
+    /**
+     * Calls named as commands, for a given platform.
+     *
+     * <p>On Windows a model's shell is Git Bash under Claude Code and
+     * PowerShell under Codex, and Windows PowerShell does not know
+     * {@code &&}: the command there is joined with {@code ;}, quoted as
+     * {@link Platform#quotedForAnyWindowsShell} says and with forward
+     * slashes, which all of them read the same.
+     *
+     * @param directory the directory the first command was run in
+     * @param jar this jar
+     * @param windows whether the command is run on Windows
+     * @return that way of naming them
+     */
+    static ToolCall throughCommandLine(Path directory, Path jar, boolean windows) {
+        return new ToolCall(directory, jar, windows);
     }
 
     /**
@@ -77,7 +98,8 @@ public final class ToolCall {
         }
         String arguments = (component.isEmpty() ? NOTHING : String.format(COMPONENT_ARGUMENT, quoted(component)))
                 + (profile.isEmpty() ? NOTHING : String.format(PROFILE_ARGUMENT, quoted(profile)));
-        return String.format(COMMAND, quoted(directory.toString()), quoted(jar.toString()), tool, arguments);
+        return String.format(windows ? WINDOWS_COMMAND : COMMAND, quoted(directory.toString()),
+                quoted(jar.toString()), tool, arguments);
     }
 
     /**
@@ -86,9 +108,9 @@ public final class ToolCall {
      * @param text what to quote
      * @return it, quoted
      */
-    private static String quoted(String text) {
-        if (Platform.windows()) {
-            return WINDOWS_QUOTE + text + WINDOWS_QUOTE;
+    private String quoted(String text) {
+        if (windows) {
+            return Platform.quotedForAnyWindowsShell(text);
         }
         return QUOTE + text.replace(QUOTE, ESCAPED_QUOTE) + QUOTE;
     }

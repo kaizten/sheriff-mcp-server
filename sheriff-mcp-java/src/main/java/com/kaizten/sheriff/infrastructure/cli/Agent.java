@@ -104,6 +104,7 @@ public final class Agent {
     private static final String OPTION_PREFIX = "--";
     private static final String WHOLE_INPUT = "\\A";
     private static final String NOTHING = "";
+    private static final String BYTE_ORDER_MARK = "﻿";
     private static final String OK_FIELD = "ok";
     private static final String INFRASTRUCTURE_ERROR_FIELD = "infrastructure_error";
     private static final String TOTAL_FIELD = "total";
@@ -422,8 +423,21 @@ public final class Agent {
      */
     private static String readStandardInput() {
         try (java.util.Scanner scanner = new java.util.Scanner(System.in, StandardCharsets.UTF_8)) {
-            return scanner.useDelimiter(WHOLE_INPUT).hasNext() ? scanner.next() : NOTHING;
+            return withoutByteOrderMark(scanner.useDelimiter(WHOLE_INPUT).hasNext() ? scanner.next() : NOTHING);
         }
+    }
+
+    /**
+     * A hook's payload without the byte order mark a program on Windows can
+     * write before it, as .NET Framework's standard input does: read as
+     * JSON, the mark failed the parse, and every hook let the turn through
+     * unchecked, saying nothing (measured 13 October).
+     *
+     * @param payload the text read
+     * @return it, without a leading byte order mark
+     */
+    static String withoutByteOrderMark(String payload) {
+        return payload.startsWith(BYTE_ORDER_MARK) ? payload.substring(BYTE_ORDER_MARK.length()) : payload;
     }
 
     /**

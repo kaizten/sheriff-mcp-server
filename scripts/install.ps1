@@ -388,6 +388,12 @@ if ($PullAlways) {
     $serverOptions += @('-e', 'SHERIFF_PULL=always')
     $codexOptions += '--pull-always'
 }
+# In the registration too, not only set for the user: a session started
+# before setx, or by a program that does not pass it on, never sees it. The
+# jar writes it into Codex's and Antigravity's entries from this session.
+if ($env:SHERIFF_DOCKER -like 'wsl*') {
+    $serverOptions += @('-e', "SHERIFF_DOCKER=$($env:SHERIFF_DOCKER)")
+}
 # How a line printed for the user runs the Java found, in PowerShell.
 $javaCommand = "& `"$java`""
 # A list of names as a sentence says it: "A", "A and B", "A, B and C".

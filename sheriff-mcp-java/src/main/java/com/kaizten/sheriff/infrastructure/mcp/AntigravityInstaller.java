@@ -4,11 +4,13 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.kaizten.sheriff.infrastructure.process.Platform;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Sets Antigravity's command line, {@code agy}, up for this jar, for every
@@ -49,6 +51,7 @@ public final class AntigravityInstaller {
     private static final String DISABLED = "disabled";
     private static final String ENVIRONMENT = "env";
     private static final String PULL_VARIABLE = "SHERIFF_PULL";
+    private static final String DOCKER_VARIABLE = "SHERIFF_DOCKER";
     private static final String PULL_ALWAYS = "always";
     private static final String PERMISSIONS = "permissions";
     private static final String ALLOW = "allow";
@@ -80,17 +83,21 @@ public final class AntigravityInstaller {
     private final PrintStream output;
     private final boolean pullAlways;
     private final String java;
+    private final Map<String, String> environment;
 
     /**
      * Wires the installer.
      *
+     * @param environment where {@code SHERIFF_DOCKER} is read, as the
+     *     installers leave it, rather than from this process: a test given
+     *     none writes what a machine without it would
      * @param geminiHome where {@code agy} keeps its configuration,
      *     {@code ~/.gemini}
      * @param jar this jar, which the server will run
      * @param output where to report what was done
      */
-    public AntigravityInstaller(Path geminiHome, Path jar, PrintStream output) {
-        this(geminiHome, jar, output, false, JAVA);
+    public AntigravityInstaller(Map<String, String> environment, Path geminiHome, Path jar, PrintStream output) {
+        this(geminiHome, jar, output, false, JAVA, environment);
     }
 
     /**
@@ -101,26 +108,31 @@ public final class AntigravityInstaller {
      * @param output where to report
      * @param pullAlways whether the server's entry sets {@code SHERIFF_PULL=always}
      * @param java the Java the server runs with: {@code java}, or a path
+     * @param environment where {@code SHERIFF_DOCKER} is read
      */
-    private AntigravityInstaller(Path geminiHome, Path jar, PrintStream output, boolean pullAlways, String java) {
+    private AntigravityInstaller(Path geminiHome, Path jar, PrintStream output, boolean pullAlways, String java,
+            Map<String, String> environment) {
         this.geminiHome = geminiHome;
         this.jar = jar;
         this.output = output;
         this.pullAlways = pullAlways;
         this.java = java;
+        this.environment = environment;
     }
 
     /**
      * The installer for the user running it, whose home holds
      * {@code agy}'s {@code .gemini} directory.
      *
+     * @param environment the process environment
      * @param home the user's home
      * @param jar this jar
      * @param output where to report
      * @return the installer
      */
-    public static AntigravityInstaller forUser(Path home, Path jar, PrintStream output) {
-        return new AntigravityInstaller(home.resolve(GEMINI_DIRECTORY), jar, output);
+    public static AntigravityInstaller forUser(Map<String, String> environment, Path home, Path jar,
+            PrintStream output) {
+        return new AntigravityInstaller(environment, home.resolve(GEMINI_DIRECTORY), jar, output);
     }
 
     /**
@@ -130,7 +142,7 @@ public final class AntigravityInstaller {
      * @return that installer
      */
     public AntigravityInstaller pullingAlways() {
-        return new AntigravityInstaller(geminiHome, jar, output, true, java);
+        return new AntigravityInstaller(geminiHome, jar, output, true, java, environment);
     }
 
     /**
@@ -143,7 +155,7 @@ public final class AntigravityInstaller {
      */
     public AntigravityInstaller runningWith(Path executable) {
         return new AntigravityInstaller(geminiHome, jar, output, pullAlways,
-                executable.toAbsolutePath().normalize().toString());
+                executable.toAbsolutePath().normalize().toString(), environment);
     }
 
     /**
@@ -250,14 +262,34 @@ public final class AntigravityInstaller {
      * @return the entry
      */
     ObjectNode serverEntry() {
+        return serverEntry(Platform.windows(), environment);
+    }
+
+    /**
+     * The server's entry, for a given platform and environment: with
+     * {@code SHERIFF_DOCKER} when Docker is WSL's, as for Codex, since a
+     * server given none of the user's variables would run a {@code docker}
+     * that is not there.
+     *
+     * @param windows whether the platform is Windows
+     * @param environment where {@code SHERIFF_DOCKER} is read, as the
+     *     installers leave it
+     * @return the entry
+     */
+    ObjectNode serverEntry(boolean windows, Map<String, String> environment) {
         ObjectNode entry = json.createObjectNode();
         entry.put(COMMAND, java);
         ArrayNode arguments = entry.putArray(ARGUMENTS);
         arguments.add(JAR_OPTION);
         arguments.add(jar.toAbsolutePath().normalize().toString());
         entry.put(DISABLED, false);
+        ObjectNode variables = json.createObjectNode();
         if (pullAlways) {
-            entry.putObject(ENVIRONMENT).put(PULL_VARIABLE, PULL_ALWAYS);
+            variables.put(PULL_VARIABLE, PULL_ALWAYS);
+        }
+        Platform.dockerSetting(windows, environment).ifPresent(setting -> variables.put(DOCKER_VARIABLE, setting));
+        if (!variables.isEmpty()) {
+            entry.set(ENVIRONMENT, variables);
         }
         return entry;
     }

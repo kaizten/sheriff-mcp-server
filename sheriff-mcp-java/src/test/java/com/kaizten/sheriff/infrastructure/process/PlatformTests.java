@@ -9,6 +9,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -35,6 +36,15 @@ class PlatformTests {
     }
 
     @Test
+    @DisplayName("a path for a model's shell on Windows is single quoted, which keeps a $ or a backtick in Git Bash "
+            + "and both PowerShells, and double quoted only when it holds a single quote")
+    void aPathForAnyWindowsShellIsSingleQuoted() {
+        assertEquals("'C:/Users/a/pay$home'", Platform.quotedForAnyWindowsShell("C:\\Users\\a\\pay$home"));
+        assertEquals("'C:/tick`x'", Platform.quotedForAnyWindowsShell("C:/tick`x"));
+        assertEquals("\"C:/o'brien\"", Platform.quotedForAnyWindowsShell("C:\\o'brien"));
+    }
+
+    @Test
     @DisplayName("a Windows path reaches a Claude Code rule as /drive/rest, the form it matches")
     void aRulePathOnWindows() {
         assertEquals("/d/work/app", Platform.posixForm("D:\\work\\app"));
@@ -54,19 +64,20 @@ class PlatformTests {
     }
 
     @Test
-    @DisplayName("SHERIFF_DOCKER=wsl runs docker through wsl.exe with a bind mount's source as WSL sees it")
+    @DisplayName("SHERIFF_DOCKER=wsl runs docker through wsl.exe -e, with no shell to expand a $, and a bind "
+            + "mount's source as WSL sees it")
     void dockerRunsThroughWslWhenAsked() {
         List<String> run = List.of("docker", "run", "--mount", "type=bind,source=C:\\Users\\a b\\proj,target=/data", "img");
         assertEquals(
-                List.of("wsl.exe", "docker", "run", "--mount", "type=bind,source=/mnt/c/Users/a b/proj,target=/data",
-                        "img"),
+                List.of("wsl.exe", "-e", "docker", "run", "--mount",
+                        "type=bind,source=/mnt/c/Users/a b/proj,target=/data", "img"),
                 Platform.dockerCommand(run, true, Map.of("SHERIFF_DOCKER", "wsl")));
         assertEquals(
-                List.of("wsl.exe", "docker", "run", "--mount", "type=bind,\"source=/mnt/d/a,b/c\",target=/data"),
+                List.of("wsl.exe", "-e", "docker", "run", "--mount", "type=bind,\"source=/mnt/d/a,b/c\",target=/data"),
                 Platform.dockerCommand(List.of("docker", "run", "--mount", "type=bind,\"source=D:\\a,b\\c\",target=/data"),
                         true, Map.of("SHERIFF_DOCKER", "wsl")));
         assertEquals(
-                List.of("wsl.exe", "-d", "Ubuntu", "docker", "pull", "img"),
+                List.of("wsl.exe", "-d", "Ubuntu", "-e", "docker", "pull", "img"),
                 Platform.dockerCommand(List.of("docker", "pull", "img"), true, Map.of("SHERIFF_DOCKER", "wsl:Ubuntu")));
     }
 
@@ -78,6 +89,15 @@ class PlatformTests {
         assertFalse(Platform.dockerThroughWsl(true, Map.of()));
         assertFalse(Platform.dockerThroughWsl(true, Map.of("SHERIFF_DOCKER", "docker")));
         assertFalse(Platform.dockerThroughWsl(false, Map.of("SHERIFF_DOCKER", "wsl")));
+    }
+
+    @Test
+    @DisplayName("the setting an installer passes on is the variable's own, and only where it applies")
+    void theDockerSettingToPassOn() {
+        assertEquals(Optional.of("wsl:Ubuntu"), Platform.dockerSetting(true, Map.of("SHERIFF_DOCKER", " wsl:Ubuntu ")));
+        assertEquals(Optional.of("wsl"), Platform.dockerSetting(true, Map.of("SHERIFF_DOCKER", "wsl")));
+        assertEquals(Optional.empty(), Platform.dockerSetting(false, Map.of("SHERIFF_DOCKER", "wsl")));
+        assertEquals(Optional.empty(), Platform.dockerSetting(true, Map.of()));
     }
 
     @Test

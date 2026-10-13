@@ -33,6 +33,8 @@ public final class Platform {
     private static final String WINDOWS_COMMAND_FLAG = "/c";
     private static final char BACKSLASH = '\\';
     private static final char SLASH = '/';
+    private static final String SINGLE_QUOTE = "'";
+    private static final String DOUBLE_QUOTE = "\"";
     private static final String ROOT = "/";
     private static final char DRIVE_SEPARATOR = ':';
     private static final int DRIVE_LETTER = 0;
@@ -52,6 +54,7 @@ public final class Platform {
     private static final String WSL_VALUE = "wsl";
     private static final String WSL_DISTRO_PREFIX = "wsl:";
     private static final String WSL_DISTRO_FLAG = "-d";
+    private static final String WSL_EXEC_FLAG = "-e";
     private static final String WSL_MOUNT_ROOT = "/mnt/";
     private static final String WINDOWS_SOURCE_REGEX = "(source=)([A-Za-z]):[\\\\/](.*?)(?=\"|,[A-Za-z]+=|$)";
     private static final Pattern WINDOWS_SOURCE = Pattern.compile(WINDOWS_SOURCE_REGEX);
@@ -112,6 +115,25 @@ public final class Platform {
     }
 
     /**
+     * A path quoted so that a model's shell on Windows reads it as it is,
+     * whichever it is: Git Bash, Windows PowerShell or PowerShell 7. In
+     * single quotes, with forward slashes, all three take a {@code $} or a
+     * backtick literally, which double quotes expanded in every one of them
+     * (measured 13 October); a path holding a single quote is double quoted,
+     * as nothing else reads the same in all three.
+     *
+     * @param path the path, with either slash
+     * @return it, with {@code /} and quoted
+     */
+    public static String quotedForAnyWindowsShell(String path) {
+        String slashed = path.replace(BACKSLASH, SLASH);
+        if (!slashed.contains(SINGLE_QUOTE)) {
+            return SINGLE_QUOTE + slashed + SINGLE_QUOTE;
+        }
+        return DOUBLE_QUOTE + slashed + DOUBLE_QUOTE;
+    }
+
+    /**
      * An absolute path the way Claude Code matches it in a permission rule:
      * as it is on POSIX, and on Windows with the drive turned into its first
      * segment, {@code C:\Users\a} as {@code /c/Users/a}.
@@ -150,6 +172,12 @@ public final class Platform {
      * ends at the next field or, for a path with a comma, which
      * {@code SheriffContainer} quotes whole, at the closing quote.
      *
+     * <p>{@code docker} runs with {@code -e}, with no shell: without it
+     * {@code wsl.exe} hands the command line to the distribution's shell,
+     * which expanded a {@code $} in a path, so a project under
+     * {@code pay$app} was mounted from {@code pay} and never analyzed
+     * (measured 13 October).
+     *
      * @param command the command, its executable first
      * @param windows whether the platform is Windows
      * @param environment where {@code SHERIFF_DOCKER} is read
@@ -166,7 +194,7 @@ public final class Platform {
         if (setting.startsWith(WSL_DISTRO_PREFIX)) {
             through.addAll(List.of(WSL_DISTRO_FLAG, setting.substring(WSL_DISTRO_PREFIX.length())));
         }
-        through.add(DOCKER_EXECUTABLE);
+        through.addAll(List.of(WSL_EXEC_FLAG, DOCKER_EXECUTABLE));
         command.stream().skip(SECOND).map(Platform::wslPath).forEach(through::add);
         return through;
     }
@@ -183,6 +211,25 @@ public final class Platform {
     public static boolean dockerThroughWsl(boolean windows, Map<String, String> environment) {
         String setting = environment.getOrDefault(DOCKER_VARIABLE, NOTHING).trim();
         return windows && (setting.equals(WSL_VALUE) || setting.startsWith(WSL_DISTRO_PREFIX));
+    }
+
+    /**
+     * The {@code SHERIFF_DOCKER} an installer writes into what an assistant
+     * starts, as {@code wsl} or {@code wsl:<name>}: Codex starts its servers
+     * and hooks with almost none of the user's variables (measured with Codex
+     * 0.162: {@code HOME}, {@code PATH} and a few more), so one that is not in
+     * its entry never reaches the jar, which then runs a {@code docker} that
+     * is not there. Empty wherever {@link #dockerThroughWsl} is false.
+     *
+     * @param windows whether the platform is Windows
+     * @param environment where {@code SHERIFF_DOCKER} is read
+     * @return the value to pass on, or empty
+     */
+    public static Optional<String> dockerSetting(boolean windows, Map<String, String> environment) {
+        if (!dockerThroughWsl(windows, environment)) {
+            return Optional.empty();
+        }
+        return Optional.of(environment.get(DOCKER_VARIABLE).trim());
     }
 
     /**

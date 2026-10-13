@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.kaizten.sheriff.infrastructure.process.Platform;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
@@ -13,6 +14,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -38,7 +40,12 @@ final class AntigravityInstallerTest {
     }
 
     private AntigravityInstaller installer() {
-        return AntigravityInstaller.forUser(home, jar(), new PrintStream(output, true, StandardCharsets.UTF_8));
+        return installer(Map.of());
+    }
+
+    private AntigravityInstaller installer(Map<String, String> environment) {
+        return AntigravityInstaller.forUser(environment, home, jar(),
+                new PrintStream(output, true, StandardCharsets.UTF_8));
     }
 
     private Path servers() {
@@ -112,6 +119,25 @@ final class AntigravityInstallerTest {
         JsonNode entry = JSON.readTree(servers().toFile()).path("mcpServers").path("sheriff");
         assertEquals("always", entry.path("env").path("SHERIFF_PULL").asText());
         assertTrue(output.toString(StandardCharsets.UTF_8).contains("pulled again"), output.toString());
+    }
+
+    @Test
+    @DisplayName("with WSL's Docker the entry carries SHERIFF_DOCKER, and never on Linux or macOS")
+    void theEntryCarriesTheDockerSetting() {
+        JsonNode windows = installer().serverEntry(true, Map.of("SHERIFF_DOCKER", "wsl"));
+        assertEquals("wsl", windows.path("env").path("SHERIFF_DOCKER").asText());
+        assertTrue(installer().serverEntry(false, Map.of("SHERIFF_DOCKER", "wsl")).path("env").isMissingNode());
+        assertTrue(installer().serverEntry(true, Map.of()).path("env").isMissingNode());
+    }
+
+    @Test
+    @DisplayName("SHERIFF_DOCKER is read from the environment the installer is given, never from this process's")
+    void readsTheDockerSettingFromTheEnvironmentItIsGiven() throws Exception {
+        assertEquals(0, installer(Map.of("SHERIFF_DOCKER", "wsl")).install());
+
+        JsonNode entry = JSON.readTree(servers().toFile()).path("mcpServers").path("sheriff");
+        assertEquals(Platform.windows(), "wsl".equals(entry.path("env").path("SHERIFF_DOCKER").asText()),
+                entry.toString());
     }
 
     @Test

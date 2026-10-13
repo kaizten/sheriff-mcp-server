@@ -562,6 +562,16 @@ main() {
     server_options+=(-e SHERIFF_PULL=always)
     codex_options+=(--pull-always)
   fi
+  # In the registration too, not only set for the user: a session started
+  # before setx never sees it. The jar writes it into Codex's and
+  # Antigravity's entries from this shell's environment.
+  case "$(uname -s)" in
+    MINGW*|MSYS*|CYGWIN*)
+      if [[ "${SHERIFF_DOCKER:-}" == wsl* ]]; then
+        server_options+=(-e "SHERIFF_DOCKER=$SHERIFF_DOCKER")
+      fi
+      ;;
+  esac
   # Only the assistants this machine has are set up, and the run ends saying
   # which: found is every one there, set_up the ones this run wrote into.
   local found=() set_up=()

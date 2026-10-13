@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
@@ -37,6 +38,21 @@ class SystemProcessRunnerTests {
         assertFalse(outcome.succeeded());
         assertEquals(3, outcome.exitCode());
         assertEquals("bad\n", outcome.standardError());
+    }
+
+    @Test
+    @DisplayName("a missing program is 'not installed' however the JDK words error 2, and error 20 is not it")
+    void readsErrorTwoInEveryJdksWords() {
+        List<String> missing = List.of(
+                "Cannot run program \"docker\": error=2, No such file or directory",
+                "Cannot run program \"docker\": Exec failed, error: 2 (No such file or directory) ",
+                "Cannot run program \"docker\": CreateProcess error=2, The system cannot find the file specified");
+        for (String message : missing) {
+            assertEquals("'docker' is not installed or not on the PATH.",
+                    SystemProcessRunner.launchFailure("docker", new IOException(message)), message);
+        }
+        assertTrue(SystemProcessRunner.launchFailure("docker", new IOException("error=20, Not a directory"))
+                .startsWith("Could not start"));
     }
 
     @Test

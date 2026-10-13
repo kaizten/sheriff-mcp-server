@@ -40,8 +40,12 @@ final class CodexInstallerTest {
     }
 
     private CodexInstaller installer(boolean failFast) {
-        return new CodexInstaller(codexHome(), home.resolve(".local/share/sheriff-agent/sheriff-mcp.jar"), home,
-                new PrintStream(output, true, StandardCharsets.UTF_8), INSTRUCTIONS, failFast);
+        return installer(Map.of(), failFast);
+    }
+
+    private CodexInstaller installer(Map<String, String> environment, boolean failFast) {
+        return new CodexInstaller(environment, codexHome(), home.resolve(".local/share/sheriff-agent/sheriff-mcp.jar"),
+                home, new PrintStream(output, true, StandardCharsets.UTF_8), INSTRUCTIONS, failFast);
     }
 
     private String read(String file) throws Exception {
@@ -58,7 +62,7 @@ final class CodexInstallerTest {
     void onWindowsTheHookLineDoesNotStartWithAQuote() throws Exception {
         PrintStream out = new PrintStream(output, true, StandardCharsets.UTF_8);
         Path jar = home.resolve("sheriff agent/sheriff-mcp.jar");
-        assertEquals(0, HookInstaller.forCodex(jar, codexHome(), home, out, true)
+        assertEquals(0, HookInstaller.forCodex(jar, codexHome(), home, out, true, Map.of())
                 .runningWith(Path.of("/opt/java home/bin/java")).install());
 
         JsonNode hooks = JSON.readTree(read("hooks.json")).path("hooks");
@@ -69,8 +73,33 @@ final class CodexInstallerTest {
         assertTrue(hooks.at("/UserPromptSubmit/0/hooks/0/command").asText().endsWith("--hook-turn\""),
                 hooks.toString());
 
-        assertEquals(0, HookInstaller.forCodex(jar, codexHome(), home, out, true).uninstall());
+        assertEquals(0, HookInstaller.forCodex(jar, codexHome(), home, out, true, Map.of()).uninstall());
         assertFalse(read("hooks.json").contains("--hook-stop"), "an uninstall finds the wrapped hooks too");
+    }
+
+    @Test
+    @DisplayName("with WSL's Docker a Codex hook sets SHERIFF_DOCKER itself, as Codex passes it almost no variable")
+    void onWindowsWithWslTheHookSetsTheVariable() throws Exception {
+        PrintStream out = new PrintStream(output, true, StandardCharsets.UTF_8);
+        Path jar = home.resolve("sheriff-mcp.jar");
+        assertEquals(0, HookInstaller.forCodex(jar, codexHome(), home, out, true,
+                Map.of("SHERIFF_DOCKER", " wsl:Ubuntu ")).install());
+
+        String stop = JSON.readTree(read("hooks.json")).at("/hooks/Stop/0/hooks/0/command").asText();
+        assertTrue(stop.startsWith("cmd /d /s /c \"set \"SHERIFF_DOCKER=wsl:Ubuntu\"&& java -jar \""), stop);
+        assertTrue(stop.endsWith("--hook-stop\""), stop);
+    }
+
+    @Test
+    @DisplayName("the server's entry carries SHERIFF_DOCKER and SHERIFF_PULL, which Codex would not pass it")
+    void theEntryCarriesTheVariablesCodexDropsFromIt() {
+        Map<String, String> wsl = Map.of("SHERIFF_DOCKER", "wsl");
+        assertEquals("env = { SHERIFF_PULL = \"always\", SHERIFF_DOCKER = \"wsl\" }\n",
+                CodexInstaller.environmentLine(true, true, wsl));
+        assertEquals("env = { SHERIFF_DOCKER = \"wsl\" }\n", CodexInstaller.environmentLine(false, true, wsl));
+        assertEquals("env = { SHERIFF_PULL = \"always\" }\n", CodexInstaller.environmentLine(true, false, wsl),
+                "Linux and macOS never get it");
+        assertEquals("", CodexInstaller.environmentLine(false, true, Map.of()));
     }
 
     @Test
@@ -87,12 +116,24 @@ final class CodexInstallerTest {
     @DisplayName("elsewhere the hook line is left as it was")
     void elsewhereTheHookLineIsUnwrapped() throws Exception {
         PrintStream out = new PrintStream(output, true, StandardCharsets.UTF_8);
-        assertEquals(0, HookInstaller.forCodex(home.resolve("sheriff-mcp.jar"), codexHome(), home, out, false)
+        assertEquals(0, HookInstaller.forCodex(home.resolve("sheriff-mcp.jar"), codexHome(), home, out, false,
+                Map.of("SHERIFF_DOCKER", "wsl"))
                 .install());
 
         String stop = JSON.readTree(read("hooks.json")).at("/hooks/Stop/0/hooks/0/command").asText();
         assertFalse(stop.startsWith("cmd "), stop);
         assertTrue(stop.endsWith("--hook-stop"), stop);
+    }
+
+    @Test
+    @DisplayName("SHERIFF_DOCKER is read from the environment the installer is given, never from this process's")
+    void readsTheDockerSettingFromTheEnvironmentItIsGiven() throws Exception {
+        assertEquals(0, installer(Map.of("SHERIFF_DOCKER", "wsl"), false).install());
+
+        String config = read("config.toml");
+        assertEquals(Platform.windows(), config.contains("SHERIFF_DOCKER = \"wsl\""), config);
+        assertEquals(Platform.windows(), config.contains("tool_timeout_sec = 1800"), config);
+        assertEquals(Platform.windows(), read("hooks.json").contains("SHERIFF_DOCKER=wsl"), read("hooks.json"));
     }
 
     @Test
@@ -102,8 +143,7 @@ final class CodexInstallerTest {
 
         String config = read("config.toml");
         assertTrue(config.contains("[mcp_servers.sheriff]"), config);
-        int expected = CodexInstaller.toolTimeoutSeconds(Platform.windows(), System.getenv());
-        assertTrue(config.contains("tool_timeout_sec = " + expected), config);
+        assertTrue(config.contains("tool_timeout_sec = 600"), config);
         assertTrue(config.contains("[mcp_servers.sheriff.tools.sheriff_fix]"), config);
         assertTrue(config.contains("approval_mode = \"approve\""), config);
         assertTrue(config.contains("sheriff-mcp.jar\"]"), config);
@@ -141,8 +181,8 @@ final class CodexInstallerTest {
     }
 
     private String entryFor(Path jar) {
-        return new CodexInstaller(codexHome(), jar, home, new PrintStream(output, true, StandardCharsets.UTF_8),
-                INSTRUCTIONS, false).serverEntry();
+        return new CodexInstaller(Map.of(), codexHome(), jar, home,
+                new PrintStream(output, true, StandardCharsets.UTF_8), INSTRUCTIONS, false).serverEntry();
     }
 
     private static String tomlString(Path jar) {

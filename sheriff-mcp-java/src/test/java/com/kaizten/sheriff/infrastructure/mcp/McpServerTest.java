@@ -1,11 +1,13 @@
 package com.kaizten.sheriff.infrastructure.mcp;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.PrintStream;
+import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -93,6 +95,50 @@ final class McpServerTest {
         assertEquals("{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{}}" + System.lineSeparator(),
                 out.toString(StandardCharsets.UTF_8));
         assertTrue(err.toString(StandardCharsets.UTF_8).contains("Iteration 1"));
+    }
+
+    @Test
+    @DisplayName("read by a program, the protocol and the progress are UTF-8 even where Java writes a pipe in Cp1252")
+    void bothStreamsAreUtf8ForAProgram() {
+        List<String> written = writtenThroughClaimedStreams(false, Charset.forName("windows-1252"));
+
+        assertEquals(List.of("A\u00f1o.java" + System.lineSeparator(), "Jes\u00fas" + System.lineSeparator()),
+                written);
+    }
+
+    @Test
+    @DisplayName("on a terminal Java's own encoding stays, as UTF-8 showed A\u00f1o as A\u251c\u2592o in code page 850")
+    void bothStreamsKeepTheConsolesEncodingOnATerminal() {
+        Charset console = Charset.forName("IBM850");
+        List<String> written = writtenThroughClaimedStreams(true, console);
+
+        assertEquals(List.of(new String(("A\u00f1o.java" + System.lineSeparator()).getBytes(console),
+                StandardCharsets.UTF_8), new String(("Jes\u00fas" + System.lineSeparator()).getBytes(console),
+                StandardCharsets.UTF_8)), written);
+    }
+
+    @Test
+    @DisplayName("a test, whose streams are pipes, is never on a terminal")
+    void aPipeIsNotATerminal() {
+        assertFalse(McpServer.onTerminal());
+    }
+
+    private static List<String> writtenThroughClaimedStreams(boolean terminal, Charset platform) {
+        PrintStream originalOut = System.out;
+        PrintStream originalErr = System.err;
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        ByteArrayOutputStream err = new ByteArrayOutputStream();
+        System.setOut(new PrintStream(out, true, platform));
+        System.setErr(new PrintStream(err, true, platform));
+        try {
+            PrintStream protocol = McpServer.claimStandardOutput(terminal);
+            protocol.println("A\u00f1o.java");
+            System.err.println("Jes\u00fas");
+        } finally {
+            System.setOut(originalOut);
+            System.setErr(originalErr);
+        }
+        return List.of(out.toString(StandardCharsets.UTF_8), err.toString(StandardCharsets.UTF_8));
     }
 
     @Test

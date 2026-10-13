@@ -14,6 +14,7 @@ import com.kaizten.sheriff.infrastructure.mcp.McpConfig;
 import com.kaizten.sheriff.infrastructure.mcp.ServerVersion;
 import com.kaizten.sheriff.infrastructure.mcp.SheriffRunner;
 import com.kaizten.sheriff.infrastructure.mcp.protocol.ToolOutcome;
+import com.kaizten.sheriff.infrastructure.process.Platform;
 import com.kaizten.sheriff.infrastructure.process.ProcessOutcome;
 import com.kaizten.sheriff.infrastructure.process.ProcessRunner;
 import java.io.IOException;
@@ -354,7 +355,7 @@ final class ToolsTest {
         String text = tools(List.of(), ProcessOutcome.completed(0, "", ""))
                 .call("sheriff_test", Map.of("component", "app")).text();
 
-        String absolute = repository.resolve("app").toAbsolutePath().normalize().toString();
+        String absolute = Platform.slashes(repository.resolve("app").toAbsolutePath().normalize());
         assertTrue(text.contains("Next step: run the project's tests (") && text.contains(absolute), text);
         assertFalse(text.contains(" -q "), "-q hides Tests run and BUILD SUCCESS from the model: " + text);
     }
