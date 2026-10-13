@@ -2,7 +2,7 @@
 # Builds the user's playbook, in Spanish and English, from playbook/:
 #
 #   scripts/playbook.sh            the version in the poms
-#   scripts/playbook.sh 1.0.1      that version, as the release does with its tag
+#   scripts/playbook.sh 0.1.1      that version, as the release does with its tag
 #
 # Writes playbook/build/sheriff-playbook-es.pdf and sheriff-playbook-en.pdf,
 # which .github/workflows/release.yml attaches to every release. The version
@@ -34,7 +34,7 @@ if [[ -z "$version" ]]; then
 fi
 
 # The Maven plugin's example names the plugin's own version, which a
-# prerelease tag (1.0.1-rc.1) is not.
+# prerelease tag (0.1.1-rc.1) is not.
 plugin_version="$(sed -n '/<artifactId>sheriff-maven-plugin<\/artifactId>/,/<version>/s|.*<version>\(.*\)</version>.*|\1|p' "$repo/sheriff-maven-plugin/pom.xml" | head -n 1)"
 
 cd "$source_dir"

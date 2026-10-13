@@ -2,7 +2,7 @@
 # built and tested here rather than on someone's machine, its checksum, the
 # two installers, which download that jar by its public URL, with no GitHub
 # account, and the user's playbook in Spanish and English, with the release's
-# version on its cover. A tag with a suffix (v1.0.0-rc.1) becomes a
+# version on its cover. A tag with a suffix (v0.1.0-rc.1) becomes a
 # prerelease, which is how the whole path is tried before the real tag: the
 # one line a user runs never picks a prerelease.
 #

@@ -512,7 +512,7 @@ public final class HookInstaller {
      * property, {@code '-Dsheriff.docker=wsl'}, quoted, as PowerShell splits
      * an unquoted one at its dot: without it the hook found no {@code docker}
      * and let the turn end with nothing checked. Not as
-     * {@code set "SHERIFF_DOCKER=wsl"&& ...}, which version 1.0.6 wrote:
+     * {@code set "SHERIFF_DOCKER=wsl"&& ...}, which an earlier version wrote:
      * PowerShell handed {@code cmd} a {@code set "} that printed every
      * variable of the user's, and Codex gave that to the model as the turn
      * hook's context (13 October).
