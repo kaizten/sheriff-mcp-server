@@ -74,9 +74,6 @@ public final class ProjectLayout {
             MAVEN_BUILD, GRADLE_BUILD, GRADLE_KOTLIN_BUILD, NPM_MANIFEST, DeclaredProfile.FILE_NAME);
     private static final String SCRIPTS_FIELD = "scripts";
     private static final String TEST_SCRIPT = "test";
-    private static final String MAVEN_RUN = "mvn%s test";
-    private static final String GRADLE_RUN = "gradle test";
-    private static final String NPM_RUN = "npm test";
     private static final String NO_RUN = "";
     private static final String QUIET = " -q";
     private static final String NOT_QUIET = "";
@@ -372,8 +369,9 @@ public final class ProjectLayout {
      * <p>On Windows a model's shell is not {@code cmd.exe}: Claude Code runs
      * Git Bash and Codex runs PowerShell, and neither runs {@code mvnw.cmd}
      * from the folder it is in without {@code ./}, nor does Windows
-     * PowerShell know {@code &&}. {@code cd "C:/x"; ./mvnw.cmd test} reads
-     * the same in Git Bash, Windows PowerShell and PowerShell 7.
+     * PowerShell know {@code &&}. {@code cd 'C:/x'; ./mvnw.cmd test} and
+     * {@code mvn -f 'C:/x' test} read the same in Git Bash, Windows
+     * PowerShell and PowerShell 7.
      *
      * @param component the component, relative to the mount
      * @param windows whether the model's shell runs on Windows
@@ -382,7 +380,7 @@ public final class ProjectLayout {
     String testCommandForModel(String component, boolean windows) {
         Path absolute = mount.resolve(component).toAbsolutePath().normalize();
         if (windows) {
-            return command(component, WINDOWS_QUOTE + Platform.slashes(absolute) + WINDOWS_QUOTE, NOT_QUIET,
+            return command(component, Platform.quotedForAnyWindowsShell(absolute.toString()), NOT_QUIET,
                     TestShell.ANY_WINDOWS_SHELL);
         }
         return command(component, quoted(absolute.toString()), NOT_QUIET, TestShell.POSIX);
@@ -427,34 +425,34 @@ public final class ProjectLayout {
      * @return the command, or the one that says nothing could be verified
      */
     private String command(String component, String directory, String quiet, TestShell shell) {
-        String run = run(mount.resolve(component), quiet, shell);
-        return run.isEmpty() ? NO_BUILD_TOOL : String.format(shell.inDirectory(), directory, run);
+        String run = run(mount.resolve(component), shell);
+        return run.isEmpty() ? NO_BUILD_TOOL : String.format(run, directory, quiet);
     }
 
     /**
-     * What runs a component's tests once in its directory: the wrapper or
-     * tool it builds with.
+     * How a shell runs a component's tests: with the wrapper or the tool it
+     * builds with.
      *
      * @param root the component's directory
-     * @param quiet Maven's quiet option, or nothing
      * @param shell the shell the command is written for
-     * @return the command, or empty when no build tool with tests was found
+     * @return a format taking the quoted directory and Maven's options, or
+     *     empty when no build tool with tests was found
      */
-    private String run(Path root, String quiet, TestShell shell) {
+    private String run(Path root, TestShell shell) {
         if (Files.isRegularFile(root.resolve(MAVEN_WRAPPER))) {
-            return String.format(shell.mavenWrapper(), quiet);
+            return shell.mavenWrapper();
         }
         if (Files.isRegularFile(root.resolve(MAVEN_BUILD))) {
-            return String.format(MAVEN_RUN, quiet);
+            return shell.maven();
         }
         if (Files.isRegularFile(root.resolve(GRADLE_WRAPPER))) {
             return shell.gradleWrapper();
         }
         if (Files.isRegularFile(root.resolve(GRADLE_BUILD)) || Files.isRegularFile(root.resolve(GRADLE_KOTLIN_BUILD))) {
-            return GRADLE_RUN;
+            return shell.gradle();
         }
         if (hasNpmTestScript(root.resolve(NPM_MANIFEST))) {
-            return NPM_RUN;
+            return shell.npm();
         }
         return NO_RUN;
     }

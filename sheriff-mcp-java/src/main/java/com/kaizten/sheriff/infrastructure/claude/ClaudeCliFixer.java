@@ -76,6 +76,14 @@ import java.util.regex.Pattern;
  * the Codex backend, whose sandbox runs commands, reached green on the same
  * project. The rule is exact, so extra goals ({@code mvn -q test deploy})
  * are still refused; the loop runs the same tests itself after every pass.
+ *
+ * <p>On Windows the rule is Bash's alone, on purpose. Measured with Claude
+ * Code 2.1.296 on 13 October: with Bash's rule the tests ran; with a
+ * {@code PowerShell(...)} rule beside it the model chose PowerShell, where
+ * Claude Code refuses a {@code cd} followed by another command
+ * ("Compound command changes working directory") and Windows PowerShell
+ * does not know {@code &&}, so they never ran. With no rule for it,
+ * {@code claude -p} does not offer PowerShell at all.
  */
 public final class ClaudeCliFixer implements CodeFixer {
 

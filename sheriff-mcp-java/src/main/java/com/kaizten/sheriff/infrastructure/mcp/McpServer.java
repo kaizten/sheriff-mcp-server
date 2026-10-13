@@ -11,6 +11,7 @@ import com.kaizten.sheriff.infrastructure.mcp.tool.Tools;
 import com.kaizten.sheriff.infrastructure.process.ProcessRunner;
 import com.kaizten.sheriff.infrastructure.process.SystemProcessRunner;
 import java.io.BufferedReader;
+import java.io.Console;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -69,6 +70,7 @@ public final class McpServer {
     private static final String FAIL_FAST_VARIABLE = "SHERIFF_FAIL_FAST";
     private static final String ENABLED = "1";
     private static final String AGENT_FLAG = "--agent";
+    private static final String IS_TERMINAL = "isTerminal";
     private static final String OPTION_START = "-";
     private static final String UNKNOWN_OPTION = "Unknown option '%s': java -jar sheriff-mcp.jar --help lists them.%n";
     private static final int UNKNOWN_OPTION_EXIT = 2;
@@ -414,20 +416,56 @@ public final class McpServer {
      * here on {@code System.out} points at standard error, which clients log,
      * and only the stream returned here reaches the client.
      *
-     * <p>Both streams are UTF-8 from here on, which is what every client
-     * decodes. Java writes a pipe in the system's own encoding, which on
-     * Windows is Cp1252: a file named {@code Año.java} reached the model with
-     * a replacement character for its {@code ñ}, and a path under a user
-     * named {@code Jesús} the same.
-     *
      * @return the real standard output, for the protocol
      */
     static PrintStream claimStandardOutput() {
-        PrintStream protocol = utf8(System.out);
-        PrintStream errors = utf8(System.err);
+        return claimStandardOutput(onTerminal());
+    }
+
+    /**
+     * Takes standard output for the protocol alone, written for a terminal or
+     * for a program.
+     *
+     * <p>Read by a program, through a pipe, both streams are UTF-8 from here
+     * on, which is what every client decodes. Java writes a pipe in the
+     * system's own encoding, which on Windows is Cp1252: a file named
+     * {@code Año.java} reached the model with a replacement character for
+     * its {@code ñ}, and a path under a user named {@code Jesús} the same. On
+     * a terminal Java already writes in the console's own code page, and
+     * UTF-8 there showed {@code Año} as {@code A├▒o} in a Windows console in
+     * code page 850 (measured 13 October), so a person running
+     * {@code --check} or an installer keeps Java's choice.
+     *
+     * @param terminal whether both streams are a terminal a person reads
+     * @return the real standard output, for the protocol
+     */
+    static PrintStream claimStandardOutput(boolean terminal) {
+        PrintStream protocol = terminal ? System.out : utf8(System.out);
+        PrintStream errors = terminal ? System.err : utf8(System.err);
         System.setErr(errors);
         System.setOut(errors);
         return protocol;
+    }
+
+    /**
+     * Whether this process writes to a terminal rather than to a program.
+     * Java 17 to 21 give a console only on a terminal; from Java 22 there is
+     * always one, and {@code isTerminal} says which.
+     *
+     * @return whether standard input and output are a terminal
+     */
+    static boolean onTerminal() {
+        Console console = System.console();
+        if (console == null) {
+            return false;
+        }
+        try {
+            return (Boolean) Console.class.getMethod(IS_TERMINAL).invoke(console);
+        } catch (NoSuchMethodException exception) {
+            return true;
+        } catch (ReflectiveOperationException exception) {
+            return false;
+        }
     }
 
     /**

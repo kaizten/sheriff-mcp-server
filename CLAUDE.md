@@ -543,8 +543,10 @@ Sheriff's and git's always written with `/`, Claude Code rules in its POSIX
 form (`C:\x` as `//c/x`), and executables such as npm's `claude.cmd` found on
 the `PATH`. With `SHERIFF_DOCKER=wsl` (or `wsl:<distro>`; `install.sh
 --docker-wsl` under Git Bash and `install.ps1 -DockerWsl` set it for the user) every `docker` command becomes `wsl.exe
-docker`, a bind mount's `source=C:\x` written `/mnt/c/x`, for a Windows
-machine whose Docker is the engine inside WSL rather than Docker Desktop. The first Windows build found git paths with backslashes, which
+-e docker`, a bind mount's `source=C:\x` written `/mnt/c/x`, for a Windows
+machine whose Docker is the engine inside WSL rather than Docker Desktop.
+The `-e` runs it with no shell: without it the distribution's shell expanded
+a `$` in a path, and a project under `pay$app` was mounted from `pay`. The first Windows build found git paths with backslashes, which
 made every pass look out of scope; do not compare `Path.toString()` with a
 path Sheriff or git wrote. The end-to-end job stays on Linux: GitHub's macOS
 and Windows runners have no Docker for Linux containers.
@@ -555,25 +557,44 @@ server and the hooks run commands through `cmd.exe`, Claude Code runs its
 Bash tool in Git Bash and Codex runs PowerShell, and neither of the last two
 runs `mvnw.cmd` from the folder it is in, nor does Windows PowerShell know
 `&&`. So a command a model is told to run (`testCommandForModel`, `--call`)
-is `cd "C:/x"; ./mvnw.cmd test` there (`TestShell.ANY_WINDOWS_SHELL`),
-measured in bash, Windows PowerShell 5.1 and pwsh, and the loop's `Bash(...)`
-rule for Claude Code names `./mvnw.cmd` (`ClaudeCliFixer.inGitBash`); what the
-server and the hooks run stays in cmd's form, with the wrapper as
-`.\mvnw.cmd` (`TestShell.CMD`): Claude Code sets
+is `cd 'C:/x'; ./mvnw.cmd test` there for a wrapper, and `mvn -f 'C:/x'
+test`, `gradle -p` or `npm --prefix` for a tool on the PATH, with no `cd`
+that could fail and leave the tests running in another folder
+(`TestShell.ANY_WINDOWS_SHELL`), measured in bash, Windows PowerShell 5.1
+and pwsh. The quotes are single (`Platform.quotedForAnyWindowsShell`): double
+ones expanded a `$` or a backtick in a path in all three; only a path holding
+a `'` is double quoted, and a folder named with `[ ]` still defeats
+PowerShell's `cd`, which reads it as a wildcard, so only a wrapper there
+fails. The loop's `Bash(...)` rule for Claude Code names `./mvnw.cmd`
+(`ClaudeCliFixer.inGitBash`), and Bash's alone: with a `PowerShell(...)` rule
+beside it the model chose PowerShell, where Claude Code refuses a `cd`
+followed by another command, and the tests never ran (measured with Claude
+Code 2.1.296). What the server and the hooks run stays in cmd's form, with
+the wrapper as `.\mvnw.cmd` (`TestShell.CMD`): Claude Code sets
 `NoDefaultCurrentDirectoryInExePath=1` for the commands it runs, and with it
 cmd does not look in the current folder, so a bare `mvnw.cmd` made a
 `sheriff_fix` with `verify` report the project's tests as failing (measured
 13 October). **Java writes a pipe in Cp1252**, not UTF-8: `Año.java` reached the
-model as `A�o.java`, so `claimStandardOutput` makes both streams UTF-8 for
-every mode but `--agent`. **Codex passes a server none of the user's
-variables**: measured with Codex 0.162, a server got `HOME LANG LOGNAME PATH
-PWD SHELL SHLVL TERM USER` and nothing else, so `SHERIFF_DOCKER` goes into
-the entry's `env` and, for its hooks, into the line itself (`set
-"SHERIFF_DOCKER=wsl"&& ...` inside `cmd /d /s /c`). Without it a server under
-Codex with WSL's Docker ran a `docker` that was not there. The installers
-read it from the environment they are given, never from the process: read
-from the process, two tests failed on a Windows machine with
-`SHERIFF_DOCKER=wsl` while CI, which has none, passed.
+model as `A�o.java`, so `claimStandardOutput` makes both streams UTF-8 when
+they go to a program; on a terminal it keeps Java's own choice, the
+console's code page, as UTF-8 there showed `Año` as `A├▒o` (measured in a
+real console, code page 850). **Codex passes a server none of the user's
+variables**: measured with Codex 0.162, on Linux a server got `HOME LANG
+LOGNAME PATH PWD SHELL SHLVL TERM USER` and nothing else, and on Windows
+twenty of the system's (`PATH`, `SYSTEMROOT`, `USERPROFILE`, `TEMP` and the
+like) and no other, so `SHERIFF_DOCKER` goes into the entry's `env` and, for
+its hooks, into the line itself (`set "SHERIFF_DOCKER=wsl"&& ...` inside
+`cmd /d /s /c`). Without it a server under Codex with WSL's Docker ran a
+`docker` that was not there, and the Stop hook let a turn end unchecked;
+with it the same Codex analyzed and the hook blocked (13 October, with only
+those twenty variables). A `docker` of the user's own on the PATH, a script
+forwarding to WSL, hides all of this, so measure with it off the PATH. The
+installers read the variable from the environment they are given, never
+from the process: read from the process, two tests failed on a Windows
+machine with `SHERIFF_DOCKER=wsl` while CI, which has none, passed. A hook's
+payload may start with a byte order mark, as .NET Framework writes one, and
+is read without it: the mark failed the JSON and every hook let the turn
+through, saying nothing.
 
 **Sheriff's image is managed, not assumed** (`ImageProvisioning`). Missing, it
 is pulled with its own time limit (60 min, not the analysis's 300 s): in the

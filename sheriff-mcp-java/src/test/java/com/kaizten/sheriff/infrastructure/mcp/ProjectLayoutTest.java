@@ -211,11 +211,12 @@ final class ProjectLayoutTest {
         file("maven/pom.xml", "<project/>");
         ProjectLayout layout = ProjectLayout.detect(workspace);
         String wrapped = Platform.slashes(workspace.resolve("wrapped").toAbsolutePath().normalize());
-        assertEquals("cd \"" + wrapped + "\"; ./mvnw.cmd test", layout.testCommandForModel("wrapped", true));
-        assertTrue(layout.testCommandForModel("gradle", true).endsWith("\"; ./gradlew.bat test"),
+        String maven = Platform.slashes(workspace.resolve("maven").toAbsolutePath().normalize());
+        assertEquals("cd '" + wrapped + "'; ./mvnw.cmd test", layout.testCommandForModel("wrapped", true));
+        assertTrue(layout.testCommandForModel("gradle", true).endsWith("'; ./gradlew.bat test"),
                 layout.testCommandForModel("gradle", true));
-        assertTrue(layout.testCommandForModel("maven", true).endsWith("\"; mvn test"),
-                layout.testCommandForModel("maven", true));
+        assertEquals("mvn -f '" + maven + "' test", layout.testCommandForModel("maven", true),
+                "a tool on the PATH is given the folder, with no cd that could fail and leave it in another");
         assertFalse(layout.testCommandForModel("wrapped", true).contains("&&"), "Windows PowerShell has no &&");
         assertEquals("cd \"wrapped\" && .\\mvnw.cmd -q test", layout.verificationCommand("wrapped", true),
                 "what the server and the hooks run goes through cmd.exe, which with "

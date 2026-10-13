@@ -50,6 +50,8 @@ public final class ImageProvisioning {
     private static final String LINE_FORMAT = "%s%n";
     private static final String EMPTY = "";
     private static final String EXIT_CODE = "docker pull exited with %d";
+    private static final String FULL_STOP = ".";
+    private static final int START = 0;
     private static final String IMAGE_FIELD = "sheriff_image";
     private static final String DIGEST_FIELD = "sheriff_image_digest";
 
@@ -222,16 +224,16 @@ public final class ImageProvisioning {
     }
 
     /**
-     * Why a pull failed, in Docker's own words when it gave any.
+     * Why a pull failed, in Docker's own words when it gave any, without a
+     * closing full stop, which the sentence it goes into has already: a
+     * missing {@code docker} read "not on the PATH.. Check".
      *
      * @param outcome what the pull did
      * @return the reason
      */
     private static String reasonOf(ProcessOutcome outcome) {
-        if (!outcome.ran()) {
-            return outcome.failure();
-        }
-        String said = outcome.standardError().strip();
-        return said.isEmpty() ? String.format(EXIT_CODE, outcome.exitCode()) : said;
+        String said = outcome.ran() ? outcome.standardError().strip() : outcome.failure().strip();
+        String reason = said.isEmpty() ? String.format(EXIT_CODE, outcome.exitCode()) : said;
+        return reason.endsWith(FULL_STOP) ? reason.substring(START, reason.length() - FULL_STOP.length()) : reason;
     }
 }

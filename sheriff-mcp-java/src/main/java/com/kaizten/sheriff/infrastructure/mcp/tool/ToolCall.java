@@ -23,10 +23,7 @@ public final class ToolCall {
     private static final String PROFILE_ARGUMENT = " profile=%s";
     private static final String QUOTE = "'";
     private static final String ESCAPED_QUOTE = "'\\''";
-    private static final String WINDOWS_QUOTE = "\"";
     private static final String NOTHING = "";
-    private static final char BACKSLASH = '\\';
-    private static final char SLASH = '/';
 
     private final Path directory;
     private final Path jar;
@@ -70,8 +67,9 @@ public final class ToolCall {
      *
      * <p>On Windows a model's shell is Git Bash under Claude Code and
      * PowerShell under Codex, and Windows PowerShell does not know
-     * {@code &&}: the command there is joined with {@code ;}, double quoted
-     * and with forward slashes, which all of them read the same.
+     * {@code &&}: the command there is joined with {@code ;}, quoted as
+     * {@link Platform#quotedForAnyWindowsShell} says and with forward
+     * slashes, which all of them read the same.
      *
      * @param directory the directory the first command was run in
      * @param jar this jar
@@ -112,7 +110,7 @@ public final class ToolCall {
      */
     private String quoted(String text) {
         if (windows) {
-            return WINDOWS_QUOTE + text.replace(BACKSLASH, SLASH) + WINDOWS_QUOTE;
+            return Platform.quotedForAnyWindowsShell(text);
         }
         return QUOTE + text.replace(QUOTE, ESCAPED_QUOTE) + QUOTE;
     }
