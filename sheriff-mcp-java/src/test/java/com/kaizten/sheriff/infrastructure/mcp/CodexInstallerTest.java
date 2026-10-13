@@ -53,13 +53,16 @@ final class CodexInstallerTest {
     }
 
     private static String unwrapped(String command) {
-        String prefix = "cmd /d /s /c \"";
-        return command.startsWith(prefix) ? command.substring(prefix.length(), command.length() - 1) : command;
+        String prefix = "& ";
+        String suffix = "; exit $LASTEXITCODE";
+        return command.startsWith(prefix) && command.endsWith(suffix)
+                ? command.substring(prefix.length(), command.length() - suffix.length()) : command;
     }
 
     @Test
-    @DisplayName("on Windows a hook is an argument of cmd /d /s /c, as cmd /c strips the quotes a line starts with")
-    void onWindowsTheHookLineDoesNotStartWithAQuote() throws Exception {
+    @DisplayName("on Windows a hook is a PowerShell line, as Codex runs it in Windows PowerShell: & before the "
+            + "quoted path, single quotes, and the exit code passed on, or a block reads as a failure")
+    void onWindowsTheHookLineIsPowerShells() throws Exception {
         PrintStream out = new PrintStream(output, true, StandardCharsets.UTF_8);
         Path jar = home.resolve("sheriff agent/sheriff-mcp.jar");
         assertEquals(0, HookInstaller.forCodex(jar, codexHome(), home, out, true, Map.of())
@@ -67,10 +70,9 @@ final class CodexInstallerTest {
 
         JsonNode hooks = JSON.readTree(read("hooks.json")).path("hooks");
         String stop = hooks.at("/Stop/0/hooks/0/command").asText();
-        assertTrue(stop.startsWith("cmd /d /s /c \"\""), stop);
-        assertTrue(stop.contains("/opt/java home/bin/java\" -jar \""), stop);
-        assertTrue(stop.endsWith("sheriff-mcp.jar\" --hook-stop\""), stop);
-        assertTrue(hooks.at("/UserPromptSubmit/0/hooks/0/command").asText().endsWith("--hook-turn\""),
+        assertTrue(stop.startsWith("& '") && stop.contains("/opt/java home/bin/java' -jar '"), stop);
+        assertTrue(stop.endsWith("sheriff-mcp.jar' --hook-stop; exit $LASTEXITCODE"), stop);
+        assertTrue(hooks.at("/UserPromptSubmit/0/hooks/0/command").asText().endsWith("--hook-turn; exit $LASTEXITCODE"),
                 hooks.toString());
 
         assertEquals(0, HookInstaller.forCodex(jar, codexHome(), home, out, true, Map.of()).uninstall());
@@ -78,16 +80,40 @@ final class CodexInstallerTest {
     }
 
     @Test
-    @DisplayName("with WSL's Docker a Codex hook sets SHERIFF_DOCKER itself, as Codex passes it almost no variable")
-    void onWindowsWithWslTheHookSetsTheVariable() throws Exception {
+    @DisplayName("with WSL's Docker a Codex hook gives Java SHERIFF_DOCKER as a property, with no set that "
+            + "printed every variable to the model")
+    void onWindowsWithWslTheHookPassesTheProperty() throws Exception {
         PrintStream out = new PrintStream(output, true, StandardCharsets.UTF_8);
         Path jar = home.resolve("sheriff-mcp.jar");
         assertEquals(0, HookInstaller.forCodex(jar, codexHome(), home, out, true,
                 Map.of("SHERIFF_DOCKER", " wsl:Ubuntu ")).install());
 
         String stop = JSON.readTree(read("hooks.json")).at("/hooks/Stop/0/hooks/0/command").asText();
-        assertTrue(stop.startsWith("cmd /d /s /c \"set \"SHERIFF_DOCKER=wsl:Ubuntu\"&& java -jar \""), stop);
-        assertTrue(stop.endsWith("--hook-stop\""), stop);
+        assertTrue(stop.startsWith("& java '-Dsheriff.docker=wsl:Ubuntu' -jar '"), stop);
+        assertTrue(stop.endsWith("--hook-stop; exit $LASTEXITCODE"), stop);
+        assertFalse(stop.contains("set ") || stop.contains("&&"), stop);
+    }
+
+    @Test
+    @DisplayName("a path with a single quote keeps it, doubled as PowerShell reads it, and a $ stays as it is")
+    void aPathIsQuotedForPowerShell() throws Exception {
+        PrintStream out = new PrintStream(output, true, StandardCharsets.UTF_8);
+        assertEquals(0, HookInstaller.forCodex(home.resolve("o'brien $x/sheriff-mcp.jar"), codexHome(), home, out,
+                true, Map.of()).install());
+
+        String stop = JSON.readTree(read("hooks.json")).at("/hooks/Stop/0/hooks/0/command").asText();
+        assertTrue(stop.contains("o''brien $x/sheriff-mcp.jar'"), stop);
+    }
+
+    @Test
+    @DisplayName("a SHERIFF_DOCKER no shell could read as it is never reaches a hook's line")
+    void anUnplainDockerSettingIsLeftOut() throws Exception {
+        PrintStream out = new PrintStream(output, true, StandardCharsets.UTF_8);
+        assertEquals(0, HookInstaller.forCodex(home.resolve("sheriff-mcp.jar"), codexHome(), home, out, true,
+                Map.of("SHERIFF_DOCKER", "wsl:my distro&x")).install());
+
+        String stop = JSON.readTree(read("hooks.json")).at("/hooks/Stop/0/hooks/0/command").asText();
+        assertFalse(stop.contains("sheriff.docker"), stop);
     }
 
     @Test
@@ -133,7 +159,7 @@ final class CodexInstallerTest {
         String config = read("config.toml");
         assertEquals(Platform.windows(), config.contains("SHERIFF_DOCKER = \"wsl\""), config);
         assertEquals(Platform.windows(), config.contains("tool_timeout_sec = 1800"), config);
-        assertEquals(Platform.windows(), read("hooks.json").contains("SHERIFF_DOCKER=wsl"), read("hooks.json"));
+        assertEquals(Platform.windows(), read("hooks.json").contains("-Dsheriff.docker=wsl"), read("hooks.json"));
     }
 
     @Test
