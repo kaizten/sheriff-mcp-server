@@ -89,6 +89,9 @@ public final class ClaudeCliFixer implements CodeFixer {
     private static final String TEST_RULE = ",Bash(%s)";
     private static final String LEADING_CD_PATTERN = "^cd\\s+('[^']*'|\"[^\"]*\"|\\S+)\\s*&&\\s*";
     private static final Pattern LEADING_CD = Pattern.compile(LEADING_CD_PATTERN);
+    private static final String CMD_WRAPPER_PATTERN = "(^|&&\\s*)(mvnw\\.cmd|gradlew\\.bat)(?=\\s|$)";
+    private static final Pattern CMD_WRAPPER = Pattern.compile(CMD_WRAPPER_PATTERN);
+    private static final String FROM_THIS_FOLDER = "$1./$2";
     private static final String RULE_OPEN = "(";
     private static final String RULE_CLOSE = ")";
     private static final String EMPTY = "";
@@ -180,8 +183,23 @@ public final class ClaudeCliFixer implements CodeFixer {
         this.promptLog = promptLog;
         this.repositoryRoot = repositoryRoot;
         this.component = component;
-        this.testCommand = testCommand;
+        this.testCommand = inGitBash(testCommand, Platform.windows());
         this.timeout = timeout;
+    }
+
+    /**
+     * The test command as Claude Code runs it: on Windows its shell is Git
+     * Bash, which does not run {@code mvnw.cmd} or {@code gradlew.bat} from
+     * the folder it is in, as {@code cmd.exe} does, without {@code ./}.
+     *
+     * @param testCommand the loop's test command, written for the platform's
+     *     own shell
+     * @param windows whether Claude Code runs on Windows
+     * @return the command with its wrapper named from the current folder on
+     *     Windows, and unchanged elsewhere
+     */
+    static String inGitBash(String testCommand, boolean windows) {
+        return windows ? CMD_WRAPPER.matcher(testCommand).replaceFirst(FROM_THIS_FOLDER) : testCommand;
     }
 
     /**

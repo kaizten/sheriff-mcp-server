@@ -9,6 +9,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -78,6 +79,15 @@ class PlatformTests {
         assertFalse(Platform.dockerThroughWsl(true, Map.of()));
         assertFalse(Platform.dockerThroughWsl(true, Map.of("SHERIFF_DOCKER", "docker")));
         assertFalse(Platform.dockerThroughWsl(false, Map.of("SHERIFF_DOCKER", "wsl")));
+    }
+
+    @Test
+    @DisplayName("the setting an installer passes on is the variable's own, and only where it applies")
+    void theDockerSettingToPassOn() {
+        assertEquals(Optional.of("wsl:Ubuntu"), Platform.dockerSetting(true, Map.of("SHERIFF_DOCKER", " wsl:Ubuntu ")));
+        assertEquals(Optional.of("wsl"), Platform.dockerSetting(true, Map.of("SHERIFF_DOCKER", "wsl")));
+        assertEquals(Optional.empty(), Platform.dockerSetting(false, Map.of("SHERIFF_DOCKER", "wsl")));
+        assertEquals(Optional.empty(), Platform.dockerSetting(true, Map.of()));
     }
 
     @Test

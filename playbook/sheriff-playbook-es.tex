@@ -306,7 +306,10 @@ curl -fsSL .../install.sh | bash -s -- --pull-always
 -{}-install-docker & -InstallDocker & Instala Docker si falta y lo arranca si
   está parado. \\
 -{}-docker-wsl & -DockerWsl & Windows: usa el Docker instalado dentro de WSL, sin Docker
-  Desktop. Después, reinicia Claude Code. \\
+  Desktop. Va también en el registro de cada asistente, porque Codex no pasa al
+  servidor ninguna de tus variables. Después, reinicia Claude Code. Para volver
+  a Docker Desktop, quita la variable (ver Actualizar y desinstalar) y ejecuta la línea de
+  nuevo. \\
 -{}-pull-always & -PullAlways & Descarga una imagen de Sheriff más nueva cada vez
   que arranca el servidor. Sin ella, solo se avisa una vez por sesión, para que
   no cambien las reglas a mitad de un trabajo. Hay que repetirla en cada

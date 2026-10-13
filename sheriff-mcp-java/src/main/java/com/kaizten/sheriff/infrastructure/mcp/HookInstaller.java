@@ -12,6 +12,7 @@ import java.nio.file.Path;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Wires this jar's hooks into Claude Code's settings, for one project or for
@@ -76,7 +77,11 @@ public final class HookInstaller {
     private static final String HOOK_COMMAND = "%s -jar %s %s%s";
     private static final String JAVA_ON_THE_PATH = "java";
     private static final String QUOTED = "\"%s\"";
+    private static final String AS_IT_IS = "%s";
     private static final String THROUGH_CMD = "cmd /d /s /c \"%s\"";
+    private static final String WITH_DOCKER = "set \"SHERIFF_DOCKER=%s\"&& %s";
+    private static final String PERCENT = "%";
+    private static final String ESCAPED_PERCENT = "%%";
     private static final String HOME_REFERENCE = "$HOME/";
     private static final char BACKSLASH = '\\';
     private static final char SLASH = '/';
@@ -119,7 +124,7 @@ public final class HookInstaller {
     private final boolean withGate;
     private final boolean failFast;
     private final String java;
-    private final boolean throughCmd;
+    private final String commandFormat;
 
     /**
      * Wires an installer for one project.
@@ -131,7 +136,7 @@ public final class HookInstaller {
      */
     public HookInstaller(Path project, Path jar, Path home, PrintStream output) {
         this(project.resolve(SETTINGS_DIRECTORY).resolve(SETTINGS_FILE), jar, home, output, INSTALLED, true, false,
-                JAVA_ON_THE_PATH, false);
+                JAVA_ON_THE_PATH, AS_IT_IS);
     }
 
     /**
@@ -146,11 +151,12 @@ public final class HookInstaller {
      * @param failFast whether the hooks ask Sheriff to stop at the first error
      * @param java the Java the hooks run with: {@code java}, found on the
      *     PATH when they run, or a path to one
-     * @param throughCmd whether each command is written as an argument of
-     *     {@code cmd /d /s /c}, for Codex on Windows
+     * @param commandFormat how each command line is written around the
+     *     command: as it is, or as an argument of {@code cmd /d /s /c} for
+     *     Codex on Windows
      */
     private HookInstaller(Path settings, Path jar, Path home, PrintStream output, String installed,
-            boolean withGate, boolean failFast, String java, boolean throughCmd) {
+            boolean withGate, boolean failFast, String java, String commandFormat) {
         this.settings = settings;
         this.jar = jar;
         this.home = home;
@@ -159,7 +165,7 @@ public final class HookInstaller {
         this.withGate = withGate;
         this.failFast = failFast;
         this.java = java;
-        this.throughCmd = throughCmd;
+        this.commandFormat = commandFormat;
     }
 
     /**
@@ -171,7 +177,7 @@ public final class HookInstaller {
      * @return that installer
      */
     public HookInstaller failingFast() {
-        return new HookInstaller(settings, jar, home, output, installed, withGate, true, java, throughCmd);
+        return new HookInstaller(settings, jar, home, output, installed, withGate, true, java, commandFormat);
     }
 
     /**
@@ -189,7 +195,7 @@ public final class HookInstaller {
      */
     public HookInstaller runningWith(Path executable) {
         return new HookInstaller(settings, jar, home, output, installed, withGate, failFast,
-                pathReference(executable), throughCmd);
+                pathReference(executable), commandFormat);
     }
 
     /**
@@ -357,7 +363,7 @@ public final class HookInstaller {
         entry.put(TYPE, COMMAND_TYPE);
         String command = String.format(HOOK_COMMAND, javaReference(), jarReference(), flag,
                 failFast ? FAIL_FAST_OPTION : NO_OPTION);
-        entry.put(COMMAND, throughCmd ? String.format(THROUGH_CMD, command) : command);
+        entry.put(COMMAND, String.format(commandFormat, command));
         return group;
     }
 
@@ -471,7 +477,7 @@ public final class HookInstaller {
      */
     public static HookInstaller forUser(Path jar, Path home, PrintStream output) {
         return new HookInstaller(home.resolve(SETTINGS_DIRECTORY).resolve(SETTINGS_FILE), jar, home, output,
-                INSTALLED_FOR_USER, true, false, JAVA_ON_THE_PATH, false);
+                INSTALLED_FOR_USER, true, false, JAVA_ON_THE_PATH, AS_IT_IS);
     }
 
     /**
@@ -485,7 +491,7 @@ public final class HookInstaller {
      * @return the installer
      */
     public static HookInstaller forCodex(Path jar, Path codexHome, Path home, PrintStream output) {
-        return forCodex(jar, codexHome, home, output, Platform.windows());
+        return forCodex(jar, codexHome, home, output, Platform.windows(), System.getenv());
     }
 
     /**
@@ -498,15 +504,37 @@ public final class HookInstaller {
      * Written as an argument of {@code cmd /d /s /c}, the line starts with
      * {@code cmd} and the inner shell keeps the quotes.
      *
+     * <p>Codex gives a hook almost none of the user's variables either, so
+     * with WSL's Docker the line sets {@code SHERIFF_DOCKER} itself, which
+     * {@code cmd} hands on to the hook: without it the hook found no
+     * {@code docker} and let the turn end with nothing checked.
+     *
      * @param jar this jar
      * @param codexHome Codex's home, {@code CODEX_HOME} or {@code ~/.codex}
      * @param home the user's home
      * @param output where to report
      * @param windows whether Codex runs on Windows
+     * @param environment where {@code SHERIFF_DOCKER} is read, as the
+     *     installers leave it
      * @return the installer
      */
-    static HookInstaller forCodex(Path jar, Path codexHome, Path home, PrintStream output, boolean windows) {
+    static HookInstaller forCodex(Path jar, Path codexHome, Path home, PrintStream output, boolean windows,
+            Map<String, String> environment) {
         return new HookInstaller(codexHome.resolve(CODEX_HOOKS_FILE), jar, home, output, INSTALLED_FOR_CODEX, false,
-                false, JAVA_ON_THE_PATH, windows);
+                false, JAVA_ON_THE_PATH, windows ? cmdFormat(Platform.dockerSetting(windows, environment)) : AS_IT_IS);
+    }
+
+    /**
+     * How a hook's line is written for Codex on Windows: as an argument of
+     * {@code cmd /d /s /c}, after setting {@code SHERIFF_DOCKER} when there
+     * is one to set.
+     *
+     * @param docker the {@code SHERIFF_DOCKER} to set, if any
+     * @return a format taking the command
+     */
+    private static String cmdFormat(Optional<String> docker) {
+        String inner = docker.map(setting -> String.format(WITH_DOCKER, setting.replace(PERCENT, ESCAPED_PERCENT),
+                AS_IT_IS)).orElse(AS_IT_IS);
+        return String.format(THROUGH_CMD, inner);
     }
 }

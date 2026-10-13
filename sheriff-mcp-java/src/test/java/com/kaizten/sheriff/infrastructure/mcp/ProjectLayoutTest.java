@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.kaizten.sheriff.infrastructure.process.Platform;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -190,10 +191,33 @@ final class ProjectLayoutTest {
     void theModelsTestCommandIsAbsoluteAndNotQuiet() throws IOException {
         file("app/src/A.java", "class A {}");
         file("app/pom.xml", "<project/>");
-        String command = ProjectLayout.detect(workspace).testCommandForModel("app");
+        String command = ProjectLayout.detect(workspace).testCommandForModel("app", false);
         assertTrue(command.contains(workspace.resolve("app").toAbsolutePath().normalize().toString()), command);
         assertFalse(command.contains(" -q"), command);
         assertTrue(ProjectLayout.detect(workspace).verificationCommand("app").contains(" -q"),
                 "the server's own run stays quiet: it reads the exit code");
+    }
+
+    @Test
+    @DisplayName("on Windows the model's command reads the same in Git Bash and in either PowerShell, not only cmd")
+    void onWindowsTheModelsCommandRunsInItsShell() throws IOException {
+        file("wrapped/src/A.java", "class A {}");
+        file("wrapped/pom.xml", "<project/>");
+        file("wrapped/mvnw", "#!/bin/sh");
+        file("gradle/src/A.java", "class A {}");
+        file("gradle/build.gradle", "");
+        file("gradle/gradlew", "#!/bin/sh");
+        file("maven/src/A.java", "class A {}");
+        file("maven/pom.xml", "<project/>");
+        ProjectLayout layout = ProjectLayout.detect(workspace);
+        String wrapped = Platform.slashes(workspace.resolve("wrapped").toAbsolutePath().normalize());
+        assertEquals("cd \"" + wrapped + "\"; ./mvnw.cmd test", layout.testCommandForModel("wrapped", true));
+        assertTrue(layout.testCommandForModel("gradle", true).endsWith("\"; ./gradlew.bat test"),
+                layout.testCommandForModel("gradle", true));
+        assertTrue(layout.testCommandForModel("maven", true).endsWith("\"; mvn test"),
+                layout.testCommandForModel("maven", true));
+        assertFalse(layout.testCommandForModel("wrapped", true).contains("&&"), "Windows PowerShell has no &&");
+        assertEquals("cd \"wrapped\" && mvnw.cmd -q test", layout.verificationCommand("wrapped", true),
+                "what the server and the hooks run goes through cmd.exe, which finds the wrapper as it is");
     }
 }

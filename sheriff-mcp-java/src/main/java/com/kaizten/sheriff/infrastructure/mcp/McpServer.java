@@ -14,6 +14,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.io.PrintStream;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
@@ -413,12 +414,31 @@ public final class McpServer {
      * here on {@code System.out} points at standard error, which clients log,
      * and only the stream returned here reaches the client.
      *
+     * <p>Both streams are UTF-8 from here on, which is what every client
+     * decodes. Java writes a pipe in the system's own encoding, which on
+     * Windows is Cp1252: a file named {@code Año.java} reached the model with
+     * a replacement character for its {@code ñ}, and a path under a user
+     * named {@code Jesús} the same.
+     *
      * @return the real standard output, for the protocol
      */
     static PrintStream claimStandardOutput() {
-        PrintStream protocol = System.out;
-        System.setOut(System.err);
+        PrintStream protocol = utf8(System.out);
+        PrintStream errors = utf8(System.err);
+        System.setErr(errors);
+        System.setOut(errors);
         return protocol;
+    }
+
+    /**
+     * A stream that writes text as UTF-8 to another, whose bytes it passes on
+     * as they are.
+     *
+     * @param stream where the bytes go
+     * @return the stream, flushed at every line
+     */
+    private static PrintStream utf8(OutputStream stream) {
+        return new PrintStream(stream, true, StandardCharsets.UTF_8);
     }
 
     /**

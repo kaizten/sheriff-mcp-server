@@ -4,11 +4,13 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.kaizten.sheriff.infrastructure.process.Platform;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Sets Antigravity's command line, {@code agy}, up for this jar, for every
@@ -49,6 +51,7 @@ public final class AntigravityInstaller {
     private static final String DISABLED = "disabled";
     private static final String ENVIRONMENT = "env";
     private static final String PULL_VARIABLE = "SHERIFF_PULL";
+    private static final String DOCKER_VARIABLE = "SHERIFF_DOCKER";
     private static final String PULL_ALWAYS = "always";
     private static final String PERMISSIONS = "permissions";
     private static final String ALLOW = "allow";
@@ -250,14 +253,34 @@ public final class AntigravityInstaller {
      * @return the entry
      */
     ObjectNode serverEntry() {
+        return serverEntry(Platform.windows(), System.getenv());
+    }
+
+    /**
+     * The server's entry, for a given platform and environment: with
+     * {@code SHERIFF_DOCKER} when Docker is WSL's, as for Codex, since a
+     * server given none of the user's variables would run a {@code docker}
+     * that is not there.
+     *
+     * @param windows whether the platform is Windows
+     * @param environment where {@code SHERIFF_DOCKER} is read, as the
+     *     installers leave it
+     * @return the entry
+     */
+    ObjectNode serverEntry(boolean windows, Map<String, String> environment) {
         ObjectNode entry = json.createObjectNode();
         entry.put(COMMAND, java);
         ArrayNode arguments = entry.putArray(ARGUMENTS);
         arguments.add(JAR_OPTION);
         arguments.add(jar.toAbsolutePath().normalize().toString());
         entry.put(DISABLED, false);
+        ObjectNode variables = json.createObjectNode();
         if (pullAlways) {
-            entry.putObject(ENVIRONMENT).put(PULL_VARIABLE, PULL_ALWAYS);
+            variables.put(PULL_VARIABLE, PULL_ALWAYS);
+        }
+        Platform.dockerSetting(windows, environment).ifPresent(setting -> variables.put(DOCKER_VARIABLE, setting));
+        if (!variables.isEmpty()) {
+            entry.set(ENVIRONMENT, variables);
         }
         return entry;
     }

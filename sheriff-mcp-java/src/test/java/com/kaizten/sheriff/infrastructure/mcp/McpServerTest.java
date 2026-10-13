@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.PrintStream;
+import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -93,6 +94,28 @@ final class McpServerTest {
         assertEquals("{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{}}" + System.lineSeparator(),
                 out.toString(StandardCharsets.UTF_8));
         assertTrue(err.toString(StandardCharsets.UTF_8).contains("Iteration 1"));
+    }
+
+    @Test
+    @DisplayName("the protocol and the progress are UTF-8 even where Java writes a pipe in Cp1252, as on Windows")
+    void bothStreamsAreUtf8WhateverThePlatformWrites() {
+        PrintStream originalOut = System.out;
+        PrintStream originalErr = System.err;
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        ByteArrayOutputStream err = new ByteArrayOutputStream();
+        Charset windows = Charset.forName("windows-1252");
+        System.setOut(new PrintStream(out, true, windows));
+        System.setErr(new PrintStream(err, true, windows));
+        try {
+            PrintStream protocol = McpServer.claimStandardOutput();
+            protocol.println("A\u00f1o.java");
+            System.err.println("Jes\u00fas");
+        } finally {
+            System.setOut(originalOut);
+            System.setErr(originalErr);
+        }
+        assertEquals("A\u00f1o.java" + System.lineSeparator(), out.toString(StandardCharsets.UTF_8));
+        assertEquals("Jes\u00fas" + System.lineSeparator(), err.toString(StandardCharsets.UTF_8));
     }
 
     @Test

@@ -53,7 +53,10 @@ public final class CodexInstaller {
             [mcp_servers.%s.tools.sheriff_fix]
             approval_mode = "approve"
             """;
-    private static final String PULL_ALWAYS_LINE = "env = { SHERIFF_PULL = \"always\" }\n";
+    private static final String ENVIRONMENT_LINE = "env = { %s }\n";
+    private static final String PULL_ALWAYS_PAIR = "SHERIFF_PULL = \"always\"";
+    private static final String DOCKER_PAIR = "SHERIFF_DOCKER = \"%s\"";
+    private static final String PAIR_SEPARATOR = ", ";
     private static final String PULL_ALWAYS_NOTE =
             "  image          pulled again each time the server starts, when a newer one is published\n";
     private static final String BEGIN_MARKER =
@@ -273,9 +276,33 @@ public final class CodexInstaller {
      */
     String serverEntry() {
         String path = tomlString(jar.toAbsolutePath().normalize().toString());
-        String environment = pullAlways ? PULL_ALWAYS_LINE : BLANK;
         return String.format(SERVER_ENTRY, SERVER_NAME, java, path,
-                toolTimeoutSeconds(Platform.windows(), System.getenv()), environment, SERVER_NAME);
+                toolTimeoutSeconds(Platform.windows(), System.getenv()),
+                environmentLine(pullAlways, Platform.windows(), System.getenv()), SERVER_NAME);
+    }
+
+    /**
+     * The variables the server's entry gives it, as one TOML line: Codex
+     * starts a server with almost none of the user's, so
+     * {@code SHERIFF_PULL} and {@code SHERIFF_DOCKER} reach it only from
+     * here. Without the second, a server under Codex on Windows with
+     * WSL's Docker ran a {@code docker} that was not there, and its runs
+     * kept the 300 s meant for Docker Desktop.
+     *
+     * @param pullAlways whether the server pulls a newer image each start
+     * @param windows whether the platform is Windows
+     * @param environment where {@code SHERIFF_DOCKER} is read, as the
+     *     installers leave it
+     * @return the line, or nothing when there is no variable to give
+     */
+    static String environmentLine(boolean pullAlways, boolean windows, Map<String, String> environment) {
+        List<String> pairs = new ArrayList<>();
+        if (pullAlways) {
+            pairs.add(PULL_ALWAYS_PAIR);
+        }
+        Platform.dockerSetting(windows, environment)
+                .ifPresent(setting -> pairs.add(String.format(DOCKER_PAIR, tomlString(setting))));
+        return pairs.isEmpty() ? BLANK : String.format(ENVIRONMENT_LINE, String.join(PAIR_SEPARATOR, pairs));
     }
 
     /**

@@ -34,4 +34,12 @@ class ToolCallTest {
                 phrase);
         assertTrue(command.phrase("sheriff_test", "it's", "").contains("component='it'\\''s'"), "a quote is escaped");
     }
+
+    @Test
+    @DisplayName("on Windows the command is joined with ; and written with /, so Git Bash and PowerShell both run it")
+    void onWindowsTheCommandRunsInEitherShell() {
+        ToolCall command = ToolCall.throughCommandLine(Path.of("/work/my app"), Path.of("/opt/sheriff-mcp.jar"), true);
+        assertEquals("run `cd \"/work/my app\"; java -jar \"/opt/sheriff-mcp.jar\" --call sheriff_fix component=\"api\"`",
+                command.phrase("sheriff_fix", "api", ""));
+    }
 }

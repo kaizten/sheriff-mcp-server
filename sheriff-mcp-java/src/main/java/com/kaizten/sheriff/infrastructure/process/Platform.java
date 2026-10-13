@@ -186,6 +186,25 @@ public final class Platform {
     }
 
     /**
+     * The {@code SHERIFF_DOCKER} an installer writes into what an assistant
+     * starts, as {@code wsl} or {@code wsl:<name>}: Codex starts its servers
+     * and hooks with almost none of the user's variables (measured with Codex
+     * 0.162: {@code HOME}, {@code PATH} and a few more), so one that is not in
+     * its entry never reaches the jar, which then runs a {@code docker} that
+     * is not there. Empty wherever {@link #dockerThroughWsl} is false.
+     *
+     * @param windows whether the platform is Windows
+     * @param environment where {@code SHERIFF_DOCKER} is read
+     * @return the value to pass on, or empty
+     */
+    public static Optional<String> dockerSetting(boolean windows, Map<String, String> environment) {
+        if (!dockerThroughWsl(windows, environment)) {
+            return Optional.empty();
+        }
+        return Optional.of(environment.get(DOCKER_VARIABLE).trim());
+    }
+
+    /**
      * An argument with the Windows directory of a bind mount's source turned
      * into the path WSL sees it at.
      *

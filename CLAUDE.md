@@ -549,6 +549,24 @@ made every pass look out of scope; do not compare `Path.toString()` with a
 path Sheriff or git wrote. The end-to-end job stays on Linux: GitHub's macOS
 and Windows runners have no Docker for Linux containers.
 
+Three more things differ on Windows, and none of them shows in its CI, which
+has no Docker and no assistant. **Every shell is a different one**: the
+server and the hooks run commands through `cmd.exe`, Claude Code runs its
+Bash tool in Git Bash and Codex runs PowerShell, and neither of the last two
+runs `mvnw.cmd` from the folder it is in, nor does Windows PowerShell know
+`&&`. So a command a model is told to run (`testCommandForModel`, `--call`)
+is `cd "C:/x"; ./mvnw.cmd test` there (`TestShell.ANY_WINDOWS_SHELL`),
+measured in bash and pwsh, and the loop's `Bash(...)` rule for Claude Code
+names `./mvnw.cmd` (`ClaudeCliFixer.inGitBash`); what the server and the hooks
+run stays in cmd's form. **Java writes a pipe in Cp1252**, not UTF-8: `Año.java` reached the
+model as `A�o.java`, so `claimStandardOutput` makes both streams UTF-8 for
+every mode but `--agent`. **Codex passes a server none of the user's
+variables**: measured with Codex 0.162, a server got `HOME LANG LOGNAME PATH
+PWD SHELL SHLVL TERM USER` and nothing else, so `SHERIFF_DOCKER` goes into
+the entry's `env` and, for its hooks, into the line itself (`set
+"SHERIFF_DOCKER=wsl"&& ...` inside `cmd /d /s /c`). Without it a server under
+Codex with WSL's Docker ran a `docker` that was not there.
+
 **Sheriff's image is managed, not assumed** (`ImageProvisioning`). Missing, it
 is pulled with its own time limit (60 min, not the analysis's 300 s): in the
 background from the MCP server's start, with the tools answering "being
