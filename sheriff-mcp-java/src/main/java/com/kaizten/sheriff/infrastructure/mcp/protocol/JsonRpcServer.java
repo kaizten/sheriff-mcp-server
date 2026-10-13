@@ -14,6 +14,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiFunction;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 /**
@@ -34,9 +35,10 @@ import java.util.function.Supplier;
  * the order they arrived, and everything else is answered at once: a call can
  * take minutes (Sheriff, then the project's tests), and while it ran this
  * server read nothing more, so a client's {@code ping} went unanswered until
- * it finished. Responses are written whole, one per line, whichever thread
- * writes them; when the input ends, the calls already read are answered
- * before this returns.
+ * it finished. A tool that runs neither Sheriff nor the tests has a second
+ * thread, so that it does not wait behind one that does. Responses are
+ * written whole, one per line, whichever thread writes them; when the input
+ * ends, the calls already read are answered before this returns.
  *
  * <p>A tool that fails answers as a normal result carrying {@code isError},
  * never as a JSON-RPC error: a JSON-RPC error means the call itself was
@@ -91,10 +93,13 @@ public final class JsonRpcServer {
     private static final String INSTRUCTIONS_FIELD = "instructions";
     private static final String NO_INSTRUCTIONS = "";
     private static final String CALL_THREAD = "sheriff-call";
+    private static final String QUICK_CALL_THREAD = "sheriff-quick-call";
+    private static final Predicate<String> NONE_AT_ONCE = name -> false;
     private static final long DRAIN_HOURS = 6;
 
     private final Supplier<List<Map<String, Object>>> listTools;
     private final BiFunction<String, Map<String, Object>, ToolOutcome> callTool;
+    private final Predicate<String> answersAtOnce;
     private final String serverName;
     private final String instructions;
     private final ObjectMapper json = new ObjectMapper();
@@ -128,8 +133,29 @@ public final class JsonRpcServer {
             BiFunction<String, Map<String, Object>, ToolOutcome> callTool,
             String serverName,
             String instructions) {
+        this(listTools, callTool, NONE_AT_ONCE, serverName, instructions);
+    }
+
+    /**
+     * Wires the protocol layer, with the tools that answer at once on a
+     * thread of their own.
+     *
+     * @param listTools every tool's definition
+     * @param callTool runs one tool and reports whether it failed
+     * @param answersAtOnce whether a tool, by name, runs neither Sheriff nor
+     *     the tests, and so is not queued behind a call that does
+     * @param serverName this server's identity in the handshake
+     * @param instructions how to use the tools together, or empty for none
+     */
+    public JsonRpcServer(
+            Supplier<List<Map<String, Object>>> listTools,
+            BiFunction<String, Map<String, Object>, ToolOutcome> callTool,
+            Predicate<String> answersAtOnce,
+            String serverName,
+            String instructions) {
         this.listTools = listTools;
         this.callTool = callTool;
+        this.answersAtOnce = answersAtOnce;
         this.serverName = serverName;
         this.instructions = instructions;
     }
@@ -263,35 +289,56 @@ public final class JsonRpcServer {
      * @throws IOException when the input cannot be read
      */
     public void serve(BufferedReader input, PrintStream output) throws IOException {
-        ExecutorService calls = Executors.newSingleThreadExecutor(runnable -> {
-            Thread thread = new Thread(runnable, CALL_THREAD);
-            thread.setDaemon(true);
-            return thread;
-        });
+        ExecutorService calls = callThread(CALL_THREAD);
+        ExecutorService quickCalls = callThread(QUICK_CALL_THREAD);
         try {
             String line = input.readLine();
             while (line != null) {
                 String trimmed = line.strip();
                 if (!trimmed.isEmpty()) {
-                    dispatch(trimmed, output, calls);
+                    dispatch(trimmed, output, calls, quickCalls);
                 }
                 line = input.readLine();
             }
         } finally {
             calls.shutdown();
+            quickCalls.shutdown();
             awaitCalls(calls);
+            awaitCalls(quickCalls);
         }
     }
 
     /**
-     * Answers one raw line of input: a {@code tools/call} on the calls'
-     * thread, anything else at once.
+     * One thread that runs tool calls in the order they came, as a daemon so
+     * that it never keeps the process alive on its own.
+     *
+     * @param name the thread's name
+     * @return that thread, as an executor
+     */
+    private static ExecutorService callThread(String name) {
+        return Executors.newSingleThreadExecutor(runnable -> {
+            Thread thread = new Thread(runnable, name);
+            thread.setDaemon(true);
+            return thread;
+        });
+    }
+
+    /**
+     * Answers one raw line of input: a {@code tools/call} on a calls' thread,
+     * anything else at once.
+     *
+     * <p>A tool that runs neither Sheriff nor the tests has a thread of its
+     * own. Behind one call, every other waited: on 13 October a
+     * {@code sheriff_test} took 7 min 27 s, and the {@code sheriff_guidelines}
+     * Codex asked for meanwhile, which only reads the rule catalog, waited
+     * for it, so Codex reported both as hung.
      *
      * @param line the request, not yet parsed
      * @param output where the response goes
-     * @param calls the thread that runs the tools
+     * @param calls the thread that runs the tools that run Sheriff
+     * @param quickCalls the thread that runs the tools that answer at once
      */
-    private void dispatch(String line, PrintStream output, ExecutorService calls) {
+    private void dispatch(String line, PrintStream output, ExecutorService calls, ExecutorService quickCalls) {
         JsonNode message;
         try {
             message = json.readTree(line);
@@ -304,7 +351,8 @@ public final class JsonRpcServer {
             return;
         }
         if (message.has(ID_FIELD) && TOOLS_CALL_METHOD.equals(message.path(METHOD_FIELD).asText(EMPTY_METHOD))) {
-            calls.execute(() -> write(output, answer(message)));
+            boolean quick = answersAtOnce.test(message.path(PARAMS_FIELD).path(NAME_ARGUMENT_FIELD).asText());
+            (quick ? quickCalls : calls).execute(() -> write(output, answer(message)));
         } else {
             write(output, answer(message));
         }

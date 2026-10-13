@@ -262,6 +262,18 @@ the table, including `SHERIFF_EXPORT_DIR`.
   disk, 26 s from `/mnt/c` in a folder holding only it, 7 min 20 s from
   `/mnt/c` with its parent being a 4.8 GB folder of other repositories, past
   `SHERIFF_TIMEOUT`'s 300 s.
+- **Sheriff analyzes every file of the component, what its build wrote
+  included, and cannot be told to leave a folder out** (`test` takes a
+  component, a profile, a URI and a repository, nothing more). On PetClinic,
+  after a Gradle build with AOT, 10,082 of its 10,311 errors were in
+  `build/generated`, and from `C:\` through WSL's Docker the analysis took
+  7 min 27 s against 6 s on WSL's own disk (13 October); the model was then
+  sent to fix generated code. So `SheriffContainer` covers, inside the
+  container, `target/` beside a `pom.xml` and `build/` and `.gradle/` beside
+  a `build.gradle` with an empty `tmpfs`: Sheriff neither reads nor repairs
+  them, and nothing on the disk changes. It goes by the build file, not by
+  name alone, since a `build/` may be a project's own source elsewhere.
+  `scripts/e2e.sh` scenario 20 checks it against real Sheriff.
 - **`test` always exits 0**, however many errors it found, and **`fix` always
   exits 1**, whatever happened. Neither exit code carries information. Decide
   what happened from the output, or by analyzing again.
@@ -755,7 +767,10 @@ points `System.out` at stderr. Anything in the core that prints (the loop
 does) must never reach the JSON-RPC channel. `--agent` is dispatched before
 that, so the agent's CLI keeps its stdout. A `tools/call` runs on a thread of
 its own, one at a time in the order they came, so a `ping` or a `tools/list`
-is answered while Sheriff or the tests run; responses are written whole, and
+is answered while Sheriff or the tests run. `sheriff_guidelines` and
+`sheriff_task`, which run neither (`Tools.answersAtOnce`), have a second
+thread: behind a 7-minute `sheriff_test` a `sheriff_guidelines` waited for
+it, and Codex reported both as hung. Responses are written whole, and
 when the input ends the calls already read are answered first. Background
 tasks run on one daemon thread, one at a time; when the client disconnects the server waits for them
 to finish rather than cut a loop mid-pass. A client that stops the server

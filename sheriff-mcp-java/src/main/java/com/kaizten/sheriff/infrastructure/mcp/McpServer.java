@@ -232,7 +232,8 @@ public final class McpServer {
         ImageProvisioning image = imageFor(config, processes).inBackground();
         ProvisionedCatalog catalog = ProvisionedCatalog.forServer(config, processes, image.ready());
         Tools tools = new Tools(config, runner, catalog, () -> pathOr(catalog, config), image);
-        JsonRpcServer server = new JsonRpcServer(tools::definitions, tools::call, config.serverName(), instructions());
+        JsonRpcServer server = new JsonRpcServer(tools::definitions, tools::call, tools::answersAtOnce,
+                config.serverName(), instructions());
         Runtime.getRuntime().addShutdownHook(new Thread(tools::interruptUnfinished, SHUTDOWN_THREAD));
         try (tools; BufferedReader input = new BufferedReader(new InputStreamReader(System.in, StandardCharsets.UTF_8))) {
             server.serve(input, protocol);

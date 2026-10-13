@@ -3,11 +3,13 @@ package com.kaizten.sheriff.infrastructure.docker;
 import com.kaizten.sheriff.infrastructure.process.ProcessOutcome;
 import com.kaizten.sheriff.infrastructure.process.ProcessRunner;
 import com.kaizten.sheriff.infrastructure.process.ProcessStatus;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Supplier;
 
@@ -33,6 +35,19 @@ public final class SheriffContainer {
     private static final String MOUNT_FLAG = "--mount";
     private static final String BIND_MOUNT = "type=bind,%s,target=" + CONTAINER_MOUNT;
     private static final String SOURCE_FIELD = "source=";
+    private static final String TMPFS_MOUNT = "type=tmpfs,%s";
+    private static final String DESTINATION_FIELD = "destination=";
+    private static final String SLASH = "/";
+    private static final String COMPONENT_FLAG = "--component";
+    private static final int NEXT = 1;
+    private static final String MAVEN_BUILD = "pom.xml";
+    private static final String MAVEN_OUTPUT = "target";
+    private static final String GRADLE_BUILD = "build.gradle";
+    private static final String GRADLE_KOTLIN_BUILD = "build.gradle.kts";
+    private static final List<String> GRADLE_BUILDS = List.of(GRADLE_BUILD, GRADLE_KOTLIN_BUILD);
+    private static final String GRADLE_OUTPUT = "build";
+    private static final String GRADLE_CACHE = ".gradle";
+    private static final List<String> GRADLE_OUTPUTS = List.of(GRADLE_OUTPUT, GRADLE_CACHE);
     private static final String QUOTE = "\"";
     private static final String ESCAPED_QUOTE = "\"\"";
     private static final int NOT_FOUND = -1;
@@ -116,10 +131,63 @@ public final class SheriffContainer {
         List<String> command = new ArrayList<>(List.of(
                 DOCKER, RUN, REMOVE_WHEN_DONE,
                 NAME_FLAG, name,
-                MOUNT_FLAG, bindMount(repositoryRoot),
-                image));
+                MOUNT_FLAG, bindMount(repositoryRoot)));
+        componentOf(arguments).ifPresent(component -> buildOutput(repositoryRoot.resolve(component))
+                .forEach(output -> command.addAll(List.of(MOUNT_FLAG, hiddenMount(component, output)))));
+        command.add(image);
         command.addAll(arguments);
         return command;
+    }
+
+    /**
+     * The component a run names, from its {@code --component} argument.
+     *
+     * @param arguments what is passed to Sheriff
+     * @return the component, or empty when the run names none
+     */
+    static Optional<String> componentOf(List<String> arguments) {
+        int flag = arguments.indexOf(COMPONENT_FLAG);
+        if (flag == NOT_FOUND || flag + NEXT >= arguments.size()) {
+            return Optional.empty();
+        }
+        return Optional.of(arguments.get(flag + NEXT));
+    }
+
+    /**
+     * The folders of a component its build writes, which hold no code of the
+     * project's: {@code target} beside a {@code pom.xml}, {@code build} and
+     * {@code .gradle} beside a {@code build.gradle}. Sheriff analyzes every
+     * file of a component and has no way to leave a folder out, so it read
+     * the code Gradle generates there too: on PetClinic, 10,082 of 10,311
+     * errors were in {@code build/generated}, and through WSL's Docker from
+     * {@code C:\} the analysis took 7 min 27 s instead of 6 s (13 October).
+     *
+     * @param component the component's directory
+     * @return those of them that are there
+     */
+    static List<String> buildOutput(Path component) {
+        List<String> outputs = new ArrayList<>();
+        if (Files.isRegularFile(component.resolve(MAVEN_BUILD))) {
+            outputs.add(MAVEN_OUTPUT);
+        }
+        if (GRADLE_BUILDS.stream().anyMatch(build -> Files.isRegularFile(component.resolve(build)))) {
+            outputs.addAll(GRADLE_OUTPUTS);
+        }
+        return outputs.stream().filter(output -> Files.isDirectory(component.resolve(output))).toList();
+    }
+
+    /**
+     * The {@code --mount} value that covers a folder of the component with an
+     * empty one in the container, so Sheriff neither reads nor repairs what
+     * is in it, and nothing on the disk changes.
+     *
+     * @param component the component, as Sheriff names it
+     * @param output the folder to cover
+     * @return that value
+     */
+    static String hiddenMount(String component, String output) {
+        return String.format(TMPFS_MOUNT, csvField(DESTINATION_FIELD + CONTAINER_MOUNT + SLASH + component
+                + SLASH + output));
     }
 
     /**
@@ -136,11 +204,19 @@ public final class SheriffContainer {
      * @return that value
      */
     static String bindMount(Path directory) {
-        String source = directory.toString();
-        boolean special = source.chars().anyMatch(character -> CSV_SPECIAL.indexOf(character) != NOT_FOUND);
-        String field = SOURCE_FIELD + source;
-        String quoted = special ? QUOTE + field.replace(QUOTE, ESCAPED_QUOTE) + QUOTE : field;
-        return String.format(BIND_MOUNT, quoted);
+        return String.format(BIND_MOUNT, csvField(SOURCE_FIELD + directory));
+    }
+
+    /**
+     * One field of a {@code --mount} value, quoted whole when it holds a comma
+     * or a quote.
+     *
+     * @param field the field, its name included
+     * @return it, quoted when it must be
+     */
+    private static String csvField(String field) {
+        boolean special = field.chars().anyMatch(character -> CSV_SPECIAL.indexOf(character) != NOT_FOUND);
+        return special ? QUOTE + field.replace(QUOTE, ESCAPED_QUOTE) + QUOTE : field;
     }
 
     /**
