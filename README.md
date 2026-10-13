@@ -346,7 +346,7 @@ directory name is the component.
 <plugin>
   <groupId>com.kaizten</groupId>
   <artifactId>sheriff-maven-plugin</artifactId>
-  <version>1.0.8</version>
+  <version>0.1.0</version>
   <executions><execution><goals><goal>check</goal></goals></execution></executions>
 </plugin>
 ```
@@ -641,12 +641,12 @@ It carries no rule catalog, and extracts one on first use.
 `v<version>` is pushed, the version being the one in the poms: the jar built
 and tested there, its checksum, the two installers and the playbook in both
 languages. Then it runs the install line on Linux, macOS and Windows (both
-PowerShells) against what it published. A tag with a suffix (`v1.0.1-rc.1`)
+PowerShells) against what it published. A tag with a suffix (`v0.1.1-rc.1`)
 is a prerelease, which the install line never picks: it is how a release is
 tried before its real tag.
 
 ```bash
-git tag v1.0.1 && git push origin v1.0.1     # after the version in the poms says 1.0.1
+git tag v0.1.1 && git push origin v0.1.1     # after the version in the poms says 0.1.1
 ```
 
 ## What Sheriff could change
