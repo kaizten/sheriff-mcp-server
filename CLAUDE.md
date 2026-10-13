@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+It holds what is true now and the reason for it in a line. The history of
+how each rule was found (dates, earlier forms, what failed) belongs in the
+commit that changed it, not here.
+
 ## What this repository is
 
 Two modules around **Sheriff** (`kaizten/sheriff:latest`), Kaizten's code
@@ -13,45 +17,33 @@ interface. Everything here is a different shape of reaching it:
 | `sheriff-mcp-java/` | **the product**: Sheriff as five MCP tools, so a model can reach it while writing code — one jar, registered once, that works in any project with no configuration. **The agent lives inside it**: the loop that fixes code until Sheriff is quiet, its hexagonal core (`domain/`, `application/`, `infrastructure/`), the rule-catalog extractor, and its CLI, reached as `sheriff-mcp.jar --agent`. The server is a driving adapter in `infrastructure/mcp/`, beside the CLI in `infrastructure/cli/`. The same jar is the CI gate (`--check`) and the three Claude Code hooks (`--hook-gate`, `--hook-stop` and `--hook-turn`, wired for every project by `scripts/install.sh`, or for one by `--install-hooks`), and sets Codex up (`--install-codex`). It hands the client its order of work as MCP instructions (`src/main/resources/instructions.md`) |
 | `sheriff-maven-plugin/` | the same check as a Maven goal, bound to `package` (so `mvn package` runs it), and `sheriff:fix`, which fails when errors are left |
 
-**The interaction is** developer → assistant (with skills)
-→ MCP server → agent → Sheriff, whose output is JSON (or, as a different kind
-of output this repository does not build, PostgreSQL). That is why the agent
-is inside the MCP module rather than beside it: until September 2026 it was a
-third module, `sheriff-agent-java`, kept in the history of the private
-repository this one was published from. And it is why the
-server works in tasks: `sheriff_autofix` answers at once with a task id and
-runs in the background, `sheriff_task` reports id, command and state, and
-every call that runs Sheriff is recorded as one, under
-`${XDG_STATE_HOME:-~/.local/state}/sheriff-mcp/tasks/<id>/`. One folder per
-call would grow without bound, so each session prunes once, on its first
-task, keeping the newest `TaskRegistry.RETAINED_FOLDERS` and only ever
-touching id-shaped folders that hold a `task.json`.
+**The interaction is** developer → assistant (with skills) → MCP server →
+agent → Sheriff, whose output is JSON. That is why the agent is inside the
+MCP module rather than beside it, and why the server works in tasks:
+`sheriff_autofix` answers at once with a task id and runs in the background,
+`sheriff_task` reports id, command and state, and every call that runs
+Sheriff is recorded as one, under
+`${XDG_STATE_HOME:-~/.local/state}/sheriff-mcp/tasks/<id>/`. Each session
+prunes once, on its first task, keeping the newest
+`TaskRegistry.RETAINED_FOLDERS` and only touching id-shaped folders that hold
+a `task.json`.
 
-Two things that were there are left out of this one, on purpose:
-`mcp-server/`, a second independent implementation of the MCP tools kept to
-compare "share the core" against "stay independent" (sharing won: it is what
-makes `sheriff_autofix` possible), and `skills/code-standards/`, whose order
-of work became the server's MCP instructions and whose hooks became
-`--install-hooks`. The rules-only skill is Sheriff's own
+The rules-only skill is Sheriff's own
 (`ai --skill --provider ANTHROPIC -t <profile>`), not this repository's.
 
 **Documentation is kept to two files**: `README.md` (install, use,
-configuration) and this one. Do not add module readmes or plans back; put a
-fact in the one whose reader needs it. `AGENTS.md`, which Codex reads, only
-sends it here: a copy made by replacing "Claude" with "Codex" had turned
-`~/.claude/` into `~/.Claude Code/` and `CodexInstaller` into
-`Claude CodeInstaller`, and was already behind. One more has a reader of
-its own, the person who installs a release and never reads the code:
-`playbook/`, the user's playbook in Spanish and English (LaTeX, one style and
-one `.tex` per language), built by `scripts/playbook.sh` and attached to every
-release as `sheriff-playbook-es.pdf` and `sheriff-playbook-en.pdf`. It holds
-plays, not reasons. A change to what a user types or reads (the install line,
-an option, a tool's answer, a hook's message) goes into both of its languages
-in the same change, and its answers are copied from a real run, not written
-by hand. It must build with only the TeX packages `release.yml` installs on
-Ubuntu: `pifont` built locally and broke there (its ZapfDingbats font is not
-among them), which would have failed the release after its tag;
-`playbook.yml` builds it on the pull request to catch that.
+configuration) and this one. Do not add module readmes or plans; put a fact
+in the one whose reader needs it. `AGENTS.md`, which Codex reads, only sends
+it here: a translated copy drifts. The third reader is the person who
+installs a release: `playbook/`, the user's playbook in Spanish and English
+(LaTeX, one style and one `.tex` per language), built by `scripts/playbook.sh`
+and attached to every release as `sheriff-playbook-es.pdf` and
+`sheriff-playbook-en.pdf`. It holds plays, not reasons. A change to what a
+user types or reads (the install line, an option, a tool's answer, a hook's
+message) goes into both languages in the same change, and its answers are
+copied from a real run. It must build with only the TeX packages
+`release.yml` installs on Ubuntu (not `pifont`); `playbook.yml` checks that
+on the pull request.
 
 **Docker and the `kaizten/sheriff` image are required** for anything that
 actually analyzes. The test suites are not: none of the tests needs Docker.
@@ -72,166 +64,21 @@ scripts/ci-local.sh                           # before every push: CI's own step
 scripts/playbook.sh                           # the user's playbook, both languages: needs TeX
 ```
 
-`scripts/e2e.sh` is the check for what the unit suites cannot see because
-they run without Docker: which branch the loop edits, whether the scope check
-sees a module-that-is-a-repository, whether the MCP's stdout is clean, whether
-a timed-out container is really gone. A stand-in `claude` plays the model, so
+`scripts/e2e.sh` checks what the unit suites cannot see without Docker:
+which branch the loop edits, whether the scope check sees a
+module-that-is-a-repository, whether the MCP's stdout is clean, whether a
+timed-out container is really gone. A stand-in `claude` plays the model, so
 it costs nothing. Every scenario in it was a real bug; run it after touching
 the loop, git, the hooks, the MCP entry point or how containers are launched.
 
 **Run `scripts/ci-local.sh` before pushing, and push only when it passes.**
 It reads the steps out of `ci.yml` by name and runs them as written, in a
-HOME, a Java `user.home` and a PATH of their own (one step removes
-`~/.claude`; with the real `claude` the installers would set this machine
-up), plus `install.ps1` in PowerShell 7 in a container, `install.sh` under
-bash 3.2, the workflows' syntax and the playbook. It exists because PR #10
-found three Windows failures in a row on GitHub, each one a round trip. It
-cannot reach Windows PowerShell 5.1, cmd, Git Bash, winget or macOS, and says
-so: a step for those is still tried first on GitHub, and that is the only
-thing CI should be the first to see. A new CI step that can run on Linux
-belongs in it too.
-
-`scripts/install.sh` copies the runnable jar and the catalog into
-`~/.local/share/sheriff-agent/` and **sets up only the assistants the machine
-already has**, never installing one, then says in its last line which. For
-Claude Code (`claude` on the PATH, or `~/.claude`, which the desktop app and
-the IDE extensions read without putting `claude` on the PATH) it registers the
-MCP server at user scope as `sheriff` when there is a `claude` to do it with,
-and wires the hooks into `~/.claude/settings.json`
-(`--install-hooks --user`), so that no project needs a step of its own,
-together with `permissions.allow` rules for the four sheriff tools that do
-not commit or spend tokens (not `sheriff_autofix`): without them a model with
-no auto mode stopped at a prompt on its first `sheriff_fix`, and
-`--uninstall-hooks` takes out only those rules.
-With `codex` on the PATH it sets Codex up the same way (`--install-codex`,
-`CodexInstaller`): the server in `~/.codex/config.toml` with the time limit
-and the approval `codex mcp add` cannot write, the order of work in
-`~/.codex/AGENTS.md`, which Codex reads in every project, and the Stop and
-turn hooks, without the gate, in `~/.codex/hooks.json`; on Windows each as a
-line of **Windows PowerShell, which is what Codex runs a hook in** (measured
-with Codex 0.162.1 and `codex exec --dangerously-bypass-hook-trust` in a
-`CODEX_HOME` of its own, with a hook only PowerShell can run, 13 October):
-`& 'C:/.../java.exe' '-Dsheriff.docker=wsl' -jar '...' --hook-stop; exit
-$LASTEXITCODE`. The `&` runs a quoted path, the single quotes keep a `$` in
-a path, the property is quoted as PowerShell 5.1 splits `-Da.b=c` at its
-dot, and without the `exit` a Stop hook's 2 reached Codex as a failure, not
-a block. Every earlier form failed there: a line starting with the quoted
-Java ran `C:/Program`, and so did `cmd /d /s /c "..."` (12 October) once
-PowerShell had joined its quotes. The one step left to
-the user is Codex's review of a new hook, and it stays there on purpose; the
-installer and the playbook say what skipping it costs, as on PetClinic
-(9 October) Codex twice stopped with over a hundred errors left and only the
-Stop hook sent it on. With
-no assistant at all it writes nothing into anyone's configuration (it used to
-create `~/.claude/settings.json` for a Claude Code nobody had) and ends saying
-the jar is installed only as the CI gate and the Maven plugin; `install.ps1`
-does the same. `--no-hooks` leaves the
-hooks out, `--no-codex` leaves Codex alone, `--no-antigravity` leaves
-Antigravity alone, `--fail-fast` writes the hooks as
-`--hook-stop --fail-fast` (an option, not a variable: Codex passes a hook
-almost none of the shell's), `--pull-always` writes `SHERIFF_PULL=always` into
-the server's registration in both assistants (`claude mcp add -e`, and
-`--install-codex --pull-always` as `env` in the entry), and `--no-mcp`, which
-CI uses with `--no-pull`, touches no assistant's configuration at all.
-Under Git Bash `install.sh` overwrites the jar in place, as `install.ps1`
-does: `install` deletes it first, which Windows refuses while a running
-server holds it, and every update with Claude Code open failed (12 October).
-Windows refuses a rename too, so there is no way to leave a running server
-its jar, and one whose jar changes under it dies at the next class it loads
-(`NoClassDefFoundError`, measured). On a tool call that used to be worse: the
-call runs on a thread of its own, the `Error` ended it with nothing written,
-and the session's tool hung for minutes. `JsonRpcServer.answer` now answers
-any `Error` too, and a `LinkageError` with "cannot load its own code ...
-Restart this session", which reaches the client with the jar replaced
-(measured). Both installers check first whether
-anything holds the jar (a rename there and back; an open with no sharing) and
-then say that open sessions must be restarted. Under Git Bash, `install.sh`
-uses Git's own `/usr/bin/cygpath`: with conda's base environment active,
-Anaconda's comes first on the PATH and turned `/c/Users/a` into
-`C:/Users/a/anaconda3/Library/c/Users/a`.
-
-Every installer writes an assistant's file through `ConfigFile`: whole, where
-a symbolic link points, and **with the permissions it had**. A `settings.json`
-or a `config.toml` only its owner could read used to come out of an install
-readable by every user, and both can hold tokens. The server, and the hooks of
-every project, run the Java the installer found, by its absolute path
-(`SHERIFF_JAVA`, read by `--install-hooks --user`, `--install-codex` and
-`--install-antigravity`, and given to `claude mcp add`): an editor started
-from the desktop can have another PATH, and the server then only showed
-"connection closed". Both installers look in `JAVA_HOME`, then the PATH, then
-where JDKs are installed, so a JDK that is on no PATH is found. `install.ps1`
-used to pass none, as Windows installs each JDK update in a folder named after
-its version; but Claude Code runs hooks in Git Bash, where a Temurin installed
-without its PATH entry is not found, and every hook failed as "non-blocking"
-(9 October). A Java update that removes the old folder now needs the install
-run again, which the playbook says. With no Java, `install.ps1` installs
-Temurin 21 with winget. Under
-Git Bash, `install.sh` writes paths as `C:/x` (`cygpath -m`). Both end by
-starting the server as registered and sending it `initialize`, and fail
-unless `serverInfo.name` is `sheriff`. A project's own
-`.claude/settings.json`, which a team commits, keeps `java`. An option the
-jar does not know is refused with exit code 2; it used to start the MCP server, so `--instal-hooks` waited on standard input or ended
-with nothing done and 0.
-
-**The same script installs a release**, which is how anyone without a clone
-gets the tools: read from a pipe, or with `--release[=TAG]`, it has no
-checkout, so it downloads the release's jar and checksum by their public URLs
-(`releases/latest/download/`, or `releases/download/<tag>/`), with curl or
-wget, instead of building. It used `gh`, logged in to any account, while the
-repository was private; public, that was a login and a tool every user had to
-set up for nothing, and on Windows a new window too. Those URLs never name a
-prerelease, and `release.yml` runs the line with no token to keep it so.
-Everything runs from `main()` on its last line, so bash has read the whole
-script before any of it runs, and nothing in it reads standard input, which
-in `curl | bash` style is the script itself. By default it then pulls Sheriff's
-image, so that the first check does not wait 4 GB; `--install-docker` installs
-Docker from Docker itself (`get.docker.com`, `pacman` on Arch, Docker Desktop's
-installer from docker.com on macOS and, per user, on Windows) and never accepts
-Docker Desktop's terms for the user. `install.ps1` mirrors it, with two rules
-of its own: it never calls `exit`, which run as a script block closes the
-window, and it is ASCII only, as its line fetches it with `irm`, and GitHub
-serves it as `application/octet-stream`, with no charset to decode it by. It
-is run as a script block rather than `irm | iex`, which would run it in the
-user's session and leave its variables and its `$ErrorActionPreference`
-there. Its native commands run for an exit code go through
-`Test-Native`: Windows PowerShell turns a redirected stderr into errors, and
-`claude mcp remove ... *> $null` used to abort a first install there.
-
-**Changing `HOME` does not keep a trial install off the real configuration.**
-`claude` follows `HOME`, but the jar finds the home through Java's
-`user.home`, so on 7 October `--install-hooks --user` and `--install-codex`
-rewrote the real `~/.claude/settings.json` and `~/.codex/` to point at a jar in
-a scratch folder. Add `JAVA_TOOL_OPTIONS=-Duser.home=<dir>` (and
-`CODEX_HOME`), use a container, or install with `--no-mcp` and `SHERIFF_HOME`,
-as CI does.
-
-The install folder is what the hooks point at, and a jar there resolves its
-catalog and logs beside itself. A registration pointing
-into `target/`, or at a module that has been removed, fails at session start
-as "connection closed"; re-run the script after pulling.
-
-`.github/workflows/ci.yml` runs both on every push to `main` and every pull
-request: `mvn -B install` first, then `scripts/e2e.sh` against the pulled
-image. A red e2e with a green build can be a new image rather than the code.
-On each of the three systems it also runs the installer as a user's would,
-which `--no-mcp` never reaches: with no assistant, when it must write into no
-one's configuration, then with stand-in `claude`, `codex` and `agy` that only
-record their calls, under `/bin/bash` (3.2 on macOS, Git Bash on Windows) and
-Windows PowerShell; and on Windows once more with Java on no PATH and no
-`JAVA_HOME`, where it must be found under Program Files.
-`.github/workflows/image.yml` publishes the agent's image,
-`ghcr.io/kaizten/sheriff-mcp-server`, when CI passes on `main`, and only
-builds it on a pull request. It fails rather than publish the rule catalog:
-the Dockerfile copies one that sits beside it, which a local checkout may have.
-`.github/workflows/release.yml` publishes a release when a tag `v<version>` is
-pushed: it fails unless the tag is the version the jar reports, and unless the
-jar is free of the catalog, and then runs the install line on Linux, macOS and
-Windows (Windows PowerShell and PowerShell 7) against what it published. A tag
-with a suffix is a prerelease, which the install line never picks, and that is
-how a release is tried first.
-
-No stated test count here or in the readmes: every one of them drifted from
-what the suites ran. Read `Tests run:` from the build instead.
+HOME, a Java `user.home` and a PATH of their own (with the real `claude` the
+installers would set this machine up), plus `install.ps1` in PowerShell 7 in
+a container, `install.sh` under bash 3.2, the workflows' syntax and the
+playbook. It cannot reach Windows PowerShell 5.1, cmd, Git Bash, winget or
+macOS, and says so: only those should be tried first on GitHub. A new CI step
+that can run on Linux belongs in it too.
 
 No module declares the aggregator as its parent, so each still builds on its
 own once the MCP module is installed:
@@ -252,10 +99,133 @@ mvn install
 mvn com.kaizten:sheriff-maven-plugin:0.1.0:check    # on any Maven module
 ```
 
+`mvn -q test` is the wrong verification command: `-q` suppresses the lines
+holding `Tests run:` and `BUILD SUCCESS`. No test count is stated here or in
+the readmes, as every stated one drifted; read `Tests run:` from the build.
+
 The agent is configured entirely by environment variables — `TARGET_REPO`,
 `SHERIFF_COMPONENT`, `SHERIFF_TEST_TYPE`, `AI_BACKEND` — because it is also
-launched as a hook and as an MCP-less CLI. The README has
-the table, including `SHERIFF_EXPORT_DIR`.
+launched as a hook and as an MCP-less CLI. The README has the table,
+including `SHERIFF_EXPORT_DIR`.
+
+## Installing
+
+`scripts/install.sh` copies the runnable jar and the catalog into
+`~/.local/share/sheriff-agent/` and **sets up only the assistants the machine
+already has**, never installing one, then says in its last line which. With
+no assistant it writes nothing into anyone's configuration and says the jar
+is installed only as the CI gate and the Maven plugin. `install.ps1` mirrors
+it.
+
+- **Claude Code** (`claude` on the PATH, or `~/.claude`, which the desktop
+  app and the IDE extensions read without putting `claude` on the PATH): the
+  MCP server at user scope as `sheriff` when there is a `claude` to register
+  it with, and the hooks in `~/.claude/settings.json`
+  (`--install-hooks --user`), with `permissions.allow` rules for the four
+  tools that do not commit or spend tokens (not `sheriff_autofix`), so a
+  model without auto mode is not stopped at a prompt. `--uninstall-hooks`
+  takes out only those rules.
+- **Codex** (`codex` on the PATH, `--install-codex`, `CodexInstaller`): the
+  server in `~/.codex/config.toml` with the time limit and the approval
+  `codex mcp add` cannot write, the order of work in `~/.codex/AGENTS.md`,
+  and the Stop and turn hooks, without the gate, in `~/.codex/hooks.json`.
+  Codex's review of a new hook is left to the user on purpose; the installer
+  and the playbook say what skipping it costs (without the Stop hook Codex
+  stops with errors left).
+- **Antigravity** (`agy` on the PATH, `--install-antigravity`): see below.
+
+**Codex runs a hook in Windows PowerShell 5.1**, not cmd, so on Windows each
+hook line is PowerShell's: `& 'C:/.../java.exe' '-Dsheriff.docker=wsl' -jar
+'...' --hook-stop; exit $LASTEXITCODE`. The `&` runs a quoted path, single
+quotes keep a `$` in a path, the property is quoted because PowerShell 5.1
+splits `-Da.b=c` at its dot, and without the `exit` a Stop hook's 2 reaches
+Codex as a failure, not a block. **Never put a `set` on a hook's line**: in
+PowerShell a `set "` reached cmd as a bare `set`, which printed every
+variable of the user's, and Codex handed that to the model.
+
+Options: `--no-hooks`, `--no-codex`, `--no-antigravity`; `--fail-fast` writes
+the hooks as `--hook-stop --fail-fast` (an option, not a variable, as Codex
+passes a hook almost none of the shell's); `--pull-always` writes
+`SHERIFF_PULL=always` into the server's registration in both assistants;
+`--no-mcp`, which CI uses with `--no-pull`, touches no assistant's
+configuration at all. An option the jar does not know is refused with exit
+code 2.
+
+Every installer writes an assistant's file through `ConfigFile`: whole,
+where a symbolic link points, and **with the permissions it had**, since
+these files can hold tokens. The server, and the hooks written for the user,
+run the Java the installer found, by its absolute path (`SHERIFF_JAVA`, read
+by `--install-hooks --user`, `--install-codex` and `--install-antigravity`,
+and given to `claude mcp add`): an editor started from the desktop can have
+another PATH, and Claude Code runs hooks in Git Bash, where a JDK installed
+without its PATH entry is not found. The installers look in `JAVA_HOME`, then
+the PATH, then where JDKs are installed; a Java update that removes the old
+folder needs the install run again, which the playbook says. With no Java,
+`install.ps1` installs Temurin 21 with winget. A project's own
+`.claude/settings.json`, which a team commits, keeps `java`. Both installers
+end by starting the server as registered and sending it `initialize`, and
+fail unless `serverInfo.name` is `sheriff`.
+
+**On Windows a running server holds its jar.** Windows refuses to delete or
+rename it, so the installers overwrite it in place (not `install`), and a
+server whose jar changes under it dies at the next class it loads.
+`JsonRpcServer.answer` answers any `Error`, a `LinkageError` with "cannot
+load its own code ... Restart this session", so the call does not hang. Both
+installers check first whether anything holds the jar and then say open
+sessions must be restarted. Under Git Bash, `install.sh` writes paths as
+`C:/x` with Git's own `/usr/bin/cygpath -m` (conda's comes first on the PATH
+when its base environment is active, and gets it wrong).
+
+**The same script installs a release**: read from a pipe, or with
+`--release[=TAG]`, it has no checkout, so it downloads the release's jar and
+checksum by their public URLs (`releases/latest/download/`, or
+`releases/download/<tag>/`) with curl or wget, no login. Those URLs never
+name a prerelease, and `release.yml` runs the line with no token to keep it
+so. Everything runs from `main()` on its last line, so bash has read the
+whole script before any of it runs, and nothing in it reads standard input,
+which in `curl | bash` is the script itself. By default it then pulls
+Sheriff's image; `--install-docker` installs Docker from Docker itself
+(`get.docker.com`, `pacman` on Arch, Docker Desktop's installer on macOS and,
+per user, on Windows) and never accepts Docker Desktop's terms for the user.
+
+`install.ps1` has rules of its own: it never calls `exit` (run as a script
+block it closes the window); it is ASCII only (GitHub serves it as
+`application/octet-stream`, with no charset); it runs as a script block, not
+`irm | iex`, so its variables and `$ErrorActionPreference` stay out of the
+user's session; and native commands run for an exit code go through
+`Test-Native`, as Windows PowerShell turns a redirected stderr into errors.
+
+**Changing `HOME` does not keep a trial install off the real
+configuration.** `claude` follows `HOME`, but the jar finds the home through
+Java's `user.home`. Add `JAVA_TOOL_OPTIONS=-Duser.home=<dir>` (and
+`CODEX_HOME`), use a container, or install with `--no-mcp` and
+`SHERIFF_HOME`, as CI does.
+
+The install folder is what the hooks point at, and a jar there resolves its
+catalog and logs beside itself. A registration pointing into `target/`, or at
+a module that has been removed, fails at session start as "connection
+closed"; re-run the script after pulling.
+
+## CI and releases
+
+`.github/workflows/ci.yml` runs on every push to `main` and every pull
+request: `mvn -B install`, then `scripts/e2e.sh` against the pulled image (a
+red e2e with a green build can be a new image rather than the code). On each
+of the three systems it also runs the installer as a user would: with no
+assistant, then with stand-in `claude`, `codex` and `agy` that only record
+their calls, under `/bin/bash` (3.2 on macOS, Git Bash on Windows) and
+Windows PowerShell; and on Windows with Java on no PATH and no `JAVA_HOME`.
+
+`image.yml` publishes `ghcr.io/kaizten/sheriff-mcp-server` when CI passes on
+`main`, only builds it on a pull request, and fails rather than publish the
+rule catalog (the Dockerfile copies one that sits beside it).
+
+`release.yml` publishes a release when a tag `v<version>` is pushed: it fails
+unless the tag is the version the jar reports and the jar is free of the
+catalog, and then runs the install line on Linux, macOS and Windows (Windows
+PowerShell and PowerShell 7). A tag with a suffix is a prerelease, which the
+install line never picks: that is how a release is tried first, and on
+Windows it has to be tried with real assistants, which CI does not have.
 
 ## Things about Sheriff that will waste your time otherwise
 
@@ -264,119 +234,85 @@ the table, including `SHERIFF_EXPORT_DIR`.
   the module mounts its parent. **Nested components (`a/b`) are rejected.**
   This is the single most common source of confusion here, and it is why the
   Maven plugin needs no configuration: Maven already knows both halves.
-  **Its time grows with the whole mount, not the component.** Measured on 9
-  October, PetClinic under `JAVA` through WSL's Docker: 1.6 s on WSL's own
-  disk, 26 s from `/mnt/c` in a folder holding only it, 7 min 20 s from
-  `/mnt/c` with its parent being a 4.8 GB folder of other repositories, past
-  `SHERIFF_TIMEOUT`'s 300 s.
+  **Its time grows with the whole mount, not the component**, and through
+  WSL's Docker from `/mnt/c` by orders of magnitude (seconds on WSL's own
+  disk, minutes from `C:` beside large sibling folders, past
+  `SHERIFF_TIMEOUT`'s 300 s).
 - **Sheriff analyzes every file of the component, what its build wrote
-  included, and cannot be told to leave a folder out** (`test` takes a
-  component, a profile, a URI and a repository, nothing more). On PetClinic,
-  after a Gradle build with AOT, 10,082 of its 10,311 errors were in
-  `build/generated`, and from `C:\` through WSL's Docker the analysis took
-  7 min 27 s against 6 s on WSL's own disk (13 October); the model was then
-  sent to fix generated code. So `SheriffContainer` covers, inside the
-  container, `target/` beside a `pom.xml` and `build/` and `.gradle/` beside
-  a `build.gradle` with an empty `tmpfs`: Sheriff neither reads nor repairs
-  them, and nothing on the disk changes. It goes by the build file, not by
-  name alone, since a `build/` may be a project's own source elsewhere.
-  `scripts/e2e.sh` scenario 20 checks it against real Sheriff.
+  included, and cannot be told to leave a folder out.** After a Gradle build
+  almost all of a project's errors can be in `build/generated`. So
+  `SheriffContainer` covers, inside the container, `target/` beside a
+  `pom.xml` and `build/` and `.gradle/` beside a `build.gradle` with an empty
+  `tmpfs`: Sheriff neither reads nor repairs them, and nothing on the disk
+  changes. It goes by the build file, not by name alone, since a `build/` may
+  be a project's own source. `scripts/e2e.sh` scenario 20 checks it.
 - **`test` always exits 0**, however many errors it found, and **`fix` always
-  exits 1**, whatever happened. Neither exit code carries information. Decide
-  what happened from the output, or by analyzing again.
+  exits 1**, whatever happened. Decide what happened from the output, or by
+  analyzing again.
 - **A fixer that cannot run looks like one that changed nothing**, and one
-  that lies looks like one that worked. `fix` exits 1 either way. Two
-  different defences, and both are needed:
+  that lies looks like one that worked. Two defences, both needed:
   - A fixer that *fails* says so on stdout: `Could not apply fixer for error
     'CODE'`, then `Error: <reason>`. `FixerFailures` reads those lines and
     every report of a repair names them.
-  - A fixer that *exits 0 having done nothing* says nothing at all. Only
-    analyzing again catches it, which is why a repair is always followed by
-    another analysis: `sheriff:fix` and `sheriff_fix` report the error count
-    before and after, and in the loop the next iteration's analysis does it.
+  - A fixer that *exits 0 having done nothing* says nothing. Only analyzing
+    again catches it, so a repair is always followed by another analysis.
     Never report a repair from the list of fixers that were run.
-  Both jar fixers in the image of 21 September are broken, and neither is
-  built into it. `BracesForStatements` is registered under a name its own
-  `pom.xml` does not produce and declares a main class that does not exist;
-  its logic works when launched by hand. `FolderNameUnderscore` is packaged
-  correctly but is a stub: it renames a hardcoded `com.oldpkg` to
-  `com.newpkg`, never reads the folder it was given, and prints that it
-  renamed something and exits 0 regardless. Sheriff also launches every jar
-  fixer without `-jar`, so no jar fixer can run at all.
+  The image's jar fixers cannot run: Sheriff launches them without `-jar`,
+  `BracesForStatements` is registered under a name its `pom.xml` does not
+  produce, and `FolderNameUnderscore` is a stub that renames a hardcoded
+  `com.oldpkg` and exits 0 regardless.
 - **`fix -f` with no `--fixers` is not every fixer, nor only the state's.**
-  Its default set leaves fixers out, and it sorted PetClinic's imports after
-  every `SortedImport` entry had been deleted from `sheriff_errors.json`
-  (1 October). With `--fixers A,B` it runs only those, and a code with no
-  fixer in the list is ignored. So `sheriff_fix` with no arguments runs the
-  default set and then `--fixers` with every rule found, in rounds while the
-  count drops: one call, the same end state every time.
+  Its default set leaves fixers out and runs some regardless of the state.
+  With `--fixers A,B` it runs only those. So `sheriff_fix` with no arguments
+  runs the default set and then `--fixers` with every rule found, in rounds
+  while the count drops: one call, the same end state every time.
 - **A bad `--test` profile exits 0 too**, printing a usage banner to stdout
   and the reason to stderr. Locating the findings array by the first `[`
   parses the banner instead.
 - **The TypeScript profile traces every checker on stdout**, one
-  `COMMAND: node ...` line each, before any findings. A clean TypeScript run
-  is only those lines, which read as "not JSON" and failed every clean
-  TypeScript component until the analyzer learned to drop them.
+  `COMMAND: node ...` line each, before any findings; the analyzer drops
+  them, or a clean TypeScript run reads as "not JSON".
 - **Every run drops three `sheriff_*.json` files at the root of the mount.**
   They must be cleaned up, except between the `test` and the `fix` of a
-  repair — `fix` does not analyze anything, it reads the state that `test`
-  left. Two are worth keeping and are read, and optionally exported, before
-  the clean-up: `sheriff_errors.json` is **where findings are read from**
-  (the same entries as stdout, without the noise; stdout is the fallback),
-  and `sheriff_tracked_files.json` gives `AnalysisResult.trackedFiles`, whose
-  hashes name what a repair changed (`changedSince`). `sheriff_summary.json`
-  has been `{ }` in every run and is ignored. That shared state is why `sheriff:fix` serializes itself across a
-  reactor's modules: two repairing at once silently clobber each other.
-- **Sheriff is incremental, and that is why its state is cleared *before*
-  every run too.** It skips every file whose hash is already in
-  `sheriff_tracked_files.json` and reuses what `sheriff_errors.json` says about
-  it. But that file holds paths and hashes only: no profile, no rule version.
-  Reproduced on 28 September: state left by a `JAVA_HEXAGONAL` run (0 errors)
-  made the next `JAVA` run report 0 on code with 3, and the `JAVA` entry it
-  recorded was present and empty, so nothing downstream can tell. A new image
-  with new rules would be skipped the same way. `SheriffDockerAnalyzerTests`
-  pins it (`noStateIsLeftForSheriffToReuse`). Do not keep the state on the
-  mount to save time; if the incremental speed-up is ever worth having, keep
-  it per component, profile and `image_id`, outside the mount, and measure
-  first on a large project.
-- **Zero errors means three different things and Sheriff distinguishes none of
-  them**: the component complies, it holds nothing of the profile's language,
-  or the run produced no report at all. All three are empty output and exit 0.
-  The third is not hypothetical — one `sheriff_test` answered "0 errors" for a
-  component that has 221, once, unreproducibly. Both the agent and the MCP now
-  guard: they check the component for sources of the profile's language, and
-  `SheriffDockerAnalyzer`, which every caller goes through, reads Sheriff's
-  own `sheriff_errors.json` before cleaning it up. That file records the
-  component and profile it analyzed and is the only signal that separates a
-  clean run from one that did nothing. There is one analyzer on purpose: the
-  MCP used to have its own, and the two drifted.
+  repair — `fix` analyzes nothing, it reads the state `test` left. Before the
+  clean-up, `sheriff_errors.json` is **where findings are read from** (stdout
+  is the fallback) and `sheriff_tracked_files.json` gives
+  `AnalysisResult.trackedFiles`, whose hashes name what a repair changed
+  (`changedSince`); both can be exported. `sheriff_summary.json` is always
+  `{ }` and ignored. That shared state is why `sheriff:fix` serializes itself
+  across a reactor's modules.
+- **Sheriff is incremental, so its state is cleared *before* every run too.**
+  It skips every file whose hash is in `sheriff_tracked_files.json`, which
+  records no profile and no rule version: state left by one profile makes the
+  next profile, or a new image, report 0 on code with errors.
+  `SheriffDockerAnalyzerTests` pins it (`noStateIsLeftForSheriffToReuse`).
+  Do not keep the state on the mount to save time; if the speed-up is ever
+  worth having, keep it per component, profile and `image_id`, outside the
+  mount, and measure first.
+- **Zero errors means three different things and Sheriff distinguishes none
+  of them**: the component complies, it holds nothing of the profile's
+  language, or the run produced no report at all. So every caller checks the
+  component for sources of the profile's language, and
+  `SheriffDockerAnalyzer`, the one analyzer every caller goes through, reads
+  `sheriff_errors.json`, which records the component and profile analyzed, to
+  tell a clean run from one that did nothing. `--check-only` **fails with
+  "Nothing was analyzed"** rather than pass; the Maven plugin instead *skips*
+  a module with no `src/`, as an aggregator pom is normal there.
 - **An architecture profile does not include its language's base rules, and
-  Sheriff takes one profile per run.** Measured on 29 September: a file with
-  five style faults draws five errors under `JAVA` wherever it is, and under
-  `JAVA_HEXAGONAL` none in `infrastructure/` or outside the layers (six in
-  `domain/model/`, two in `application/service/`). `JAVA_DDD` is the same. So
+  Sheriff takes one profile per run.** A file with style faults draws them
+  under `JAVA` and few or none under `JAVA_HEXAGONAL` or `JAVA_DDD`. So
   `Rules.withBaseProfiles` puts the base profile before every architecture
-  profile, wherever a profile comes from (argument, variable, declaration,
-  plugin parameter), and the two places that run Sheriff (the analyzer and
-  `SheriffRepair`) split the comma-separated list: one
-  analysis per profile, merged by `AnalysisResult.merged`, and repairs profile
-  by profile, because `fix` reads the state of the `test` just before it.
-  Declaring an architecture must add checks, never take the base ones away.
-- **Sheriff reports zero errors both when a component passes and when it holds
-  nothing of the profile's language.** The two are indistinguishable from its
-  output, and in a gate the second is a silent pass. `--check-only` now tells
-  them apart itself, by looking for sources of the profile's language, and
-  **fails with "Nothing was analyzed"** rather than reporting a pass — the same
-  way a component that does not exist already failed. The Maven plugin instead
-  *skips* a module with no `src/`, because there an aggregator pom is normal
-  and the module list is generated rather than typed by hand.
+  profile, wherever a profile comes from, and the two places that run Sheriff
+  (the analyzer and `SheriffRepair`) split the list: one analysis per
+  profile, merged by `AnalysisResult.merged`, and repairs profile by profile,
+  because `fix` reads the state of the `test` just before it. Declaring an
+  architecture must add checks, never take the base ones away.
 
 ## The rule catalog is the spine
 
-Sheriff ships no rule documentation. `rules_catalog.json` — 529 rules in the
-image of 5 October, 89 with a deterministic fixer, 41 carrying the fixer's own
-code — is **extracted from
-the image** by the agent:
+Sheriff ships no rule documentation. `rules_catalog.json` (about 530 rules,
+under a hundred with a deterministic fixer) is **extracted from the image**
+by the agent:
 
 ```bash
 cd sheriff-mcp-java && java -jar target/sheriff-mcp.jar --agent --extract-rules
@@ -384,259 +320,223 @@ cd sheriff-mcp-java && java -jar target/sheriff-mcp.jar --agent --extract-rules
 
 Everything else consumes it: the MCP's `sheriff_guidelines`, the agent's
 `--rules`, and the deterministic fixer, which reads from it *which* rules it
-can repair. A component without the catalog does not fail, and it must not
-pretend: `sheriff:fix` once repaired nothing while reporting success, and the
-deterministic pass later skipped even the plain `fix -f` (which needs no
-catalog) while saying nothing could be repaired. Without a catalog it now runs
-the default set and says that only that ran.
+can repair. A component without the catalog does not fail, and must not
+pretend: without it the repair runs Sheriff's default set and says that only
+that ran.
 
-**It is not in version control**, and that is deliberate: it is read out of
-Kaizten's proprietary image, down to the source of the fixer scripts, so it is
-not this repository's content to publish. It is gitignored in both shapes
-(`rules_catalog.json` and `SHERIFF_RULES.md`), and nobody has to regenerate
-it: every tool that reads it checks it against the image installed and
-extracts a new one when it is missing or stale (below); `--extract-rules`
-does the same by hand. Everything degrades gracefully
-without it, the Dockerfile copies it with a glob so a clone that has not run
-the extractor still builds, and the catalog-dependent tests skip themselves
-rather than fail.
+**It is not in version control**, on purpose: it is read out of Kaizten's
+proprietary image, down to the source of the fixer scripts. It is gitignored
+in both shapes (`rules_catalog.json` and `SHERIFF_RULES.md`). Everything
+degrades gracefully without it, the Dockerfile copies it with a glob so a
+clone without it still builds, and the catalog-dependent tests skip
+themselves.
 
-**The extractor is a workaround, not the design.** Reading rules out of an
-image is not something a tool should have to do; it exists because Sheriff's
-own export does not carry enough to replace it. `tree --export-profile JSON`
-gives `displayName`, `description`, `active`, `settings` and `children`, and
-nothing else: no reference code (the id findings carry and `--fixers` takes),
-no "has a fixer", no message template, and only 12 of the 35 profiles. Whole
-families also share one leaf: by `CatalogBuilder`'s own measurement, going by
-the tree alone leaves 105 codes attached to no profile at all, which is why it
-merges the tree with the bytecode. If Sheriff ever exports those fields, the
-extractor, the bytecode reading, the freshness check and the provisioning at
-startup all go away. Push for the export rather than for a better extractor;
-meanwhile the extractor stays, because the alternative is having no rules to
-show.
+**The extractor is a workaround, not the design.** Sheriff's own
+`tree --export-profile JSON` gives `displayName`, `description`, `active`,
+`settings` and `children` only: no reference code (the id findings carry and
+`--fixers` takes), no "has a fixer", no message template, and only some of
+the profiles; whole families share one leaf, so the tree alone leaves codes
+attached to no profile, which is why `CatalogBuilder` merges it with the
+bytecode. If Sheriff ever exports those fields, the extractor, the bytecode
+reading, the freshness check and the provisioning all go away. Push for the
+export rather than for a better extractor.
 
-There is exactly one copy in this repository, in `sheriff-mcp-java/`; the
-Maven plugin's copy is **generated at build time** from that module. Two copies
-used to be committed and they drifted apart once, which is the reason the
-arrangement is now one file and several readers. `CatalogFreshness` compares
-the `image_id` the extractor recorded against the image installed now, and
-the plugin's copy is only its first choice: it is unpacked into
-`target/sheriff/`, where the agent looks first, and used only while it
-matches.
+There is one copy, in `sheriff-mcp-java/`; the Maven plugin's is
+**generated at build time** from it. **No tool depends on anyone running the
+extractor.** `CatalogProvisioning` decides for all three: a catalog named by
+hand is used as it is; otherwise the one beside the tool (the MCP's jar, the
+agent's directory, the plugin's `target/sheriff/`), then
+`${XDG_CACHE_HOME:-~/.cache}/sheriff-mcp/`, each only if its `image_id`
+matches the image installed (`CatalogFreshness`). With none it runs the
+extractor (about 6 s), writing atomically. The MCP server does this in the
+background from startup and again on a lookup, at most once a minute
+(`ProvisionedCatalog`), so a `docker pull` mid-session gets its own catalog;
+the agent's CLI in the foreground for the modes that read it (not
+`--check-only`); `sheriff:fix` before it repairs. The agent finds the cache
+only through its own environment (`XDG_CACHE_HOME`, `HOME`, `USERPROFILE`),
+so a test built from a bare map never writes to the real one.
 
-**No tool depends on anyone running the extractor.** `CatalogProvisioning`
-decides for all three: a catalog named by hand is used as it is; otherwise the
-one beside the tool (the MCP's jar, in a checkout the module itself; the
-agent's directory; the plugin's `target/sheriff/`), then
-`${XDG_CACHE_HOME:-~/.cache}/sheriff-mcp/`, shared by all three, each only if
-its `image_id` matches the image installed. With none, it runs the extractor
-(about 6 s), writing atomically so two tools starting together do not
-interleave. The MCP server does this in the background from startup, and
-again during the session: `ProvisionedCatalog` checks on a lookup, at most
-once a minute, so a `docker pull` in another terminal gets its own catalog
-while the old one answers. The agent's CLI does it in the foreground for the
-modes that read the catalog (not `--check-only`), and `sheriff:fix` before it
-repairs. The agent finds the cache only through its own environment
-(`XDG_CACHE_HOME`, `HOME`, `USERPROFILE`), so a test built from a bare map
-never writes to the real one. That is what lets one jar be dropped into any
-project.
-
-The rest of what makes it portable is `ProjectLayout`: the mount and the
-component from the working directory (the `src/` rule, same as the hook
-script), the profile the project declares or else the one its sources call
-for (`.vue` decides Vue; Sheriff's Vue profile also reads `.ts`/`.js`, so
-those cannot; `.py` is Python, a profile the image of 5 October checks and
-these tools read as nothing to analyze until then), and the test command from
-the build tool. `scripts/e2e.sh`
-scenarios 8, 9 and 14 exercise it for real. A working directory inside a
-module's `src/` is that module, when the module has a build file: Codex names
-no project and runs the server and the hooks in its session's directory, and
-a session opened in `src/main/java/demo` used to give the server nothing to
-analyze and the Stop hook nothing to block.
+The rest of what makes the jar portable is `ProjectLayout`: the mount and the
+component from the working directory (the `src/` rule; a directory inside a
+module's `src/` is that module when it has a build file, as Codex runs the
+server in the session's directory), the profile the project declares or else
+the one its sources call for (`.vue` decides Vue; Sheriff's Vue profile also
+reads `.ts`/`.js`, so those cannot; `.py` is not analyzed yet), and the test
+command from the build tool. `scripts/e2e.sh` scenarios 8, 9 and 14 exercise
+it.
 
 **A project declares its profile once, and the plugin and the MCP must agree
 on where** (`DeclaredProfile`): the `sheriff.profile` property of a
-`pom.xml`, read nearest first and only while each directory is a Maven module,
-as Maven inherits it; then `profile` in `.sheriff.properties`. Every
-`pom.xml` comes before any file, because the Maven build resolves the
-property and never sees the file. A declaration applies only to components
-in its language, so one at the root of a repository with a TypeScript front
-end does not turn that front end into an empty Java analysis, and a
-single-module project ignores its parent, which is its siblings' too.
-No rule can be taken out. A version that let a project exclude
-`SortedImport`, on a model's claim that PetClinic's `spring-javaformat`
-rejects Sheriff's import order, was measured and withdrawn: with every Sheriff
-fixer applied, PetClinic's build and tests pass. `KnownFalsePositives`, inside
-the one analyzer, drops only `FilenamePascalCase` on `package-info.java` and
+`pom.xml`, read nearest first and only while each directory is a Maven
+module, as Maven inherits it; then `profile` in `.sheriff.properties`. Every
+`pom.xml` comes before any file, because the Maven build never sees the file.
+A declaration applies only to components in its language, and a
+single-module project ignores its parent, which is its siblings' too. **No
+rule can be taken out**: an exclusion added on a model's claim of a conflict
+was measured and withdrawn. `KnownFalsePositives`, inside the one analyzer,
+drops only `FilenamePascalCase` on `package-info.java` and
 `module-info.java`, names Java requires.
 
-**The MCP's answers decide the next step, not the model.** Every answer of
+## The MCP's answers
+
+**The answers decide the next step, not the model.** Every answer of
 `sheriff_test` and `sheriff_fix` ends with one `Next step:` (`NextStep`),
-chosen from the state alone and with no alternative in it, and the server's
-instructions are to do that step. Measured on 1 and 5 October: the answers
-were the same for the same code call after call, and the work still differed
-by model, because "fix these or ask for a narrower component" and "call the
-fixer with one of these codes" left the choice to it. Do not add wording that
-offers the model a choice; `ToolsTest` checks the step has none, and that it is
-the answer's last line (`NextStep.last` moves it below the task's folder and
-the image notice). The work is one loop with one tool: `sheriff_fix`, what it
-leaves by hand, `sheriff_fix` again; after an analysis the step is the repair
-whatever the catalog says, so it does not change while one is extracted. The
-test command a step names is `ProjectLayout.testCommandForModel`: absolute,
-because the server's own is relative to the mount and a model's shell is in
-the project, and without `-q`. What is left by hand is listed bottom-up per
-file and followed by the Java Sheriff accepts for it (`AcceptedCode`, from
+chosen from the state alone, with no alternative in it: when an answer left
+a choice, the work differed by model for the same answers. Do not add wording
+that offers the model a choice; `ToolsTest` checks the step has none and is
+the answer's last line (`NextStep.last`). The work is one loop with one tool:
+`sheriff_fix`, what it leaves by hand, `sheriff_fix` again. The test command
+a step names is `ProjectLayout.testCommandForModel`: absolute, and without
+`-q`. What is left by hand is listed bottom-up per file and followed by the
+code Sheriff accepts for it (`AcceptedCode`, from
 `src/main/resources/accepted-code.md`): change a shape there only after
-checking it against the image, as every one in it was.
+checking it against the image.
 
-**The hooks speak the same language.** A hook has already analyzed, so it
-ends with the step an analysis ends with, from `ComponentGate.repairStep`: the
-`sheriff_fix` tool with the component named, what done looks like ("Next step:
-none, the component is done"), and the command for a session with no sheriff
-tools, `--call`, which goes through the same `Tools` and so answers the same,
-its steps written as commands (`ToolCall`). Every step names the component: "call
-sheriff_fix with no arguments" failed in a repository of several modules.
-`scripts/e2e.sh` runs the command a Stop hook printed, as it stands.
+**The hooks speak the same language.** A hook ends with the step an analysis
+ends with, from `ComponentGate.repairStep`: the `sheriff_fix` tool with the
+component named, what done looks like ("Next step: none, the component is
+done"), and the command for a session with no sheriff tools, `--call`, which
+goes through the same `Tools` and so answers the same (`ToolCall`). Every
+step names the component. `scripts/e2e.sh` runs the command a Stop hook
+printed, as it stands.
 
-**The answers are as short as the work allows, and that is measured, not
-guessed** (task records under `~/.local/state/sheriff-mcp/tasks/` hold every
-answer of every session): `sheriff_test` answers with counts
-(`FindingsRenderer.summary`), as its step is the repair, whose list writes the
-shared folder once, one line per error and a rule's `howToSolve` once, and only
-for a rule `accepted-code.md` does not show. That list is whole files, in path
-order, until they hold `SheriffFixTool.ERRORS_PER_ANSWER` (20) errors, with the
-rest counted per file, and the step is those files and no other
-(`NextStep.afterRepair`): the whole list was 8 to 11 KB a call, and Codex,
-fixing one file per call, got it fifteen times; one file per answer would be a
-call for every file of one error. `AnswerMemory` says when a list is the same
-as the last one. On PetClinic a Codex session made 20 calls for
-238 KB of answers, three of them the same 172 errors. Do not point an answer
-elsewhere for the rest: "the rest are in that answer", and the task's folder
-named in every answer, sent the next Codex session to read Sheriff's raw JSON
-(100 KB) instead of fixing the file; answers name the task's id only. A
-component that is a path inside one is refused before Sheriff runs, naming the
-component (`ToolContext.componentArgument`). Its description gives no example
-name: Codex called `component: "backend"`, the one it used to give.
+**The answers are as short as the work allows**, judged from the task
+records, which hold every answer of every session. `sheriff_test` answers
+with counts (`FindingsRenderer.summary`), as its step is the repair. The
+repair's list writes the shared folder once, one line per error and a rule's
+`howToSolve` once, only for rules `accepted-code.md` does not show. It holds
+whole files, in path order, until they reach
+`SheriffFixTool.ERRORS_PER_ANSWER` (20) errors, with the rest counted per
+file, and the step names those files and no other (`NextStep.afterRepair`).
+`AnswerMemory` says when a list is the same as the last one. Do not point an
+answer elsewhere for the rest (a folder, another answer): models went to read
+Sheriff's raw JSON instead of fixing. Answers name the task's id only. A
+component that is a path inside one is refused before Sheriff runs
+(`ToolContext.componentArgument`), and its description gives no example
+name, which models copy.
 
 **A clean component is not finished while a method the change added has no
 test** (`UntestedMethods`): a non-private method with a body in `src/main`
 that the last commit does not have must be called from a test file that
 changed too. The MCP's clean step names them, and the Stop hook blocks on
-them before the tests. It reads Java declarations by pattern, not by parsing,
-and compares with `git show HEAD:`; with no repository it checks nothing.
-`scripts/e2e.sh` scenario 19 runs it against real git and Sheriff.
+them before the tests. It reads Java declarations by pattern, compares with
+`git show HEAD:`, and with no repository checks nothing. `scripts/e2e.sh`
+scenario 19 runs it.
 
 `sheriff_fix`, the loop's first pass and `sheriff:fix` repair with one class,
 `SheriffRepair` (`SheriffRunner.fix` and `DeterministicFixer` only call it
 and word its outcome): Sheriff's default set, then `--fixers` with every rule
 found, again for each profile whose count the round before lowered, up to
 three rounds, each round's analysis measuring the one before; a `fix` that
-did not run is a failure, not a repair that found nothing. It used to be
-written twice, and the copies had drifted (flags, rounds, a dead `fix`
-noticed by one and not the other); `DeterministicFixerTests` now checks the
-loop and `sheriff_fix` give Sheriff the same commands.
+did not run is a failure, not a repair that found nothing.
+`DeterministicFixerTests` checks the loop and `sheriff_fix` give Sheriff the
+same commands.
 
 ## Architecture
 
 The agent is hexagonal and **the layering is enforced, not trusted**:
 `LayeringTests` fails on any import a layer is not explicitly allowed —
 dependencies point inwards, the domain knows nothing outside itself, and only
-infrastructure touches I/O or a third-party library. Adding a dependency to
-`domain/` or `application/` fails the build with the offending import named,
-and so does a source outside the three layers.
+infrastructure touches I/O or a third-party library. A source outside the
+three layers fails it too.
 
 That is what makes the adapters cheap: **the CLI is a driving adapter, the
 MCP server is another (`infrastructure/mcp/`), and the Maven Mojo is a third,
-in its own module.** The plugin adds the Maven-facing edge and
-the decision a build takes from a result; the analysis, the Docker call and
-the value objects are the agent's, unchanged.
+in its own module.** The plugin adds the Maven-facing edge and the decision a
+build takes from a result; the analysis, the Docker call and the value
+objects are the agent's, unchanged.
 
 `ProcessRunner` is the seam everything external goes through, so the exact
 `docker` and `claude` invocations are asserted against recorded values rather
 than inspected on a mock.
 
-**It runs on Linux, macOS and Windows, and CI builds on all three.** What
-differs lives in `Platform`, one place: `cmd.exe /c` instead of `/bin/sh -c`
-for the project's tests (with `mvnw.cmd`, double quotes), paths compared with
-Sheriff's and git's always written with `/`, Claude Code rules in its POSIX
-form (`C:\x` as `//c/x`), and executables such as npm's `claude.cmd` found on
-the `PATH`. With `SHERIFF_DOCKER=wsl` (or `wsl:<distro>`; `install.sh
---docker-wsl` under Git Bash and `install.ps1 -DockerWsl` set it for the user) every `docker` command becomes `wsl.exe
--e docker`, a bind mount's `source=C:\x` written `/mnt/c/x`, for a Windows
-machine whose Docker is the engine inside WSL rather than Docker Desktop.
-The `-e` runs it with no shell: without it the distribution's shell expanded
-a `$` in a path, and a project under `pay$app` was mounted from `pay`. The first Windows build found git paths with backslashes, which
-made every pass look out of scope; do not compare `Path.toString()` with a
-path Sheriff or git wrote. The end-to-end job stays on Linux: GitHub's macOS
-and Windows runners have no Docker for Linux containers.
+**Sheriff's image is managed, not assumed** (`ImageProvisioning`). Missing,
+it is pulled with its own time limit (60 min, not the analysis's 300 s): in
+the background from the MCP server's start, with the tools answering "being
+downloaded" meanwhile; in the foreground from `--check`, the agent's CLI and
+the Maven goals. The hooks never pull: with no image they let the edit
+through. Out of date (Docker Hub's digest differs from the local one) it is
+reported once per session and replaced only with `SHERIFF_PULL=always`, so
+new rules do not arrive in the middle of someone's work unasked.
 
-Three more things differ on Windows, and none of them shows in its CI, which
-has no Docker and no assistant. **Every shell is a different one**: the
-server and the hooks run commands through `cmd.exe`, Claude Code runs its
-Bash tool in Git Bash and Codex runs PowerShell, and neither of the last two
-runs `mvnw.cmd` from the folder it is in, nor does Windows PowerShell know
-`&&`. So a command a model is told to run (`testCommandForModel`, `--call`)
-is `cd 'C:/x'; ./mvnw.cmd test` there for a wrapper, and `mvn -f 'C:/x'
-test`, `gradle -p` or `npm --prefix` for a tool on the PATH, with no `cd`
-that could fail and leave the tests running in another folder
-(`TestShell.ANY_WINDOWS_SHELL`), measured in bash, Windows PowerShell 5.1
-and pwsh. The quotes are single (`Platform.quotedForAnyWindowsShell`): double
-ones expanded a `$` or a backtick in a path in all three; only a path holding
-a `'` is double quoted, and a folder named with `[ ]` still defeats
-PowerShell's `cd`, which reads it as a wildcard, so only a wrapper there
-fails. The loop's `Bash(...)` rule for Claude Code names `./mvnw.cmd`
-(`ClaudeCliFixer.inGitBash`), and Bash's alone: with a `PowerShell(...)` rule
-beside it the model chose PowerShell, where Claude Code refuses a `cd`
-followed by another command, and the tests never ran (measured with Claude
-Code 2.1.296). What the server and the hooks run stays in cmd's form, with
-the wrapper as `.\mvnw.cmd` (`TestShell.CMD`): Claude Code sets
-`NoDefaultCurrentDirectoryInExePath=1` for the commands it runs, and with it
-cmd does not look in the current folder, so a bare `mvnw.cmd` made a
-`sheriff_fix` with `verify` report the project's tests as failing (measured
-13 October). **Java writes a pipe in Cp1252**, not UTF-8: `Año.java` reached the
-model as `A�o.java`, so `claimStandardOutput` makes both streams UTF-8 when
-they go to a program; on a terminal it keeps Java's own choice, the
-console's code page, as UTF-8 there showed `Año` as `A├▒o` (measured in a
-real console, code page 850). **Codex passes a server none of the user's
-variables**: measured with Codex 0.162, on Linux a server got `HOME LANG
-LOGNAME PATH PWD SHELL SHLVL TERM USER` and nothing else, and on Windows
-twenty of the system's (`PATH`, `SYSTEMROOT`, `USERPROFILE`, `TEMP` and the
-like) and no other, so `SHERIFF_DOCKER` goes into the entry's `env` and, for
-its hooks, onto the line as the Java property `sheriff.docker`
-(`Platform.environment` reads it when the variable is not set). Without it a
-server under Codex with WSL's Docker ran a `docker` that was not there, and
-the Stop hook let a turn end unchecked. **Never put a `set` on a hook's
-line**: 1.0.6 and 1.0.7 wrote `cmd /d /s /c "set "SHERIFF_DOCKER=wsl"&& ..."`,
-PowerShell handed `cmd` a `set "`, which printed every variable of the
-user's, and Codex gave that to the model as the turn hook's context: 69
-variables of a Windows machine sent to the model in two sessions, none a
-token by name or shape (13 October). A `docker` of the user's own on the PATH, a script
-forwarding to WSL, hides all of this, so measure with it off the PATH. The
-installers read the variable from the environment they are given, never
-from the process: read from the process, two tests failed on a Windows
-machine with `SHERIFF_DOCKER=wsl` while CI, which has none, passed. A hook's
-payload may start with a byte order mark, as .NET Framework writes one, and
-is read without it: the mark failed the JSON and every hook let the turn
-through, saying nothing.
+The MCP server writes the protocol to the stream it claims at startup and
+points `System.out` at stderr: anything in the core that prints must never
+reach the JSON-RPC channel. `--agent` is dispatched before that, so the
+agent's CLI keeps its stdout. A `tools/call` runs on a thread of its own, one
+at a time in order, so a `ping` or a `tools/list` is answered while Sheriff
+or the tests run; `sheriff_guidelines` and `sheriff_task`, which run neither
+(`Tools.answersAtOnce`), have a second thread, so they never wait behind a
+long analysis. Responses are written whole, and when the input ends the calls
+already read are answered first. Background tasks run on one daemon thread;
+when the client disconnects the server waits for them. A client that stops
+the server instead (Codex sends SIGTERM to the process group, then SIGKILL
+about 0.3 s later) triggers a shutdown hook that records every unfinished
+task as `interrupted`, which nothing may overwrite afterwards; a background
+task's failure waits 0.2 s before it is recorded, as its `git` can die first;
+a queued task never starts. Task records are written to a file of their own
+and moved into place.
 
-**Sheriff's image is managed, not assumed** (`ImageProvisioning`). Missing, it
-is pulled with its own time limit (60 min, not the analysis's 300 s): in the
-background from the MCP server's start, with the tools answering "being
-downloaded" meanwhile and the catalog extracted after it; in the foreground
-from `--check`, the agent's CLI and the Maven goals. The hooks never pull:
-with no image they let the edit through at once. Out of date (Docker Hub's
-digest for the tag differs from the local one) it is reported, once per
-session, and replaced only with `SHERIFF_PULL=always`: new rules should not
-arrive in the middle of someone's work unasked.
+Every Sheriff run holds `MountLock` for its mount, across threads and
+processes, with the whole `test`, `fix`, `test` sequence held at once, since
+Sheriff keeps its state at the root of the mount. The lock files, and the
+markers the hooks leave for their next run, live in a folder of the temporary
+directory per user (`TemporaryFolders`). Markers older than a week are pruned
+when their folder is written; lock files never are.
+
+## Windows
+
+**It runs on Linux, macOS and Windows, and CI builds on all three**, but
+Windows CI has no Docker and no assistant, so nothing below shows in it. What
+differs lives in `Platform`: `cmd.exe /c` instead of `/bin/sh -c` for the
+project's tests, paths compared with Sheriff's and git's always written with
+`/` (never compare `Path.toString()` with a path Sheriff or git wrote),
+Claude Code rules in its POSIX form (`C:\x` as `//c/x`), and executables such
+as npm's `claude.cmd` found on the `PATH`. The end-to-end job stays on Linux.
+
+- **WSL's Docker.** With `SHERIFF_DOCKER=wsl` (or `wsl:<distro>`; set for the
+  user by `install.sh --docker-wsl` under Git Bash and `install.ps1
+  -DockerWsl`) every `docker` command becomes `wsl.exe -e docker`, a bind
+  mount's `source=C:\x` written `/mnt/c/x`. The `-e` runs it with no shell,
+  which would expand a `$` in a path. A `docker` of the user's own on the
+  PATH that forwards to WSL hides every problem here, so measure with it off
+  the PATH.
+- **Every shell is a different one.** The server and the hooks run commands
+  through `cmd.exe`, Claude Code runs its Bash tool in Git Bash, Codex runs
+  PowerShell (5.1 for hooks). A command a model is told to run
+  (`testCommandForModel`, `--call`) must work in all of Git Bash, Windows
+  PowerShell 5.1 and pwsh (`TestShell.ANY_WINDOWS_SHELL`): `cd 'C:/x';
+  ./mvnw.cmd test` for a wrapper, `mvn -f 'C:/x' test`, `gradle -p` or
+  `npm --prefix` for a tool on the PATH. Single quotes
+  (`Platform.quotedForAnyWindowsShell`), as double ones expand `$` and
+  backticks; a folder named with `[ ]` still defeats PowerShell's `cd`. What
+  the server and the hooks run is cmd's form, with the wrapper as
+  `.\mvnw.cmd` (`TestShell.CMD`), because Claude Code sets
+  `NoDefaultCurrentDirectoryInExePath=1`.
+- **The loop's rule for Claude Code is `Bash(...)` alone**, naming
+  `./mvnw.cmd` (`ClaudeCliFixer.inGitBash`): with a `PowerShell(...)` rule
+  beside it the model chose PowerShell, where Claude Code refuses a `cd`
+  followed by another command.
+- **Java writes a pipe in Cp1252.** `claimStandardOutput` makes both streams
+  UTF-8 when they go to a program, and keeps Java's own choice on a terminal,
+  where UTF-8 shows mojibake in the console's code page.
+- **Codex passes a server and a hook almost none of the user's variables**
+  (on Linux `HOME LANG LOGNAME PATH PWD SHELL SHLVL TERM USER`, on Windows a
+  score of system ones). So `SHERIFF_DOCKER` goes into the entry's `env` and,
+  for its hooks, onto the line as the Java property `sheriff.docker`, which
+  `Platform.environment` reads when the variable is not set. The installers
+  read it from the environment they are given, never from the process, or
+  tests pass in CI and fail on a machine that has it set.
+- **A hook's payload may start with a byte order mark** (.NET Framework
+  writes one), and is read without it, or the JSON fails and every hook lets
+  the turn through silently.
 
 ## Rules this repository holds itself to
 
-Kaizten's rules are not a convention to interpret — they are compiled into the
-image as profiles. Two consequences when writing code here:
+Kaizten's rules are not a convention to interpret — they are compiled into
+the image as profiles. When writing code here:
 
 - **Both modules must stay green under `JAVA`.** Check before finishing, and
-  prefer the plugin's own goal for the plugin. Both were green as of the last
-  change.
+  prefer the plugin's own goal for the plugin.
 - **JavaDoc is at least three lines** (`/**`, text, `*/`, each on its own
   line) on every method, constructor and field, with `@param` and `@return`.
   No hardcoded strings or numbers in a call, braces on every branch, imports
@@ -646,10 +546,17 @@ image as profiles. Two consequences when writing code here:
   `domain/model/` and several findings under `domain/valueobject/`.
 
 `JAVA_HEXAGONAL` and `JAVA_DDD` each report exactly one error on
-`sheriff-mcp-java`:
-`domain/port` is not an allowed domain directory name. That is known and
-deliberate — in hexagonal architecture the ports *are* domain, so the rule and
-the architecture disagree about one directory. Do not "fix" it by renaming.
+`sheriff-mcp-java`: `domain/port` is not an allowed domain directory name.
+That is deliberate — in hexagonal architecture the ports *are* domain. Do not
+"fix" it by renaming.
+
+**"Measured" means observed in the real tool.** A claim about how Claude
+Code, Codex, `agy`, Sheriff or a shell behaves is written as fact here, in a
+commit or in code only after running that tool and seeing it; reproducing
+the behaviour you expect in something else (passing a line to `cmd /c` by
+hand to learn what Codex does with it) is a hypothesis, and is written as
+one. The Codex hooks on Windows went through three releases on such a
+hypothesis, and one of them sent the user's environment to the model.
 
 ## When running the loop
 
@@ -661,139 +568,74 @@ batching, the scope check and the commits are identical for all of them:
 **`openai_api` and `local` are one adapter.** Ollama, LM Studio, vLLM and
 llama.cpp all speak OpenAI's `/chat/completions`, so the difference is a base
 URL (`OPENAI_BASE_URL`) and whether a key is required. It uses the JDK's HTTP
-client, not an SDK, and adds no dependency. Both API backends work by offering
-`read_file`/`write_file`, and **how well that goes is a property of the model,
-not of the loop**: a model that cannot emit structured `tool_calls` never calls
-one, and one that can may still call `read_file` and stop without writing —
-both observed on the same local model across two runs of the same file. Either
-way nothing unintended happens; the loop parks the file it made no progress on
-and cuts. **Both tools are kept to the component** (`FileTools`, given it by
-`Composition`), reading as much as writing, with symbolic links followed to
-where they lead: paths stay relative to the mount, but for a single-module
-project the mount is the folder of every other project beside it, and the
-model could read their `.env` files and, in the repair pass, write into them
-where no `git status` of the component would show it.
+client, not an SDK. Both API backends offer `read_file`/`write_file`, and
+**how well that goes is a property of the model, not of the loop**: a model
+may never call a tool, or read and stop without writing. Either way the loop
+parks the file it made no progress on and cuts. **Both tools are kept to the
+component** (`FileTools`, given it by `Composition`), reading as much as
+writing, with symbolic links followed: for a single-module project the mount
+is the folder of every project beside it.
 
-`AI_BACKEND=claude_cli` (the default) uses the Claude Code subscription and
-needs no API key. The loop works on its own branch, commits each pass, and
-**cuts the run without committing when the model touches a file outside its
-batch** — that is a scope violation, not a failure of the fix, and the work is
-left in the tree for review.
+The loop works on its own branch, commits each pass, and **cuts the run
+without committing when the model touches a file outside its batch** — a
+scope violation, not a failure of the fix; the work is left in the tree for
+review. The order inside a run is tested: branch first, then Sheriff's own
+fixers (`AutomaticRepair`, committed on their own), then the model passes.
+Git runs from inside the component and translates its paths to the mount's,
+so a repository that *is* the module gets the same branch, commits and scope
+check; no repository, or any git command failing, stops the run loudly. The
+assistant the loop launches carries `SHERIFF_AGENT_RUNNING=1`, and the hooks
+stand aside for it.
 
-The order inside a run matters and is tested: branch first, then Sheriff's
-own fixers (`AutomaticRepair`, committed on their own), then the model
-passes. Git runs from inside the component and translates its paths to the
-mount's, so a repository that *is* the module gets the same branch, commits
-and scope check; no repository, or any git command failing, stops the run
-loudly. The assistant the loop launches carries `SHERIFF_AGENT_RUNNING=1`,
-and the hooks stand aside for it. With `claude_cli` it may edit only inside
-the component, by Claude Code's own rule `Edit(//<absolute component path>/**)` rather than
-`--permission-mode acceptEdits`: the CLI runs in the mount, which for a
-single-module repository is its parent, and acceptEdits made every sibling
-project editable. Validated with a real run: 15 errors to 0, tests green,
-no permission denied, the sibling project untouched. **The path in that rule
-must be absolute**: Claude Code resolves a relative `Edit(<component>/**)`
-against the session's *current* directory, so a model that runs
-`cd <component>` before editing is denied every edit after it. That made
-runs fail intermittently until 28 September; `ClaudeCliFixerTests` pins the
-absolute form. It may also run the project's test command, as an exact
-`Bash(<command>)` rule without the `cd`: without it a repair pass worked
-blind, fixing the one error the output showed, while Codex, which runs
-commands, reached green on the same project. `codex_cli` gets the
-same confinement another way: it runs with `--cd <component>`, which is also
-what lets it start at all in a single-module layout, since it refuses to run
-outside a git repository. Validated for real too (15 to 0 in two passes).
+With `claude_cli` the model may edit only inside the component, by Claude
+Code's rule `Edit(//<absolute component path>/**)`, not
+`--permission-mode acceptEdits`, which would make every sibling of a
+single-module repository editable. **The path must be absolute**: Claude Code
+resolves a relative one against the session's current directory, so a model
+that `cd`s is denied every edit after it (`ClaudeCliFixerTests` pins it). It
+may also run the project's test command, as an exact `Bash(<command>)` rule
+without the `cd`; without it a repair pass works blind. The prompt goes to
+`claude -p` on standard input, as Linux caps one argument at 128 KB.
+`codex_cli` is confined by `--cd <component>`, which also lets it start in a
+single-module layout, as it refuses to run outside a git repository.
 
-Antigravity is also an MCP client (`agy` 1.3.1, tried 7 October): it reads
-the server's instructions and follows the steps, but has no hooks.
-`--install-antigravity` (`AntigravityInstaller`, which `install.sh` runs when
-`agy` is on the PATH) writes the server where `agy mcp add` does,
-`~/.gemini/config/mcp_config.json`, and allows the four tools that do not commit
-in `~/.gemini/antigravity-cli/settings.json`: its headless mode refuses any
-tool it cannot ask about, MCP tools included, unless `permissions.allow` names
-it (`mcp(sheriff/sheriff_test)`). `agy` follows `HOME`, so a trial can run with
-a home of its own, as `AntigravityHome` does; the jar does not, so pass it
+Antigravity is also an MCP client: it reads the server's instructions and
+follows the steps, but has no hooks. `--install-antigravity`
+(`AntigravityInstaller`) writes the server where `agy mcp add` does,
+`~/.gemini/config/mcp_config.json`, and allows the four tools that do not
+commit in `~/.gemini/antigravity-cli/settings.json`
+(`mcp(sheriff/sheriff_test)`), as its headless mode refuses any tool it
+cannot ask about.
+
+`antigravity_cli` runs `agy` inside the component with
+`--mode accept-edits` and the prompt on standard input. Headless, it accepts
+writes inside the directory it runs in and refuses everything else but
+reading, a refusal ending the session with exit 0 and no output. **Measure
+it outside `/tmp`**, where `agy` writes anywhere. Its permissions come only
+from `~/.gemini/antigravity-cli/settings.json` and its login from the
+keyring, so each pass runs with a `HOME` of its own (`AntigravityHome`): a
+copy of the user's settings with `command(<test command>)` and
+`command(git mv)` added, deleted after. `command(X)` allows `X` with more
+arguments and refuses anything chained to it. Maven and Gradle find their
+caches through Java's `user.home`, which ignores that `HOME`, and
+`MAVEN_USER_HOME` and npm's two variables point the rest back
+(`Configuration.buildToolHomes`). On Windows, where `agy` reads
+`USERPROFILE`, none of this has been tried, and it runs with no command. A
+session cut at a refused tool is reported rather than failed, and
+`--print-timeout` is set to the fixer's own limit, as `agy` gives up after
+five minutes. `agy` follows `HOME`; the jar does not, so a trial passes it
 `-Duser.home` too.
-
-`antigravity_cli` runs Google Antigravity's `agy` inside the component with
-`--mode accept-edits`, the prompt on standard input (`-p` takes it as an
-argument; with no `-p` and a stdin that is not a terminal, `agy` reads it
-there). Measured with `agy` 1.1.16, on 7 October: without its interface every
-write is refused, `accept-edits` accepts the ones inside the directory it runs
-in and refuses those outside, and every terminal command, URL or tool but
-reading and editing is refused, the refusal ending the session with exit 0
-and no output. **Measure it outside `/tmp`:** there `agy` writes anywhere,
-which made a first test say it was not confined at all. Its permissions come
-only from `~/.gemini/antigravity-cli/settings.json`, with no flag, and its
-login from the system's keyring, so each pass runs with a `HOME` of its own
-(`AntigravityHome`): a copy of the user's settings with `command(<test
-command>)` and `command(git mv)` added, deleted after, the user's file never
-written. `command(X)` allows `X` with more arguments and refuses anything
-chained to it (`&&`, `;`, `$(...)`, a pipe, a redirection), measured. The
-commands it runs inherit that `HOME`: Maven and Gradle find their caches
-through Java's `user.home`, which ignores it, and `MAVEN_USER_HOME` and npm's
-two variables point the rest back (`Configuration.buildToolHomes`). On
-Windows, where `agy` reads `USERPROFILE`, none of this has been tried, and it
-runs with no command. The prompt names the two commands as the only ones, a
-session cut at a refused tool anyway is reported rather than failed (a failed
-fixer stops the run), and `--print-timeout` is set to the fixer's own limit,
-as `agy` gives up after five minutes. Validated on PetClinic, 7 October.
-Without the tests it got 221 errors to 0 and then could not pass
-`spring-javaformat:validate` (two JavaDoc lines wrapped differently), and its
-repair pass, unable to run the build, reached for a URL and was cut. With
-them, the same run reached 0 in five passes with the 81 tests and the
-formatter green and no repair pass, having run `./mvnw -q test` itself.
 
 **The iteration cap grows while the passes make progress**, unless one was
 given (`--max-iterations`, `max_iterations` in `sheriff_autofix`). The first
 analysis sizes it as one pass per batch of files plus two to spare
 (`BatchPolicy.estimateMaxIterations`), and every pass that lowers the count
 re-sizes it from the files still with errors (`extendedMaxIterations`), up to
-three times the first estimate. A project analyzed for the first time, with
-errors in hundreds of files and many needing a second pass, used to stop at
-`iterations_exhausted` with work left after the two spare passes. A pass that
-lowers nothing never grows it: its files are parked, and the run stops when
-nothing is left to try.
+three times the first estimate. A pass that lowers nothing never grows it:
+its files are parked, and the run stops when nothing is left to try.
 
 Standards clean is not the same as working: Sheriff's fixers and a partial
 pass can break the build. So the loop runs the project's tests however it
 stops (`RunSummary.testsPassed`), `sheriff_fix` takes `verify`, the Stop
 hook requires green tests with `SHERIFF_STOP_RUNS_TESTS=1`, and `sheriff:fix`
 analyzes again and fails on what it could not repair.
-
-Two more things the loop and the tools rely on. The prompt reaches
-`claude -p` on standard input, not as an argument: Linux caps one argument at
-128 KB, and a batch of large files passes that. And every Sheriff run holds
-`MountLock` for its mount, across threads and processes, with the whole
-`test`, `fix`, `test` sequence held at once: Sheriff keeps its state at the
-root of the mount, so two sibling single-module projects checked together
-used to clobber each other's. The lock files, and the markers the hooks
-leave for their next run (gate, turn, stop), live in a folder of the
-temporary directory per user (`TemporaryFolders`): shared, the first user to
-create one left it unwritable for the others. Markers older than a week are
-pruned when their folder is written; lock files never are.
-
-The MCP server writes the protocol to the stream it claims at startup and
-points `System.out` at stderr. Anything in the core that prints (the loop
-does) must never reach the JSON-RPC channel. `--agent` is dispatched before
-that, so the agent's CLI keeps its stdout. A `tools/call` runs on a thread of
-its own, one at a time in the order they came, so a `ping` or a `tools/list`
-is answered while Sheriff or the tests run. `sheriff_guidelines` and
-`sheriff_task`, which run neither (`Tools.answersAtOnce`), have a second
-thread: behind a 7-minute `sheriff_test` a `sheriff_guidelines` waited for
-it, and Codex reported both as hung. Responses are written whole, and
-when the input ends the calls already read are answered first. Background
-tasks run on one daemon thread, one at a time; when the client disconnects the server waits for them
-to finish rather than cut a loop mid-pass. A client that stops the server
-instead gets no such courtesy: Codex ends a session with SIGTERM to the whole
-process group and SIGKILL about 0.3 s later. A shutdown hook then records
-every unfinished task as `interrupted`, and nothing may overwrite that record
-afterwards (the loop, whose `git` died with it, used to record a failure over
-it). A background task's failure also waits 0.2 s before it is recorded, as
-that `git` can die before the hook starts, and one run in five used to end
-`failed`; a task still queued when the stop comes never starts. Task records
-are written to a file of their own and moved into place, because a JVM halted
-mid-write left an empty `task.json`.
-
-`mvn -q test` is the wrong verification command: `-q` suppresses Maven's INFO
-lines, which is where `Tests run:` and `BUILD SUCCESS` are.
