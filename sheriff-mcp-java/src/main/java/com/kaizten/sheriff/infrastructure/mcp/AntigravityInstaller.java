@@ -83,17 +83,21 @@ public final class AntigravityInstaller {
     private final PrintStream output;
     private final boolean pullAlways;
     private final String java;
+    private final Map<String, String> environment;
 
     /**
      * Wires the installer.
      *
+     * @param environment where {@code SHERIFF_DOCKER} is read, as the
+     *     installers leave it, rather than from this process: a test given
+     *     none writes what a machine without it would
      * @param geminiHome where {@code agy} keeps its configuration,
      *     {@code ~/.gemini}
      * @param jar this jar, which the server will run
      * @param output where to report what was done
      */
-    public AntigravityInstaller(Path geminiHome, Path jar, PrintStream output) {
-        this(geminiHome, jar, output, false, JAVA);
+    public AntigravityInstaller(Map<String, String> environment, Path geminiHome, Path jar, PrintStream output) {
+        this(geminiHome, jar, output, false, JAVA, environment);
     }
 
     /**
@@ -104,26 +108,31 @@ public final class AntigravityInstaller {
      * @param output where to report
      * @param pullAlways whether the server's entry sets {@code SHERIFF_PULL=always}
      * @param java the Java the server runs with: {@code java}, or a path
+     * @param environment where {@code SHERIFF_DOCKER} is read
      */
-    private AntigravityInstaller(Path geminiHome, Path jar, PrintStream output, boolean pullAlways, String java) {
+    private AntigravityInstaller(Path geminiHome, Path jar, PrintStream output, boolean pullAlways, String java,
+            Map<String, String> environment) {
         this.geminiHome = geminiHome;
         this.jar = jar;
         this.output = output;
         this.pullAlways = pullAlways;
         this.java = java;
+        this.environment = environment;
     }
 
     /**
      * The installer for the user running it, whose home holds
      * {@code agy}'s {@code .gemini} directory.
      *
+     * @param environment the process environment
      * @param home the user's home
      * @param jar this jar
      * @param output where to report
      * @return the installer
      */
-    public static AntigravityInstaller forUser(Path home, Path jar, PrintStream output) {
-        return new AntigravityInstaller(home.resolve(GEMINI_DIRECTORY), jar, output);
+    public static AntigravityInstaller forUser(Map<String, String> environment, Path home, Path jar,
+            PrintStream output) {
+        return new AntigravityInstaller(environment, home.resolve(GEMINI_DIRECTORY), jar, output);
     }
 
     /**
@@ -133,7 +142,7 @@ public final class AntigravityInstaller {
      * @return that installer
      */
     public AntigravityInstaller pullingAlways() {
-        return new AntigravityInstaller(geminiHome, jar, output, true, java);
+        return new AntigravityInstaller(geminiHome, jar, output, true, java, environment);
     }
 
     /**
@@ -146,7 +155,7 @@ public final class AntigravityInstaller {
      */
     public AntigravityInstaller runningWith(Path executable) {
         return new AntigravityInstaller(geminiHome, jar, output, pullAlways,
-                executable.toAbsolutePath().normalize().toString());
+                executable.toAbsolutePath().normalize().toString(), environment);
     }
 
     /**
@@ -253,7 +262,7 @@ public final class AntigravityInstaller {
      * @return the entry
      */
     ObjectNode serverEntry() {
-        return serverEntry(Platform.windows(), System.getenv());
+        return serverEntry(Platform.windows(), environment);
     }
 
     /**

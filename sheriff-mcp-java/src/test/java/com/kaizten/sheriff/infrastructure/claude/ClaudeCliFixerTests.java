@@ -86,11 +86,14 @@ class ClaudeCliFixerTests {
     @DisplayName("on Windows the loop's test command names its wrapper from the current folder, as Git Bash needs")
     void onWindowsTheWrapperIsRunFromTheCurrentFolder() {
         assertEquals("cd \"app\" && ./mvnw.cmd -q test",
+                ClaudeCliFixer.inGitBash("cd \"app\" && .\\mvnw.cmd -q test", true));
+        assertEquals("cd \"app\" && ./mvnw.cmd -q test",
                 ClaudeCliFixer.inGitBash("cd \"app\" && mvnw.cmd -q test", true));
+        assertEquals("./gradlew.bat test", ClaudeCliFixer.inGitBash(".\\gradlew.bat test", true));
         assertEquals("./gradlew.bat test", ClaudeCliFixer.inGitBash("gradlew.bat test", true));
         assertEquals("cd \"app\" && mvn -q test", ClaudeCliFixer.inGitBash("cd \"app\" && mvn -q test", true));
         assertEquals(",Bash(./mvnw.cmd -q test)",
-                ClaudeCliFixer.testRule(ClaudeCliFixer.inGitBash("cd \"app\" && mvnw.cmd -q test", true)));
+                ClaudeCliFixer.testRule(ClaudeCliFixer.inGitBash("cd \"app\" && .\\mvnw.cmd -q test", true)));
         assertEquals("cd 'app' && ./mvnw -q test", ClaudeCliFixer.inGitBash("cd 'app' && ./mvnw -q test", false));
     }
 

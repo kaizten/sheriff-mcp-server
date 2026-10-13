@@ -11,8 +11,8 @@ final class TestShell {
     private static final String IN_DIRECTORY_ANY_WINDOWS_SHELL = "cd %s; %s";
     private static final String MAVEN_WRAPPER_RUN = "./mvnw%s test";
     private static final String GRADLE_WRAPPER_RUN = "./gradlew test";
-    private static final String MAVEN_WRAPPER_RUN_CMD = "mvnw.cmd%s test";
-    private static final String GRADLE_WRAPPER_RUN_CMD = "gradlew.bat test";
+    private static final String MAVEN_WRAPPER_RUN_CMD = ".\\mvnw.cmd%s test";
+    private static final String GRADLE_WRAPPER_RUN_CMD = ".\\gradlew.bat test";
     private static final String MAVEN_WRAPPER_RUN_WINDOWS = "./mvnw.cmd%s test";
     private static final String GRADLE_WRAPPER_RUN_WINDOWS = "./gradlew.bat test";
 
@@ -23,7 +23,10 @@ final class TestShell {
 
     /**
      * {@code cmd.exe}, which runs the server's and the hooks' own commands on
-     * Windows and finds a wrapper in the current folder as it is.
+     * Windows. The wrapper is named from the current folder, {@code .\}:
+     * with {@code NoDefaultCurrentDirectoryInExePath} set, as Claude Code
+     * sets it for the commands it runs, {@code cmd.exe} no longer looks for a
+     * bare {@code mvnw.cmd} there and answers that it is not recognized.
      */
     static final TestShell CMD = new TestShell(IN_DIRECTORY, MAVEN_WRAPPER_RUN_CMD, GRADLE_WRAPPER_RUN_CMD);
 

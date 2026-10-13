@@ -166,7 +166,7 @@ final class ProjectLayoutTest {
         assertEquals("cd 'gradle' && gradle test", layout.verificationCommand("gradle", false));
         assertEquals("cd 'node' && npm test", layout.verificationCommand("node", false));
         assertEquals("cd \"maven\" && mvn -q test", layout.verificationCommand("maven", true));
-        assertEquals("cd \"wrapped\" && mvnw.cmd -q test", layout.verificationCommand("wrapped", true));
+        assertEquals("cd \"wrapped\" && .\\mvnw.cmd -q test", layout.verificationCommand("wrapped", true));
         assertEquals("cd \"node\" && npm test", layout.verificationCommand("node", true));
         assertTrue(layout.verificationCommand("untested").startsWith("echo"),
                 "npm test without a test script fails, which the loop would read as a broken build");
@@ -217,7 +217,8 @@ final class ProjectLayoutTest {
         assertTrue(layout.testCommandForModel("maven", true).endsWith("\"; mvn test"),
                 layout.testCommandForModel("maven", true));
         assertFalse(layout.testCommandForModel("wrapped", true).contains("&&"), "Windows PowerShell has no &&");
-        assertEquals("cd \"wrapped\" && mvnw.cmd -q test", layout.verificationCommand("wrapped", true),
-                "what the server and the hooks run goes through cmd.exe, which finds the wrapper as it is");
+        assertEquals("cd \"wrapped\" && .\\mvnw.cmd -q test", layout.verificationCommand("wrapped", true),
+                "what the server and the hooks run goes through cmd.exe, which with "
+                        + "NoDefaultCurrentDirectoryInExePath set finds the wrapper only as .\\mvnw.cmd");
     }
 }

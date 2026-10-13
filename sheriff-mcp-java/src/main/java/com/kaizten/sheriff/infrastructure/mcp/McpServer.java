@@ -199,8 +199,8 @@ public final class McpServer {
             System.exit(options.contains(INSTALL_CODEX_FLAG) ? installer.install() : installer.uninstall());
         }
         if (options.contains(INSTALL_ANTIGRAVITY_FLAG) || options.contains(UNINSTALL_ANTIGRAVITY_FLAG)) {
-            AntigravityInstaller chosen = AntigravityInstaller.forUser(Path.of(System.getProperty(USER_HOME)),
-                    ownJar(), protocol);
+            AntigravityInstaller chosen = AntigravityInstaller.forUser(System.getenv(),
+                    Path.of(System.getProperty(USER_HOME)), ownJar(), protocol);
             AntigravityInstaller pulling = options.contains(PULL_ALWAYS_FLAG) ? chosen.pullingAlways() : chosen;
             AntigravityInstaller installer = chosenJava(System.getenv()).map(pulling::runningWith).orElse(pulling);
             System.exit(options.contains(INSTALL_ANTIGRAVITY_FLAG) ? installer.install() : installer.uninstall());

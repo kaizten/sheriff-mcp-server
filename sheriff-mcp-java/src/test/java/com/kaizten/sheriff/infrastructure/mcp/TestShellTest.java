@@ -18,18 +18,18 @@ final class TestShellTest {
     }
 
     @Test
-    @DisplayName("Maven's wrapper is ./mvnw, mvnw.cmd for cmd, and ./mvnw.cmd for Git Bash and PowerShell")
+    @DisplayName("Maven's wrapper is ./mvnw, .\\mvnw.cmd for cmd, and ./mvnw.cmd for Git Bash and PowerShell")
     void eachShellNamesMavensWrapper() {
         assertEquals("./mvnw -q test", String.format(TestShell.POSIX.mavenWrapper(), " -q"));
-        assertEquals("mvnw.cmd -q test", String.format(TestShell.CMD.mavenWrapper(), " -q"));
+        assertEquals(".\\mvnw.cmd -q test", String.format(TestShell.CMD.mavenWrapper(), " -q"));
         assertEquals("./mvnw.cmd test", String.format(TestShell.ANY_WINDOWS_SHELL.mavenWrapper(), ""));
     }
 
     @Test
-    @DisplayName("Gradle's wrapper is ./gradlew, gradlew.bat for cmd, and ./gradlew.bat for Git Bash and PowerShell")
+    @DisplayName("Gradle's wrapper is ./gradlew, .\\gradlew.bat for cmd, and ./gradlew.bat for Git Bash and PowerShell")
     void eachShellNamesGradlesWrapper() {
         assertEquals("./gradlew test", TestShell.POSIX.gradleWrapper());
-        assertEquals("gradlew.bat test", TestShell.CMD.gradleWrapper());
+        assertEquals(".\\gradlew.bat test", TestShell.CMD.gradleWrapper());
         assertEquals("./gradlew.bat test", TestShell.ANY_WINDOWS_SHELL.gradleWrapper());
     }
 }

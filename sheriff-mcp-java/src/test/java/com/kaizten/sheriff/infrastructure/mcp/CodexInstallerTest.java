@@ -40,8 +40,12 @@ final class CodexInstallerTest {
     }
 
     private CodexInstaller installer(boolean failFast) {
-        return new CodexInstaller(codexHome(), home.resolve(".local/share/sheriff-agent/sheriff-mcp.jar"), home,
-                new PrintStream(output, true, StandardCharsets.UTF_8), INSTRUCTIONS, failFast);
+        return installer(Map.of(), failFast);
+    }
+
+    private CodexInstaller installer(Map<String, String> environment, boolean failFast) {
+        return new CodexInstaller(environment, codexHome(), home.resolve(".local/share/sheriff-agent/sheriff-mcp.jar"),
+                home, new PrintStream(output, true, StandardCharsets.UTF_8), INSTRUCTIONS, failFast);
     }
 
     private String read(String file) throws Exception {
@@ -122,14 +126,24 @@ final class CodexInstallerTest {
     }
 
     @Test
+    @DisplayName("SHERIFF_DOCKER is read from the environment the installer is given, never from this process's")
+    void readsTheDockerSettingFromTheEnvironmentItIsGiven() throws Exception {
+        assertEquals(0, installer(Map.of("SHERIFF_DOCKER", "wsl"), false).install());
+
+        String config = read("config.toml");
+        assertEquals(Platform.windows(), config.contains("SHERIFF_DOCKER = \"wsl\""), config);
+        assertEquals(Platform.windows(), config.contains("tool_timeout_sec = 1800"), config);
+        assertEquals(Platform.windows(), read("hooks.json").contains("SHERIFF_DOCKER=wsl"), read("hooks.json"));
+    }
+
+    @Test
     @DisplayName("Codex cuts a call at 60 s, and codex exec refuses sheriff_fix unless the entry approves it")
     void writesTheServerWithItsTimeAndApproval() throws Exception {
         assertEquals(0, installer(false).install());
 
         String config = read("config.toml");
         assertTrue(config.contains("[mcp_servers.sheriff]"), config);
-        int expected = CodexInstaller.toolTimeoutSeconds(Platform.windows(), System.getenv());
-        assertTrue(config.contains("tool_timeout_sec = " + expected), config);
+        assertTrue(config.contains("tool_timeout_sec = 600"), config);
         assertTrue(config.contains("[mcp_servers.sheriff.tools.sheriff_fix]"), config);
         assertTrue(config.contains("approval_mode = \"approve\""), config);
         assertTrue(config.contains("sheriff-mcp.jar\"]"), config);
@@ -167,8 +181,8 @@ final class CodexInstallerTest {
     }
 
     private String entryFor(Path jar) {
-        return new CodexInstaller(codexHome(), jar, home, new PrintStream(output, true, StandardCharsets.UTF_8),
-                INSTRUCTIONS, false).serverEntry();
+        return new CodexInstaller(Map.of(), codexHome(), jar, home,
+                new PrintStream(output, true, StandardCharsets.UTF_8), INSTRUCTIONS, false).serverEntry();
     }
 
     private static String tomlString(Path jar) {

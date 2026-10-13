@@ -403,7 +403,7 @@ public final class ProjectLayout {
     /**
      * The command that runs a component's tests, written for a given
      * platform's shell: {@code cmd.exe} on Windows takes double quotes and
-     * runs the wrappers as {@code mvnw.cmd} and {@code gradlew.bat}.
+     * runs the wrappers as {@code .\mvnw.cmd} and {@code .\gradlew.bat}.
      *
      * @param component the component, relative to the mount
      * @param windows whether the command runs on Windows

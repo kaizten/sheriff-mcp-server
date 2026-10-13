@@ -556,16 +556,24 @@ Bash tool in Git Bash and Codex runs PowerShell, and neither of the last two
 runs `mvnw.cmd` from the folder it is in, nor does Windows PowerShell know
 `&&`. So a command a model is told to run (`testCommandForModel`, `--call`)
 is `cd "C:/x"; ./mvnw.cmd test` there (`TestShell.ANY_WINDOWS_SHELL`),
-measured in bash and pwsh, and the loop's `Bash(...)` rule for Claude Code
-names `./mvnw.cmd` (`ClaudeCliFixer.inGitBash`); what the server and the hooks
-run stays in cmd's form. **Java writes a pipe in Cp1252**, not UTF-8: `Año.java` reached the
+measured in bash, Windows PowerShell 5.1 and pwsh, and the loop's `Bash(...)`
+rule for Claude Code names `./mvnw.cmd` (`ClaudeCliFixer.inGitBash`); what the
+server and the hooks run stays in cmd's form, with the wrapper as
+`.\mvnw.cmd` (`TestShell.CMD`): Claude Code sets
+`NoDefaultCurrentDirectoryInExePath=1` for the commands it runs, and with it
+cmd does not look in the current folder, so a bare `mvnw.cmd` made a
+`sheriff_fix` with `verify` report the project's tests as failing (measured
+13 October). **Java writes a pipe in Cp1252**, not UTF-8: `Año.java` reached the
 model as `A�o.java`, so `claimStandardOutput` makes both streams UTF-8 for
 every mode but `--agent`. **Codex passes a server none of the user's
 variables**: measured with Codex 0.162, a server got `HOME LANG LOGNAME PATH
 PWD SHELL SHLVL TERM USER` and nothing else, so `SHERIFF_DOCKER` goes into
 the entry's `env` and, for its hooks, into the line itself (`set
 "SHERIFF_DOCKER=wsl"&& ...` inside `cmd /d /s /c`). Without it a server under
-Codex with WSL's Docker ran a `docker` that was not there.
+Codex with WSL's Docker ran a `docker` that was not there. The installers
+read it from the environment they are given, never from the process: read
+from the process, two tests failed on a Windows machine with
+`SHERIFF_DOCKER=wsl` while CI, which has none, passed.
 
 **Sheriff's image is managed, not assumed** (`ImageProvisioning`). Missing, it
 is pulled with its own time limit (60 min, not the analysis's 300 s): in the

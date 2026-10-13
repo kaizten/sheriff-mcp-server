@@ -482,20 +482,8 @@ public final class HookInstaller {
 
     /**
      * The installer for every project Codex opens: its turn and Stop hooks,
-     * without the gate, in {@code hooks.json} in Codex's home.
-     *
-     * @param jar this jar
-     * @param codexHome Codex's home, {@code CODEX_HOME} or {@code ~/.codex}
-     * @param home the user's home
-     * @param output where to report
-     * @return the installer
-     */
-    public static HookInstaller forCodex(Path jar, Path codexHome, Path home, PrintStream output) {
-        return forCodex(jar, codexHome, home, output, Platform.windows(), System.getenv());
-    }
-
-    /**
-     * The installer for every project Codex opens, for a given platform.
+     * without the gate, in {@code hooks.json} in Codex's home, for a given
+     * platform and environment.
      *
      * <p>On Windows Codex runs a hook's command through {@code cmd /c}, which
      * strips the first and the last quote of a line that starts with one: the
