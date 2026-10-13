@@ -528,6 +528,29 @@ check "a clean turn that added a method no test calls cannot end" \
 check "and is told to add a test for it" 'grep -q "Next step: add a test" "$work/19a.out"'
 check "with a test that calls it, the turn ends" '(( tested_exit == 0 ))'
 
+echo "20. What a build writes is never analyzed: target/ beside a pom.xml, build/ beside a build.gradle"
+built="$work/built/app"
+component "$built"
+printf '<project/>\n' > "$built/pom.xml"
+: > "$built/build.gradle"
+(cd "$built" && java -jar "$mcp_jar" --check >"$work/20a.out" 2>&1)
+clean_count=$(grep -oE 'app: [0-9]+ error' "$work/20a.out" | grep -oE '[0-9]+')
+generated='package demo;\nclass generated_by_a_build { }\n'
+mkdir -p "$built/target/generated-sources/demo" "$built/build/generated/demo" "$built/generated/demo"
+printf "$generated" > "$built/target/generated-sources/demo/generated_by_a_build.java"
+printf "$generated" > "$built/build/generated/demo/generated_by_a_build.java"
+(cd "$built" && java -jar "$mcp_jar" --check >"$work/20b.out" 2>&1)
+built_count=$(grep -oE 'app: [0-9]+ error' "$work/20b.out" | grep -oE '[0-9]+')
+printf "$generated" > "$built/generated/demo/generated_by_a_build.java"
+(cd "$built" && java -jar "$mcp_jar" --check >"$work/20c.out" 2>&1)
+elsewhere_count=$(grep -oE 'app: [0-9]+ error' "$work/20c.out" | grep -oE '[0-9]+')
+check "generated code under target/ and build/ adds no error" \
+  '[[ -n "$clean_count" && -n "$built_count" ]] && (( built_count == clean_count ))'
+check "the same file anywhere else does, so it was not skipped for being clean" \
+  '[[ -n "$elsewhere_count" ]] && (( elsewhere_count > clean_count ))'
+check "and what the build wrote is still there, as it was" \
+  '[[ -f "$built/target/generated-sources/demo/generated_by_a_build.java" && -f "$built/build/generated/demo/generated_by_a_build.java" ]]'
+
 echo
 if (( failures > 0 )); then
   echo "$failures check(s) failed. The repositories and outputs are kept in $work."

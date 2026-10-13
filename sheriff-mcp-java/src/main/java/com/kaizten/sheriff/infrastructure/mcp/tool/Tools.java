@@ -256,6 +256,18 @@ public final class Tools implements AutoCloseable {
     }
 
     /**
+     * Whether a tool answers without running Sheriff or the project's tests,
+     * and so need not wait behind a call that does.
+     *
+     * @param name the tool asked for
+     * @return {@code true} for {@code sheriff_guidelines} and
+     *     {@code sheriff_task}
+     */
+    public boolean answersAtOnce(String name) {
+        return name.equals(taskTool) || name.equals(guidelinesTool);
+    }
+
+    /**
      * Why a tool cannot run right now, when it cannot.
      *
      * <p>{@code sheriff_task} always can. {@code sheriff_guidelines} runs no

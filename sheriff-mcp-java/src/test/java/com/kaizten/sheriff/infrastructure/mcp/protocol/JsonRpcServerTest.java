@@ -178,6 +178,50 @@ final class JsonRpcServerTest {
     }
 
     @Test
+    @DisplayName("a tool that answers at once is not queued behind a long call, as sheriff_guidelines was behind "
+            + "a 7-minute sheriff_test")
+    void aQuickToolIsNotQueuedBehindALongCall() throws Exception {
+        CountDownLatch answered = new CountDownLatch(1);
+        List<String> lines = new CopyOnWriteArrayList<>();
+        OutputStream recording = new OutputStream() {
+            private final StringBuilder line = new StringBuilder();
+
+            @Override
+            public void write(int character) {
+                if (character != '\n') {
+                    line.append((char) character);
+                    return;
+                }
+                lines.add(line.toString());
+                if (line.toString().contains("\"id\":2")) {
+                    answered.countDown();
+                }
+                line.setLength(0);
+            }
+        };
+        JsonRpcServer server = new JsonRpcServer(List::of, (name, arguments) -> {
+            if (name.equals("sheriff_guidelines")) {
+                return new ToolOutcome("the rules", false);
+            }
+            try {
+                return new ToolOutcome(answered.await(10, TimeUnit.SECONDS) ? "after the rules" : "held them", false);
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                return new ToolOutcome("interrupted", true);
+            }
+        }, "sheriff_guidelines"::equals, "sheriff", "");
+        String input = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"sheriff_test\"}}\n"
+                + "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"sheriff_guidelines\"}}\n";
+
+        server.serve(new BufferedReader(new StringReader(input)),
+                new PrintStream(recording, true, StandardCharsets.UTF_8));
+
+        assertEquals(2, lines.size(), lines.toString());
+        assertTrue(lines.get(0).contains("\"id\":2") && lines.get(0).contains("the rules"), lines.toString());
+        assertTrue(lines.get(1).contains("\"id\":1") && lines.get(1).contains("after the rules"), lines.toString());
+    }
+
+    @Test
     @DisplayName("a tool that cannot load its own classes is answered, saying to restart, not left hanging")
     void aCallWhoseCodeWasReplacedIsAnswered() throws Exception {
         JsonRpcServer server = new JsonRpcServer(List::of, (name, arguments) -> {
