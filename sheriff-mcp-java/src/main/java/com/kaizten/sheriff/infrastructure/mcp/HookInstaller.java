@@ -12,7 +12,7 @@ import java.nio.file.Path;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
+import java.util.regex.Pattern;
 
 /**
  * Wires this jar's hooks into Claude Code's settings, for one project or for
@@ -74,14 +74,17 @@ public final class HookInstaller {
     private static final String GATE_FLAG = "--hook-gate";
     private static final String STOP_FLAG = "--hook-stop";
     private static final String TURN_FLAG = "--hook-turn";
-    private static final String HOOK_COMMAND = "%s -jar %s %s%s";
+    private static final String HOOK_COMMAND = "%s%s -jar %s %s%s";
     private static final String JAVA_ON_THE_PATH = "java";
     private static final String QUOTED = "\"%s\"";
     private static final String AS_IT_IS = "%s";
-    private static final String THROUGH_CMD = "cmd /d /s /c \"%s\"";
-    private static final String WITH_DOCKER = "set \"SHERIFF_DOCKER=%s\"&& %s";
-    private static final String PERCENT = "%";
-    private static final String ESCAPED_PERCENT = "%%";
+    private static final String THROUGH_POWERSHELL = "& %s; exit $LASTEXITCODE";
+    private static final String POWERSHELL_QUOTE = "'";
+    private static final String POWERSHELL_ESCAPED_QUOTE = "''";
+    private static final String DOCKER_OPTION = " '-D" + Platform.DOCKER_PROPERTY + "=%s'";
+    private static final String NO_JAVA_OPTIONS = "";
+    private static final String PLAIN_WORD_PATTERN = "[A-Za-z0-9:._-]+";
+    private static final Pattern PLAIN_WORD = Pattern.compile(PLAIN_WORD_PATTERN);
     private static final String HOME_REFERENCE = "$HOME/";
     private static final char BACKSLASH = '\\';
     private static final char SLASH = '/';
@@ -124,6 +127,7 @@ public final class HookInstaller {
     private final boolean withGate;
     private final boolean failFast;
     private final String java;
+    private final String javaOptions;
     private final String commandFormat;
 
     /**
@@ -136,7 +140,7 @@ public final class HookInstaller {
      */
     public HookInstaller(Path project, Path jar, Path home, PrintStream output) {
         this(project.resolve(SETTINGS_DIRECTORY).resolve(SETTINGS_FILE), jar, home, output, INSTALLED, true, false,
-                JAVA_ON_THE_PATH, AS_IT_IS);
+                JAVA_ON_THE_PATH, NO_JAVA_OPTIONS, AS_IT_IS);
     }
 
     /**
@@ -151,12 +155,13 @@ public final class HookInstaller {
      * @param failFast whether the hooks ask Sheriff to stop at the first error
      * @param java the Java the hooks run with: {@code java}, found on the
      *     PATH when they run, or a path to one
+     * @param javaOptions what goes between Java and {@code -jar}: nothing, or
+     *     the {@code SHERIFF_DOCKER} Codex's hooks need, as a property
      * @param commandFormat how each command line is written around the
-     *     command: as it is, or as an argument of {@code cmd /d /s /c} for
-     *     Codex on Windows
+     *     command: as it is, or as a PowerShell line for Codex on Windows
      */
     private HookInstaller(Path settings, Path jar, Path home, PrintStream output, String installed,
-            boolean withGate, boolean failFast, String java, String commandFormat) {
+            boolean withGate, boolean failFast, String java, String javaOptions, String commandFormat) {
         this.settings = settings;
         this.jar = jar;
         this.home = home;
@@ -165,6 +170,7 @@ public final class HookInstaller {
         this.withGate = withGate;
         this.failFast = failFast;
         this.java = java;
+        this.javaOptions = javaOptions;
         this.commandFormat = commandFormat;
     }
 
@@ -177,7 +183,8 @@ public final class HookInstaller {
      * @return that installer
      */
     public HookInstaller failingFast() {
-        return new HookInstaller(settings, jar, home, output, installed, withGate, true, java, commandFormat);
+        return new HookInstaller(settings, jar, home, output, installed, withGate, true, java, javaOptions,
+                commandFormat);
     }
 
     /**
@@ -195,7 +202,7 @@ public final class HookInstaller {
      */
     public HookInstaller runningWith(Path executable) {
         return new HookInstaller(settings, jar, home, output, installed, withGate, failFast,
-                pathReference(executable), commandFormat);
+                pathReference(executable), javaOptions, commandFormat);
     }
 
     /**
@@ -361,7 +368,7 @@ public final class HookInstaller {
         ObjectNode group = json.createObjectNode();
         ObjectNode entry = group.putArray(HOOKS).addObject();
         entry.put(TYPE, COMMAND_TYPE);
-        String command = String.format(HOOK_COMMAND, javaReference(), jarReference(), flag,
+        String command = String.format(HOOK_COMMAND, javaReference(), javaOptions, jarReference(), flag,
                 failFast ? FAIL_FAST_OPTION : NO_OPTION);
         entry.put(COMMAND, String.format(commandFormat, command));
         return group;
@@ -417,6 +424,9 @@ public final class HookInstaller {
         boolean throughHome = absolute.startsWith(home) && !Platform.windows();
         String path = throughHome ? HOME_REFERENCE + Platform.slashes(home.relativize(absolute))
                 : absolute.toString().replace(BACKSLASH, SLASH);
+        if (THROUGH_POWERSHELL.equals(commandFormat)) {
+            return POWERSHELL_QUOTE + path.replace(POWERSHELL_QUOTE, POWERSHELL_ESCAPED_QUOTE) + POWERSHELL_QUOTE;
+        }
         return String.format(QUOTED, path);
     }
 
@@ -477,7 +487,7 @@ public final class HookInstaller {
      */
     public static HookInstaller forUser(Path jar, Path home, PrintStream output) {
         return new HookInstaller(home.resolve(SETTINGS_DIRECTORY).resolve(SETTINGS_FILE), jar, home, output,
-                INSTALLED_FOR_USER, true, false, JAVA_ON_THE_PATH, AS_IT_IS);
+                INSTALLED_FOR_USER, true, false, JAVA_ON_THE_PATH, NO_JAVA_OPTIONS, AS_IT_IS);
     }
 
     /**
@@ -485,17 +495,27 @@ public final class HookInstaller {
      * without the gate, in {@code hooks.json} in Codex's home, for a given
      * platform and environment.
      *
-     * <p>On Windows Codex runs a hook's command through {@code cmd /c}, which
-     * strips the first and the last quote of a line that starts with one: the
-     * command, which starts with the quoted path of Java, became
-     * {@code C:/Program} and every hook ended with exit code 1 (12 October).
-     * Written as an argument of {@code cmd /d /s /c}, the line starts with
-     * {@code cmd} and the inner shell keeps the quotes.
+     * <p>On Windows Codex runs a hook's line in Windows PowerShell 5.1, not
+     * in {@code cmd} (measured with Codex 0.162.1 on 13 October, with a hook
+     * that only PowerShell can run). So the line is PowerShell's:
+     * {@code & 'C:/Program Files/.../java.exe' -jar '...' --hook-stop; exit
+     * $LASTEXITCODE}. The {@code &} runs a quoted path, which on its own is
+     * only a string; the single quotes keep a {@code $} or a backtick in a
+     * path as it is; and without the {@code exit} Codex saw a Stop hook's
+     * exit code 2 as a hook that failed, not one that blocks. Every earlier
+     * form failed: a line starting with the quoted path of Java ran
+     * {@code C:/Program}, and {@code cmd /d /s /c "..."} did the same once
+     * PowerShell had joined its quotes.
      *
      * <p>Codex gives a hook almost none of the user's variables either, so
-     * with WSL's Docker the line sets {@code SHERIFF_DOCKER} itself, which
-     * {@code cmd} hands on to the hook: without it the hook found no
-     * {@code docker} and let the turn end with nothing checked.
+     * with WSL's Docker the line gives Java {@code SHERIFF_DOCKER} as a
+     * property, {@code '-Dsheriff.docker=wsl'}, quoted, as PowerShell splits
+     * an unquoted one at its dot: without it the hook found no {@code docker}
+     * and let the turn end with nothing checked. Not as
+     * {@code set "SHERIFF_DOCKER=wsl"&& ...}, which version 1.0.6 wrote:
+     * PowerShell handed {@code cmd} a {@code set "} that printed every
+     * variable of the user's, and Codex gave that to the model as the turn
+     * hook's context (13 October).
      *
      * @param jar this jar
      * @param codexHome Codex's home, {@code CODEX_HOME} or {@code ~/.codex}
@@ -508,21 +528,20 @@ public final class HookInstaller {
      */
     static HookInstaller forCodex(Path jar, Path codexHome, Path home, PrintStream output, boolean windows,
             Map<String, String> environment) {
+        String javaOptions = Platform.dockerSetting(windows, environment).filter(HookInstaller::plainWord)
+                .map(setting -> String.format(DOCKER_OPTION, setting)).orElse(NO_JAVA_OPTIONS);
         return new HookInstaller(codexHome.resolve(CODEX_HOOKS_FILE), jar, home, output, INSTALLED_FOR_CODEX, false,
-                false, JAVA_ON_THE_PATH, windows ? cmdFormat(Platform.dockerSetting(windows, environment)) : AS_IT_IS);
+                false, JAVA_ON_THE_PATH, javaOptions, windows ? THROUGH_POWERSHELL : AS_IT_IS);
     }
 
     /**
-     * How a hook's line is written for Codex on Windows: as an argument of
-     * {@code cmd /d /s /c}, after setting {@code SHERIFF_DOCKER} when there
-     * is one to set.
+     * Whether a value can go on a hook's line as it is, with nothing any
+     * shell reads: {@code wsl} and {@code wsl:<distribution>} can.
      *
-     * @param docker the {@code SHERIFF_DOCKER} to set, if any
-     * @return a format taking the command
+     * @param value the value
+     * @return whether it holds only letters, digits and {@code :._-}
      */
-    private static String cmdFormat(Optional<String> docker) {
-        String inner = docker.map(setting -> String.format(WITH_DOCKER, setting.replace(PERCENT, ESCAPED_PERCENT),
-                AS_IT_IS)).orElse(AS_IT_IS);
-        return String.format(THROUGH_CMD, inner);
+    private static boolean plainWord(String value) {
+        return PLAIN_WORD.matcher(value).matches();
     }
 }

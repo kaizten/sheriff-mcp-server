@@ -107,10 +107,17 @@ With `codex` on the PATH it sets Codex up the same way (`--install-codex`,
 `CodexInstaller`): the server in `~/.codex/config.toml` with the time limit
 and the approval `codex mcp add` cannot write, the order of work in
 `~/.codex/AGENTS.md`, which Codex reads in every project, and the Stop and
-turn hooks, without the gate, in `~/.codex/hooks.json`; on Windows each as an
-argument of `cmd /d /s /c "..."`, because Codex runs a hook through `cmd /c`,
-which strips the quotes of a line that starts with one, and every hook ended
-with exit code 1 (`"C:/Program" is not recognized`, 12 October). The one step left to
+turn hooks, without the gate, in `~/.codex/hooks.json`; on Windows each as a
+line of **Windows PowerShell, which is what Codex runs a hook in** (measured
+with Codex 0.162.1 and `codex exec --dangerously-bypass-hook-trust` in a
+`CODEX_HOME` of its own, with a hook only PowerShell can run, 13 October):
+`& 'C:/.../java.exe' '-Dsheriff.docker=wsl' -jar '...' --hook-stop; exit
+$LASTEXITCODE`. The `&` runs a quoted path, the single quotes keep a `$` in
+a path, the property is quoted as PowerShell 5.1 splits `-Da.b=c` at its
+dot, and without the `exit` a Stop hook's 2 reached Codex as a failure, not
+a block. Every earlier form failed there: a line starting with the quoted
+Java ran `C:/Program`, and so did `cmd /d /s /c "..."` (12 October) once
+PowerShell had joined its quotes. The one step left to
 the user is Codex's review of a new hook, and it stays there on purpose; the
 installer and the playbook say what skipping it costs, as on PetClinic
 (9 October) Codex twice stopped with over a hundred errors left and only the
@@ -242,7 +249,7 @@ java -jar target/sheriff-mcp.jar --agent --help
 # The Maven plugin (needs the MCP module installed first)
 cd sheriff-maven-plugin
 mvn install
-mvn com.kaizten:sheriff-maven-plugin:1.0.7:check    # on any Maven module
+mvn com.kaizten:sheriff-maven-plugin:1.0.8:check    # on any Maven module
 ```
 
 The agent is configured entirely by environment variables — `TARGET_REPO`,
@@ -595,11 +602,15 @@ variables**: measured with Codex 0.162, on Linux a server got `HOME LANG
 LOGNAME PATH PWD SHELL SHLVL TERM USER` and nothing else, and on Windows
 twenty of the system's (`PATH`, `SYSTEMROOT`, `USERPROFILE`, `TEMP` and the
 like) and no other, so `SHERIFF_DOCKER` goes into the entry's `env` and, for
-its hooks, into the line itself (`set "SHERIFF_DOCKER=wsl"&& ...` inside
-`cmd /d /s /c`). Without it a server under Codex with WSL's Docker ran a
-`docker` that was not there, and the Stop hook let a turn end unchecked;
-with it the same Codex analyzed and the hook blocked (13 October, with only
-those twenty variables). A `docker` of the user's own on the PATH, a script
+its hooks, onto the line as the Java property `sheriff.docker`
+(`Platform.environment` reads it when the variable is not set). Without it a
+server under Codex with WSL's Docker ran a `docker` that was not there, and
+the Stop hook let a turn end unchecked. **Never put a `set` on a hook's
+line**: 1.0.6 and 1.0.7 wrote `cmd /d /s /c "set "SHERIFF_DOCKER=wsl"&& ..."`,
+PowerShell handed `cmd` a `set "`, which printed every variable of the
+user's, and Codex gave that to the model as the turn hook's context: 69
+variables of a Windows machine sent to the model in two sessions, none a
+token by name or shape (13 October). A `docker` of the user's own on the PATH, a script
 forwarding to WSL, hides all of this, so measure with it off the PATH. The
 installers read the variable from the environment they are given, never
 from the process: read from the process, two tests failed on a Windows

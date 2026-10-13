@@ -36,6 +36,35 @@ class PlatformTests {
     }
 
     @Test
+    @DisplayName("the sheriff.docker property stands for SHERIFF_DOCKER when the variable is not set, never over it")
+    void theDockerPropertyStandsForTheVariable() {
+        assertEquals("wsl", Platform.withDockerProperty(Map.of(), "wsl").get("SHERIFF_DOCKER"));
+        assertEquals("wsl:Ubuntu",
+                Platform.withDockerProperty(Map.of("SHERIFF_DOCKER", "wsl:Ubuntu"), "wsl").get("SHERIFF_DOCKER"));
+        assertEquals(Map.of(), Platform.withDockerProperty(Map.of(), null));
+        assertEquals(Map.of(), Platform.withDockerProperty(Map.of(), " "));
+    }
+
+    @Test
+    @DisplayName("this process's environment takes SHERIFF_DOCKER from -Dsheriff.docker only when it has none")
+    void theProcessEnvironmentReadsTheProperty() {
+        String before = System.getProperty("sheriff.docker");
+        System.setProperty("sheriff.docker", "wsl:FromTheProperty");
+        try {
+            String variable = System.getenv("SHERIFF_DOCKER");
+            String expected = variable == null || variable.isBlank() ? "wsl:FromTheProperty" : variable;
+            assertEquals(expected, Platform.environment().get("SHERIFF_DOCKER"));
+            assertEquals(System.getenv("PATH"), Platform.environment().get("PATH"), "the rest is the process's own");
+        } finally {
+            if (before == null) {
+                System.clearProperty("sheriff.docker");
+            } else {
+                System.setProperty("sheriff.docker", before);
+            }
+        }
+    }
+
+    @Test
     @DisplayName("a path for a model's shell on Windows is single quoted, which keeps a $ or a backtick in Git Bash "
             + "and both PowerShells, and double quoted only when it holds a single quote")
     void aPathForAnyWindowsShellIsSingleQuoted() {

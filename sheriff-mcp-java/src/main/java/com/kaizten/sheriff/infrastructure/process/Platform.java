@@ -3,6 +3,7 @@ package com.kaizten.sheriff.infrastructure.process;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -49,6 +50,13 @@ public final class Platform {
     private static final String NOTHING = "";
     private static final int FIRST = 0;
     private static final String DOCKER_VARIABLE = "SHERIFF_DOCKER";
+
+    /**
+     * The Java property that stands for {@code SHERIFF_DOCKER} where the
+     * variable cannot be set, as on a Codex hook's line.
+     */
+    public static final String DOCKER_PROPERTY = "sheriff.docker";
+
     private static final String DOCKER_EXECUTABLE = "docker";
     private static final String WSL_EXECUTABLE = "wsl.exe";
     private static final String WSL_VALUE = "wsl";
@@ -161,7 +169,38 @@ public final class Platform {
      * @return the command, unchanged unless it is a {@code docker} one and the variable asks
      */
     public static List<String> dockerCommand(List<String> command) {
-        return dockerCommand(command, windows(), System.getenv());
+        return dockerCommand(command, windows(), environment());
+    }
+
+    /**
+     * This process's environment, with {@code SHERIFF_DOCKER} taken from the
+     * {@code sheriff.docker} property when the variable is not set.
+     *
+     * @return that environment
+     */
+    public static Map<String, String> environment() {
+        return withDockerProperty(System.getenv(), System.getProperty(DOCKER_PROPERTY));
+    }
+
+    /**
+     * An environment with {@code SHERIFF_DOCKER} taken from a property when
+     * the variable is not in it: Codex's hooks on Windows receive it as
+     * {@code -Dsheriff.docker=wsl}, since Codex passes a hook none of the
+     * user's variables and a {@code set} on its line printed every one of
+     * them to the model instead (13 October).
+     *
+     * @param environment the environment
+     * @param property the property's value, or {@code null}
+     * @return the environment, with the variable when only the property had it
+     */
+    static Map<String, String> withDockerProperty(Map<String, String> environment, String property) {
+        boolean variableSet = !environment.getOrDefault(DOCKER_VARIABLE, NOTHING).isBlank();
+        if (variableSet || property == null || property.isBlank()) {
+            return environment;
+        }
+        Map<String, String> withDocker = new HashMap<>(environment);
+        withDocker.put(DOCKER_VARIABLE, property.trim());
+        return withDocker;
     }
 
     /**

@@ -8,6 +8,7 @@ import com.kaizten.sheriff.infrastructure.mcp.protocol.JsonRpcServer;
 import com.kaizten.sheriff.infrastructure.mcp.protocol.ToolOutcome;
 import com.kaizten.sheriff.infrastructure.mcp.tool.ToolCall;
 import com.kaizten.sheriff.infrastructure.mcp.tool.Tools;
+import com.kaizten.sheriff.infrastructure.process.Platform;
 import com.kaizten.sheriff.infrastructure.process.ProcessRunner;
 import com.kaizten.sheriff.infrastructure.process.SystemProcessRunner;
 import java.io.BufferedReader;
@@ -179,7 +180,7 @@ public final class McpServer {
         }
         for (String hook : List.of(HOOK_GATE_FLAG, HOOK_STOP_FLAG, HOOK_TURN_FLAG)) {
             if (options.contains(hook)) {
-                System.exit(HookCommand.run(hook, hookEnvironment(System.getenv(), options),
+                System.exit(HookCommand.run(hook, hookEnvironment(Platform.environment(), options),
                         Path.of(System.getProperty(USER_DIRECTORY))));
             }
         }
