@@ -513,6 +513,16 @@ final class ToolsTest {
     }
 
     @Test
+    @DisplayName("asked which version was installed, Codex searched the project: the handshake's version never reaches it")
+    void sheriffTaskWithNoIdSaysWhichVersionIsRunning() {
+        String listing = tools(List.of()).call("sheriff_task", Map.of()).text();
+
+        assertTrue(listing.startsWith("sheriff-mcp " + ServerVersion.current() + ", running Sheriff's image "),
+                listing);
+        assertTrue(listing.contains("kaizten/sheriff"), listing);
+    }
+
+    @Test
     @DisplayName("a sheriff_test that fails names its task, so the client can find what Sheriff exported")
     void aFailedTestNamesItsTask() throws IOException {
         Files.createDirectories(repository.resolve("empty-component"));
@@ -815,7 +825,7 @@ final class ToolsTest {
             assertTrue(outcome.text().strip().lines().reduce((line, next) -> next).orElseThrow()
                     .startsWith("Next step: call this tool again with max_iterations"), outcome.text());
         }
-        assertEquals("No tasks yet in this session.", tools.call("sheriff_task", Map.of()).text().strip());
+        assertTrue(tools.call("sheriff_task", Map.of()).text().strip().endsWith("No tasks yet in this session."));
     }
 
     @Test

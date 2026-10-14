@@ -255,7 +255,7 @@ in the answer.
 | `sheriff_fix` | With no arguments, every repair Sheriff has for what it finds, round after round while the count drops; reports errors before and after, and with `verify` runs the tests | no |
 | `sheriff_guidelines` | The rules, before anything is broken, with the code Sheriff accepts | no |
 | `sheriff_autofix` | The agent's whole repair loop, on its own branch. Answers at once with a task id and runs in the background | yes |
-| `sheriff_task` | A task's command, state and result; without an id, the session's tasks | no |
+| `sheriff_task` | A task's command, state and result; without an id, the server's version and Sheriff image, and the session's tasks | no |
 
 **Every answer of `sheriff_test` and `sheriff_fix` ends with one `Next step:`**,
 its last line, worked out from the state alone. After an analysis with errors
@@ -315,8 +315,10 @@ changed, the ones already there included (and, with
 changed is the third hook's job: when a prompt arrives it records what the
 components git already reports as changed look like, and the Stop hook leaves
 alone those still the same, so a question asked in a repository with earlier
-work in it is not sent back to fix code. That decision is the hooks', not the
-model's. A hook has already analyzed, so its message ends with the step an
+work in it is not sent back to fix code. A component the gate refused an edit
+to during the turn is checked too, though the turn changed nothing in it: a
+model whose only edit was refused ended the turn asking whether to fix the
+errors. That decision is the hooks', not the model's. A hook has already analyzed, so its message ends with the step an
 analysis by the MCP ends with, worded the same: call the `sheriff_fix` tool
 with the component named, follow each answer's step until one ends "Next
 step: none, the component is done", and do not ask. Under it, the command

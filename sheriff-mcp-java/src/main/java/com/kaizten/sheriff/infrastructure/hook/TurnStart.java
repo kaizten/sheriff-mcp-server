@@ -5,12 +5,15 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * What the components git already reported as changed looked like when a
@@ -29,6 +32,11 @@ import java.util.Optional;
  * since every hook run is a separate process. A session with no record (no
  * turn hook installed, or a client that names no session) is checked as
  * before: every component git reports.
+ *
+ * <p>It also keeps which components the gate refused an edit to during the
+ * turn, as the Stop hook checks those too. A session whose only edit the gate
+ * refused changed nothing, so it had nothing to check: a model stopped there
+ * and asked the user whether to fix the errors, and the turn ended with them.
  */
 public final class TurnStart {
 
@@ -39,6 +47,7 @@ public final class TurnStart {
     private static final int FIELDS = 2;
     private static final int COMPONENT_FIELD = 0;
     private static final int FINGERPRINT_FIELD = 1;
+    private static final String REFUSED_SUFFIX = ".refused";
 
     private final Path directory;
 
@@ -61,8 +70,9 @@ public final class TurnStart {
 
     /**
      * Records what the changed components looked like as a turn begins,
-     * replacing the previous turn's record. Best effort: a record that cannot
-     * be written means the Stop hook checks every changed component.
+     * replacing the previous turn's record and forgetting the components the
+     * gate refused in it. Best effort: a record that cannot be written means
+     * the Stop hook checks every changed component.
      *
      * @param session the session, or empty when unknown
      * @param fingerprints each changed component's fingerprint
@@ -78,9 +88,55 @@ public final class TurnStart {
             Files.createDirectories(directory);
             TemporaryFolders.prune(directory, TemporaryFolders.MARKER_LIFETIME);
             Files.writeString(fileFor(session), content);
+            Files.deleteIfExists(refusedFileFor(session));
         } catch (IOException exception) {
             return;
         }
+    }
+
+    /**
+     * Records that the gate refused an edit to a component during the
+     * current turn. Best effort: a record that cannot be written means the
+     * Stop hook checks only what the turn changed.
+     *
+     * @param session the session, or empty when unknown
+     * @param component the component the edit was in
+     */
+    public void refused(String session, String component) {
+        if (session.isEmpty() || refusedThisTurn(session).contains(component)) {
+            return;
+        }
+        try {
+            Files.createDirectories(directory);
+            Files.writeString(refusedFileFor(session), component + LINE_SEPARATOR,
+                    StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+        } catch (IOException exception) {
+            return;
+        }
+    }
+
+    /**
+     * The components the gate refused an edit to since this session's
+     * current turn began.
+     *
+     * @param session the session, or empty when unknown
+     * @return those components, empty when there are none or no record
+     */
+    public Set<String> refusedThisTurn(String session) {
+        Set<String> components = new LinkedHashSet<>();
+        if (session.isEmpty()) {
+            return components;
+        }
+        try {
+            for (String line : Files.readString(refusedFileFor(session)).split(LINE_SEPARATOR)) {
+                if (!line.isBlank()) {
+                    components.add(line.strip());
+                }
+            }
+        } catch (IOException exception) {
+            return components;
+        }
+        return components;
     }
 
     /**
@@ -114,9 +170,29 @@ public final class TurnStart {
      * @return its path
      */
     private Path fileFor(String session) {
+        return directory.resolve(digestOf(session));
+    }
+
+    /**
+     * The file of the components the gate refused, for one session.
+     *
+     * @param session the session
+     * @return its path
+     */
+    private Path refusedFileFor(String session) {
+        return directory.resolve(digestOf(session) + REFUSED_SUFFIX);
+    }
+
+    /**
+     * The name a session's files take, so that no session id reaches a path.
+     *
+     * @param session the session
+     * @return the hexadecimal digest of the session
+     */
+    private static String digestOf(String session) {
         try {
             byte[] digest = MessageDigest.getInstance(DIGEST).digest(session.getBytes(StandardCharsets.UTF_8));
-            return directory.resolve(HexFormat.of().formatHex(digest));
+            return HexFormat.of().formatHex(digest);
         } catch (NoSuchAlgorithmException exception) {
             throw new IllegalStateException(exception);
         }

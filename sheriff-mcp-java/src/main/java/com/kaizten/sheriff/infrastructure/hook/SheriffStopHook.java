@@ -12,6 +12,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.function.UnaryOperator;
@@ -45,7 +46,10 @@ import java.util.stream.Collectors;
  *
  * <p>Only what the turn changed is checked. The turn hook ({@link #startTurn})
  * records the fingerprint of every component git already reported when the
- * prompt arrived, and a component still the same at the stop is left alone.
+ * prompt arrived, and a component still the same at the stop is left alone,
+ * unless the gate refused an edit to it during the turn: a turn whose only
+ * edit was refused changed nothing, and a model ended one that way, asking the
+ * user whether to fix the errors the gate had just shown it.
  * That used to be a paragraph of the message asking the model to tell for
  * itself whether the turn wrote code, and the message was most of a screen. It
  * is now a few lines ending in the step, and every decision in it is made here: whether there
@@ -76,6 +80,14 @@ public final class SheriffStopHook {
             Not done: what this turn changed has Sheriff errors, those that were already there
             included. All of them are fixed before finishing; only a false positive of the checker
             may stay, named, with the reason.
+
+            %s
+            %s
+            """;
+    private static final String REFUSED_BLOCKED = """
+            Not done: an edit this turn tried was stopped because the component already had Sheriff
+            errors, and they are still there. All of them are fixed, and then the edit made again;
+            only a false positive of the checker may stay, named, with the reason.
 
             %s
             %s
@@ -257,12 +269,18 @@ public final class SheriffStopHook {
      * if it does block.
      *
      * @param session the session, whose turn-start record says which
-     *     components the turn left as they were
+     *     components the turn left as they were and which the gate refused an
+     *     edit to
      * @return the exit code
      */
     private int check(String session) {
         Set<String> touched = touchedComponents();
-        turns.recorded(session).ifPresent(start -> touched.removeIf(component -> unchanged(component, start)));
+        Optional<Map<String, String>> start = turns.recorded(session);
+        start.ifPresent(recorded -> touched.removeIf(component -> unchanged(component, recorded)));
+        boolean changedNone = touched.isEmpty();
+        if (start.isPresent()) {
+            touched.addAll(turns.refusedThisTurn(session));
+        }
         sources = touched.stream().map(gate::fingerprintOf).collect(Collectors.joining(SOURCES_SEPARATOR));
         List<String> dirty = new ArrayList<>();
         String first = NO_COMPONENT;
@@ -274,8 +292,8 @@ public final class SheriffStopHook {
             }
         }
         if (!dirty.isEmpty()) {
-            reason = String.format(BLOCKED, String.join(System.lineSeparator(), dirty) + gate.floorNote(),
-                    gate.repairStep(first));
+            reason = String.format(changedNone ? REFUSED_BLOCKED : BLOCKED,
+                    String.join(System.lineSeparator(), dirty) + gate.floorNote(), gate.repairStep(first));
             return HookExit.BLOCK;
         }
         if (untestedDecide(touched) == HookExit.BLOCK) {

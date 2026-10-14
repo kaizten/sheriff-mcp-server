@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import java.nio.file.Path;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -27,6 +28,22 @@ class TurnStartTests {
         assertEquals(Optional.of(Map.of()), turns.recorded("two"));
         turns.record("one", Map.of("web", "def"));
         assertEquals(Optional.of(Map.of("web", "def")), turns.recorded("one"));
+    }
+
+    @Test
+    @DisplayName("what the gate refused is read back by the Stop hook once, and the next turn forgets it")
+    void recordsWhatTheGateRefused() {
+        TurnStart turns = new TurnStart(directory);
+        turns.record("one", Map.of());
+        turns.refused("one", "app");
+        turns.refused("one", "app");
+        turns.refused("one", "web");
+        turns.refused("", "app");
+        assertEquals(Set.of("app", "web"), new TurnStart(directory).refusedThisTurn("one"));
+        assertEquals(Set.of(), turns.refusedThisTurn("two"));
+        assertEquals(Set.of(), turns.refusedThisTurn(""));
+        turns.record("one", Map.of());
+        assertEquals(Set.of(), turns.refusedThisTurn("one"));
     }
 
     @Test

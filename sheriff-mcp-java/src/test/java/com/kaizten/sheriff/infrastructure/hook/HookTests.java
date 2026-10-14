@@ -280,7 +280,7 @@ class HookTests {
         @DisplayName("blocking every edit left no way to clear the errors by hand, since a fix is an edit")
         void blocksOncePerSessionAndComponent() {
             SheriffGateHook hook = new SheriffGateHook(gate(ProcessOutcome.completed(0, SHERIFF_OUTPUT, "")),
-                    new GateMemory(repository.resolve("memory")));
+                    new GateMemory(repository.resolve("memory")), new TurnStart(repository.resolve("turns")));
             String edit = sessionEditOf("one", "app/src/A.java");
             assertEquals(HookExit.BLOCK, capturingStandardError(() -> hook.decide(edit)));
             assertTrue(errors.contains("Edits to the files that have them go through"), errors);
@@ -292,7 +292,7 @@ class HookTests {
         @DisplayName("an edit to a file with errors is the fix: a session following the repair steps was refused its first one")
         void letsAnEditToAFileWithErrorsThrough() {
             SheriffGateHook hook = new SheriffGateHook(gate(ProcessOutcome.completed(0, ERRORS_IN_EDITED_FILE, "")),
-                    new GateMemory(repository.resolve("memory")));
+                    new GateMemory(repository.resolve("memory")), new TurnStart(repository.resolve("turns")));
             assertEquals(HookExit.ALLOW, hook.decide(sessionEditOf("one", "app/src/A.java")));
             assertEquals(HookExit.BLOCK,
                     capturingStandardError(() -> hook.decide(sessionEditOf("one", "app/src/New.java"))),
@@ -320,7 +320,7 @@ class HookTests {
         @Test
         void warnsANewSessionAgain() {
             SheriffGateHook hook = new SheriffGateHook(gate(ProcessOutcome.completed(0, SHERIFF_OUTPUT, "")),
-                    new GateMemory(repository.resolve("memory")));
+                    new GateMemory(repository.resolve("memory")), new TurnStart(repository.resolve("turns")));
             capturingStandardError(() -> hook.decide(sessionEditOf("one", "app/src/A.java")));
             assertEquals(HookExit.BLOCK,
                     capturingStandardError(() -> hook.decide(sessionEditOf("two", "app/src/A.java"))));
@@ -329,7 +329,7 @@ class HookTests {
         @Test
         void keepsBlockingWhenTheSessionIsUnknown() {
             SheriffGateHook hook = new SheriffGateHook(gate(ProcessOutcome.completed(0, SHERIFF_OUTPUT, "")),
-                    new GateMemory(repository.resolve("memory")));
+                    new GateMemory(repository.resolve("memory")), new TurnStart(repository.resolve("turns")));
             capturingStandardError(() -> hook.decide(editOf("app/src/A.java")));
             assertEquals(HookExit.BLOCK, capturingStandardError(() -> hook.decide(editOf("app/src/A.java"))));
         }
@@ -544,6 +544,33 @@ class HookTests {
             SheriffStopHook stop = recording(turns);
             assertEquals(HookExit.BLOCK, capturingStandardError(() -> stop.decide(FRESH_STOP)));
             assertTrue(errors.contains("app: 2 error(s)"), errors);
+        }
+
+        @Test
+        @DisplayName("a model whose only edit the gate refused asked the user and ended the turn, as it had changed nothing")
+        void aComponentTheGateRefusedInTheTurnIsChecked() throws IOException {
+            TurnStart turns = new TurnStart(repository.resolve("turns"));
+            recording(turns).startTurn("{\"session_id\":\"s\"}");
+            SheriffGateHook gateHook = new SheriffGateHook(gate(ProcessOutcome.completed(0, SHERIFF_OUTPUT, "")),
+                    new GateMemory(repository.resolve("memory")), turns);
+            assertEquals(HookExit.BLOCK, capturingStandardError(() -> gateHook.decide(sessionEditOf("s", "app/src/New.java"))));
+            SheriffStopHook stop = recording(turns);
+            assertEquals(HookExit.BLOCK, capturingStandardError(() -> stop.decide(FRESH_STOP)));
+            assertTrue(errors.contains("Not done: an edit this turn tried was stopped"), errors);
+            assertTrue(errors.contains("app: 2 error(s)"), errors);
+            assertTrue(errors.contains("Next step: call the sheriff_fix tool with component 'app'."), errors);
+        }
+
+        @Test
+        @DisplayName("what the gate refused in one turn is not the next turn's: a question after it is not a fix")
+        void aRefusalIsForgottenWhenTheNextTurnStarts() throws IOException {
+            TurnStart turns = new TurnStart(repository.resolve("turns"));
+            recording(turns).startTurn("{\"session_id\":\"s\"}");
+            turns.refused("s", "app");
+            recording(turns).startTurn("{\"session_id\":\"s\"}");
+            SheriffStopHook stop = recording(turns);
+            assertEquals(HookExit.ALLOW, capturingStandardError(() -> stop.decide(FRESH_STOP)));
+            assertFalse(errors.contains("Not done:"), errors);
         }
 
         @Test

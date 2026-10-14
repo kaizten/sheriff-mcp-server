@@ -248,7 +248,7 @@ public final class HookInstaller {
             ArrayNode stop = withoutSheriff(hooks, STOP);
             ArrayNode prompt = withoutSheriff(hooks, USER_PROMPT_SUBMIT);
             if (add && withGate) {
-                before.add(group(GATE_FLAG).put(MATCHER, EDITING_TOOLS));
+                before.add(json.createObjectNode().put(MATCHER, EDITING_TOOLS).setAll(group(GATE_FLAG)));
             }
             if (add) {
                 stop.add(group(STOP_FLAG, STOP_TIMEOUT_SECONDS));
@@ -454,8 +454,7 @@ public final class HookInstaller {
      * @throws IOException when it cannot be written, or is a link to nothing
      */
     private void write(Path settings, ObjectNode root) throws IOException {
-        ConfigFile.replace(settings, json.writerWithDefaultPrettyPrinter().writeValueAsString(root)
-                + System.lineSeparator());
+        ConfigFile.replace(settings, ConfigFile.json(json, root));
     }
 
     /**

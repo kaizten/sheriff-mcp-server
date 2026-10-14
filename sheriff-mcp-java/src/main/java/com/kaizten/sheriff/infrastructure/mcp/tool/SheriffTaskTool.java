@@ -1,5 +1,6 @@
 package com.kaizten.sheriff.infrastructure.mcp.tool;
 
+import com.kaizten.sheriff.infrastructure.mcp.ServerVersion;
 import com.kaizten.sheriff.infrastructure.mcp.task.Task;
 import java.util.ArrayList;
 import java.util.List;
@@ -10,12 +11,17 @@ import java.util.Optional;
  * {@code sheriff_task}: a task's command, state and result, or the session's
  * tasks when no id is given. How the client asks after
  * {@code sheriff_autofix}, and finds the JSON any call exported.
+ *
+ * <p>With no id it first says which version of this server is running and
+ * which image it runs. The version was only in the handshake, which Codex does
+ * not show the model: asked which version was installed, it searched the
+ * project and said it could not tell.
  */
 final class SheriffTaskTool {
 
     private static final String DESCRIPTION =
             "The state and result of a task, such as a sheriff_autofix running in the background, by "
-            + "its id; with no id, the tasks of this session.";
+            + "its id; with no id, this server's version and Sheriff image, and the tasks of this session.";
     private static final String TITLE = "Check a Sheriff task";
     private static final ToolAnnotations ANNOTATIONS = ToolAnnotations.readingOnly(TITLE);
     private static final String ID_ARGUMENT = "id";
@@ -30,6 +36,7 @@ final class SheriffTaskTool {
     private static final String TASK_FINISHED = ", finished %s";
     private static final String TASK_RESULT = "%n%nResult:%n%s";
     private static final String NEWLINE = "\n";
+    private static final String VERSION_LINE = "sheriff-mcp %s, running Sheriff's image %s.";
 
     private final ToolContext context;
 
@@ -62,7 +69,8 @@ final class SheriffTaskTool {
     private String handle(Map<String, Object> arguments) {
         String id = ToolContext.textArgument(arguments, ID_ARGUMENT);
         if (id.isEmpty()) {
-            return listing(context.tasks().all());
+            return String.format(VERSION_LINE, ServerVersion.current(), context.config().image()) + NEWLINE
+                    + listing(context.tasks().all());
         }
         Optional<Task> task = context.tasks().find(id);
         if (task.isEmpty()) {
