@@ -1,5 +1,10 @@
 package com.kaizten.sheriff.infrastructure.mcp;
 
+import com.fasterxml.jackson.core.util.DefaultIndenter;
+import com.fasterxml.jackson.core.util.DefaultPrettyPrinter;
+import com.fasterxml.jackson.core.util.Separators;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -29,18 +34,45 @@ import java.util.Set;
  * came out of an install readable by every user of the machine. The copy is
  * created with those permissions before anything is written into it, so
  * there is no moment when it is more open than the original.
+ *
+ * <p>Claude Code's settings are written the way Claude Code writes them
+ * ({@link #json}), so a reinstall changes only what it changes. Jackson's
+ * default printer put every array on one line: a user's settings with some
+ * 450 permission rules, one per line, came out of a reinstall as 51 lines,
+ * the same content with the whole list on one.
  */
 final class ConfigFile {
 
     private static final String TEMPORARY_SUFFIX = ".tmp";
     private static final String POSIX_VIEW = "posix";
     private static final String ERROR_UTILITY_CLASS = "This is a utility class and cannot be instantiated.";
+    private static final String NOTHING_INSIDE = "";
+    private static final DefaultPrettyPrinter AS_CLAUDE_CODE_WRITES_IT = new DefaultPrettyPrinter(
+            Separators.createDefaultInstance()
+                    .withObjectFieldValueSpacing(Separators.Spacing.AFTER)
+                    .withObjectEmptySeparator(NOTHING_INSIDE)
+                    .withArrayEmptySeparator(NOTHING_INSIDE))
+            .withArrayIndenter(DefaultIndenter.SYSTEM_LINEFEED_INSTANCE);
 
     /**
      * Refuses to be instantiated: every member here is static.
      */
     private ConfigFile() {
         throw new UnsupportedOperationException(ERROR_UTILITY_CLASS);
+    }
+
+    /**
+     * A JSON document as Claude Code writes its own settings: two spaces of
+     * indent, {@code "key": value}, one array element per line, and
+     * {@code []} and {@code {}} when empty, ending in a line break.
+     *
+     * @param json the mapper to write with
+     * @param root the document
+     * @return its text
+     * @throws IOException when it cannot be written as JSON
+     */
+    static String json(ObjectMapper json, JsonNode root) throws IOException {
+        return json.writer(AS_CLAUDE_CODE_WRITES_IT).writeValueAsString(root) + System.lineSeparator();
     }
 
     /**

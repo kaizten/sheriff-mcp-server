@@ -20,7 +20,9 @@ import java.util.Set;
  * repaired nothing (a second call helps after edits, or after a fixer that
  * makes room for another, not before), and made the same edit once more. An
  * edit that puts new code into a file with errors goes through too; the Stop
- * hook is what refuses a turn that ends with errors left.
+ * hook is what refuses a turn that ends with errors left, and a refusal here
+ * is recorded for it ({@link TurnStart#refused}), so that a turn whose only
+ * edit was refused is checked too.
  *
  * <p>It is fast feedback, not a guarantee, and the difference is worth stating
  * plainly: a PreToolUse hook only sees the file-editing tools, so anything
@@ -63,6 +65,7 @@ public final class SheriffGateHook {
 
     private final ComponentGate gate;
     private final GateMemory memory;
+    private final TurnStart turns;
     private final ObjectMapper json = new ObjectMapper();
 
     /**
@@ -71,7 +74,7 @@ public final class SheriffGateHook {
      * @param gate the shared component gate
      */
     public SheriffGateHook(ComponentGate gate) {
-        this(gate, new GateMemory());
+        this(gate, new GateMemory(), new TurnStart());
     }
 
     /**
@@ -79,10 +82,13 @@ public final class SheriffGateHook {
      *
      * @param gate the shared component gate
      * @param memory which sessions were already warned about which components
+     * @param turns where the refusals of the current turn are recorded for
+     *     the Stop hook
      */
-    public SheriffGateHook(ComponentGate gate, GateMemory memory) {
+    public SheriffGateHook(ComponentGate gate, GateMemory memory, TurnStart turns) {
         this.gate = gate;
         this.memory = memory;
+        this.turns = turns;
     }
 
     /**
@@ -116,6 +122,7 @@ public final class SheriffGateHook {
             return HookExit.ALLOW;
         }
         memory.remember(session, component);
+        turns.refused(session, component);
         System.err.printf(BLOCKED, component, gate.countOf(verdict), file,
                 verdict.sample() + gate.floorNote(), gate.repairStep(component));
         return HookExit.BLOCK;

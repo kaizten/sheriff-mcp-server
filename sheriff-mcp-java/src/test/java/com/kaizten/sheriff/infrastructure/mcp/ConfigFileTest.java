@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
@@ -21,6 +22,29 @@ final class ConfigFileTest {
 
     @TempDir
     Path home;
+
+    @Test
+    @DisplayName("Claude Code's settings come out as Claude Code writes them, empty arrays and objects included")
+    void writesJsonAsClaudeCodeDoes() throws Exception {
+        ObjectMapper json = new ObjectMapper();
+        String lf = System.lineSeparator();
+
+        String written = ConfigFile.json(json, json.readTree(
+                "{\"permissions\":{\"allow\":[\"Bash(ls)\",\"Read\"],\"deny\":[]},\"env\":{},\"model\":\"opus\"}"));
+
+        assertEquals(String.join(lf, "{",
+                "  \"permissions\": {",
+                "    \"allow\": [",
+                "      \"Bash(ls)\",",
+                "      \"Read\"",
+                "    ],",
+                "    \"deny\": []",
+                "  },",
+                "  \"env\": {},",
+                "  \"model\": \"opus\"",
+                "}") + lf, written);
+        assertEquals("{}" + lf, ConfigFile.json(json, json.createObjectNode()));
+    }
 
     @Test
     @DisabledOnOs(value = OS.WINDOWS, disabledReason = "Windows has no POSIX permissions")

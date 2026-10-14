@@ -188,6 +188,25 @@ final class HookInstallerTest {
     }
 
     @Test
+    @DisplayName("a reinstall put a user's 450 permission rules on one line: the file is written as Claude Code writes it")
+    void writesTheSettingsAsClaudeCodeDoes() throws Exception {
+        Path project = project();
+        Path file = project.resolve(".claude/settings.json");
+        Files.createDirectories(file.getParent());
+        Files.writeString(file, "{\"permissions\": {\"allow\": [\"Bash(ls)\"], \"deny\": []}}");
+        String lf = System.lineSeparator();
+
+        installer(project, installedJar()).install();
+
+        String written = Files.readString(file);
+        assertTrue(written.contains("\"allow\": [" + lf + "      \"Bash(ls)\"," + lf), written);
+        assertTrue(written.contains("\"deny\": []"), written);
+        assertTrue(written.contains("\"PreToolUse\": [" + lf + "      {" + lf + "        \"matcher\": "), written);
+        installer(project, installedJar()).install();
+        assertEquals(written, Files.readString(file), "a reinstall changes nothing it does not change");
+    }
+
+    @Test
     @DisplayName("the tools the order of work goes through run without a prompt, whatever the model's permission mode")
     void allowsTheSheriffToolsAndKeepsEveryOtherRule() throws Exception {
         Path project = project();

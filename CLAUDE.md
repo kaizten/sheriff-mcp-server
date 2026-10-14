@@ -153,8 +153,10 @@ code 2.
 
 Every installer writes an assistant's file through `ConfigFile`: whole,
 where a symbolic link points, and **with the permissions it had**, since
-these files can hold tokens. The server, and the hooks written for the user,
-run the Java the installer found, by its absolute path (`SHERIFF_JAVA`, read
+these files can hold tokens. Claude Code's settings go out in Claude Code's
+own format (`ConfigFile.json`), so a reinstall changes only its own lines.
+The server, and the hooks written for the user, run the Java the installer
+found, by its absolute path (`SHERIFF_JAVA`, read
 by `--install-hooks --user`, `--install-codex` and `--install-antigravity`,
 and given to `claude mcp add`): an editor started from the desktop can have
 another PATH, and Claude Code runs hooks in Git Bash, where a JDK installed

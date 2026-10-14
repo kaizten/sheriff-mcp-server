@@ -632,8 +632,9 @@ Compuerta & Antes de la primera edición de la sesión en un componente &
   que tiene errores nunca se bloquea: es el arreglo. Solo en Claude Code: Codex
   edita con parches, y el fin de turno detecta lo mismo después. \\
 Fin de turno & Cuando el asistente va a terminar &
-  Si lo que ha cambiado en el turno tiene errores, o métodos nuevos sin test
-  (en Java), le devuelve el turno con la lista. \\
+  Si lo que ha cambiado en el turno tiene errores, o la compuerta paró una
+  edición del turno y siguen ahí, o hay métodos nuevos sin test (en Java), le
+  devuelve el turno con la lista. \\
 Inicio de turno & Al llegar tu mensaje &
   Anota cómo estaban los componentes, para que el fin de turno mire solo lo que
   cambia en este turno y no el trabajo anterior sin confirmar. \\
@@ -1079,7 +1080,9 @@ interactiva y apruébalo con \code{/hooks}.}
 
 \subsection{Cómo informar de un problema}
 
-Incluye tres cosas: la versión (\code{--version} con el jar), el identificador de
+Incluye tres cosas: la versión (\code{--version} con el jar, o pregunta
+\ask{¿qué versión de Sheriff tengo?}: el asistente llama a \tool{sheriff_task}),
+el identificador de
 la tarea que aparece en la respuesta (\code{Task 4047f176.}) y, si puedes, el
 archivo \path{~/.local/state/sheriff-mcp/tasks/<id>/task.json}, que guarda con
 qué versión del jar y con qué imagen exacta de Sheriff se hizo el análisis. Se
