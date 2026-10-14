@@ -645,6 +645,18 @@ PowerShells) against what it published. A tag with a suffix (`v0.1.1-rc.1`)
 is a prerelease, which the install line never picks: it is how a release is
 tried before its real tag.
 
+On Windows the release's CI has no Docker and no assistant, so a change that
+touches Windows (the installers, the hooks, how commands or Docker are run)
+is tried on the prerelease by hand, on a Windows machine, before the real
+tag: install it, open a Codex session and a Claude Code session on a project
+with errors, and check that `sheriff_test` analyzes, that the Stop hook
+blocks the turn, and that it lets the turn end once `sheriff_fix` has left
+nothing.
+
+```powershell
+& ([scriptblock]::Create((irm https://github.com/kaizten/sheriff-mcp-server/releases/download/v0.1.1-rc.1/install.ps1))) -Tag v0.1.1-rc.1
+```
+
 ```bash
 git tag v0.1.1 && git push origin v0.1.1     # after the version in the poms says 0.1.1
 ```
