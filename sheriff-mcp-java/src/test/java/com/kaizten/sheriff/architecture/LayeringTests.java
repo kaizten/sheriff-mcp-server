@@ -41,7 +41,7 @@ class LayeringTests {
     private static final String APPLICATION_PACKAGE = "com.kaizten.sheriff.application";
     private static final String INFRASTRUCTURE_PACKAGE = "com.kaizten.sheriff.infrastructure";
     private static final List<String> INFRASTRUCTURE_TOOLING = List.of("java.io", "java.nio", "java.time",
-            "java.util", "java.lang", "com.fasterxml.jackson", "com.anthropic", "java.security", "java.net",
+            "java.util", "java.lang", "com.fasterxml.jackson", "java.security", "java.net",
             "javax.xml", "org.w3c.dom", "org.xml.sax");
     private static final int MINIMUM_EXPECTED_SOURCES = 10;
 

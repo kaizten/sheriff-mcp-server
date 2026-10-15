@@ -78,12 +78,16 @@ class DeterministicFixerTests {
     @Test
     @DisplayName("the state is deleted afterwards, or the next analysis reports a false clean")
     void cleansUpSheriffsStateWhenItIsDone() throws IOException {
+        Path state = new SheriffContainer(FakeProcessRunner.always(ProcessOutcome.completed(0, "", "")),
+                "kaizten/sheriff:latest", repository, Duration.ofSeconds(300)).stateFolder("app");
+        Files.createDirectories(state);
         for (String name : SheriffDockerAnalyzer.STATE_FILES) {
-            Files.writeString(repository.resolve(name), "{}");
+            Files.writeString(state.resolve(name), "{}");
         }
         fixer(FakeProcessRunner.always(ProcessOutcome.completed(0, OUTPUT, "")), CATALOG).run();
         for (String name : SheriffDockerAnalyzer.STATE_FILES) {
-            assertFalse(Files.exists(repository.resolve(name)), name + " was left behind");
+            assertFalse(Files.exists(state.resolve(name)), name + " was left behind");
+            assertFalse(Files.exists(repository.resolve(name)), name + " was written into the mount");
         }
     }
 

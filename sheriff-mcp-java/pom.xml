@@ -30,12 +30,11 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <junit.version>5.10.2</junit.version>
         <!--
-          The version anthropic-java itself is built against. Pinning an older
-          one here mixed 2.17 core classes with the SDK's 2.18 modules in the
-          same jar; the BOM below keeps every Jackson artifact on one version.
+          The BOM below keeps every Jackson artifact on this one version: two
+          versions in the same jar once mixed 2.17 core classes with 2.18
+          modules.
         -->
         <jackson.version>2.18.2</jackson.version>
-        <anthropic.version>2.34.0</anthropic.version>
     </properties>
 
     <dependencyManagement>
@@ -51,11 +50,6 @@
     </dependencyManagement>
 
     <dependencies>
-        <dependency>
-            <groupId>com.anthropic</groupId>
-            <artifactId>anthropic-java</artifactId>
-            <version>${anthropic.version}</version>
-        </dependency>
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
@@ -104,6 +98,15 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>3.2.5</version>
+                <configuration>
+                    <!--
+                      Sheriff's state folders, which the container puts under
+                      the user's cache, go inside the build for the tests.
+                    -->
+                    <systemPropertyVariables>
+                        <sheriff.state.home>${project.build.directory}/sheriff-state</sheriff.state.home>
+                    </systemPropertyVariables>
+                </configuration>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

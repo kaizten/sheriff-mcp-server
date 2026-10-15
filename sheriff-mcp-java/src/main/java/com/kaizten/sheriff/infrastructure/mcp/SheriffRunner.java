@@ -5,6 +5,7 @@ import com.kaizten.sheriff.infrastructure.docker.RepairOutcome;
 import com.kaizten.sheriff.infrastructure.docker.SheriffContainer;
 import com.kaizten.sheriff.infrastructure.docker.SheriffDockerAnalyzer;
 import com.kaizten.sheriff.infrastructure.docker.SheriffRepair;
+import com.kaizten.sheriff.infrastructure.hook.VerdictCache;
 import com.kaizten.sheriff.infrastructure.process.ProcessRunner;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -23,6 +24,11 @@ import java.util.Optional;
  * responding", and could take an empty, unrecorded run for a pass. Those
  * checks now live in {@link SheriffDockerAnalyzer}, and this class only turns
  * an untrustworthy result into the exception the tools report.
+ *
+ * <p>What a full analysis or a repair finds is recorded in the
+ * {@link VerdictCache} the hooks read, so that a turn whose last call was a
+ * clean {@code sheriff_test} or {@code sheriff_fix} does not end with the Stop
+ * hook running Sheriff again on the same files.
  */
 public final class SheriffRunner {
 
@@ -32,6 +38,7 @@ public final class SheriffRunner {
     private final Duration timeout;
     private final SheriffContainer container;
     private final Optional<Path> exportDirectory;
+    private final VerdictCache verdicts = new VerdictCache();
 
     /**
      * Wires the runner to one Sheriff image and one repository.
@@ -106,6 +113,9 @@ public final class SheriffRunner {
         if (result.error()) {
             throw new SheriffUnavailableException(result.message());
         }
+        if (!keepState) {
+            verdicts.rememberAnalyzed(repository, component, profile, result);
+        }
         return result;
     }
 
@@ -128,11 +138,12 @@ public final class SheriffRunner {
         SheriffDockerAnalyzer stateKeeping =
                 new SheriffDockerAnalyzer(processes, image, profile, component, repository, timeout, false);
         SheriffDockerAnalyzer analyzer = exportDirectory.map(stateKeeping::exportingTo).orElse(stateKeeping);
-        SheriffRepair repair = new SheriffRepair(container, analyzer, component, repository);
+        SheriffRepair repair = new SheriffRepair(container, analyzer, component);
         RepairOutcome outcome = referenceCode.isEmpty() ? repair.everyFixer(List.of()) : repair.onlyRules(referenceCode);
         if (outcome.failure().isPresent()) {
             throw new SheriffUnavailableException(outcome.failure().get());
         }
+        verdicts.rememberAnalyzed(repository, component, profile, outcome.after());
         return new FixRun(outcome.before(), outcome.after(), outcome.fixerFailures());
     }
 }

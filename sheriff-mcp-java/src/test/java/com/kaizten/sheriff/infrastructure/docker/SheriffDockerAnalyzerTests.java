@@ -48,6 +48,16 @@ class SheriffDockerAnalyzerTests {
                 runner, "kaizten/sheriff:latest", "JAVA", "app", repository, Duration.ofSeconds(300));
     }
 
+    /**
+     * Where Sheriff's state goes for the component every test analyzes,
+     * created, as a run would before Sheriff writes into it.
+     */
+    private Path state() throws IOException {
+        Path folder = analyzer(FakeProcessRunner.always(ProcessOutcome.completed(0, "", ""))).stateFolder();
+        Files.createDirectories(folder);
+        return folder;
+    }
+
     @Test
     void buildsTheInvocationSheriffActuallyExpects() {
         FakeProcessRunner runner = FakeProcessRunner.always(ProcessOutcome.completed(0, "", ""));
@@ -55,10 +65,22 @@ class SheriffDockerAnalyzerTests {
         List<String> command = runner.command();
         assertTrue(command.get(4).startsWith("sheriff-agent-"), "every run is a named container");
         assertEquals(
-                List.of("docker", "run", "--rm", "--name", command.get(4), "--mount", "type=bind,source=" + repository + ",target=/data",
+                List.of("docker", "run", "--rm", "--name", command.get(4),
+                        "--mount", "type=bind,source=" + analyzer(runner).stateFolder() + ",target=/data",
+                        "--mount", "type=bind,source=" + repository.resolve("app") + ",target=/data/app",
                         "kaizten/sheriff:latest", "test", "--test", "JAVA", "--uri", "file:/data",
                         "--component", "app"),
                 command);
+    }
+
+    @Test
+    @DisplayName("an analysis locks its component and reads the state folder its container mounts")
+    void locksTheComponentAndUsesItsContainersStateFolder() {
+        SheriffDockerAnalyzer analyzer = analyzer(FakeProcessRunner.always(ProcessOutcome.completed(0, "", "")));
+        assertEquals(repository.resolve("app"), analyzer.lockKey());
+        assertEquals(new SheriffContainer(FakeProcessRunner.always(ProcessOutcome.completed(0, "", "")),
+                "kaizten/sheriff:latest", repository, Duration.ofSeconds(1)).stateFolder("app"), analyzer.stateFolder());
+        assertEquals(analyzer.lockKey(), analyzer.perProfile().get(0).lockKey());
     }
 
     @Test
@@ -79,7 +101,7 @@ class SheriffDockerAnalyzerTests {
     @Test
     @DisplayName("an empty result Sheriff did not record is 'nothing analyzed', never 'no errors'")
     void anUnrecordedEmptyRunIsAFailure() throws IOException {
-        Files.writeString(repository.resolve("sheriff_errors.json"), "{\"file:/data\": {\"other\": {\"JAVA\": []}}}");
+        Files.writeString(state().resolve("sheriff_errors.json"), "{\"file:/data\": {\"other\": {\"JAVA\": []}}}");
         AnalysisResult result = analyzer(FakeProcessRunner.withoutSheriffReport(
                 ProcessOutcome.completed(0, "", ""))).analyze();
         assertTrue(result.error());
@@ -89,7 +111,7 @@ class SheriffDockerAnalyzerTests {
     @Test
     @DisplayName("TypeScript traces every checker it runs; a clean run is only those lines, and it is clean")
     void theTypescriptTracesAreNotOutput() throws IOException {
-        Files.writeString(repository.resolve("sheriff_errors.json"), "{\"file:/data\": {\"app\": {\"JAVA\": []}}}");
+        Files.writeString(state().resolve("sheriff_errors.json"), "{\"file:/data\": {\"app\": {\"JAVA\": []}}}");
         String traces = "COMMAND: node entry-point.js file-comment /data/app/a.ts\n"
                 + "COMMAND: node entry-point.js imports /data/app/a.ts\n";
         AnalysisResult clean = analyzer(FakeProcessRunner.always(ProcessOutcome.completed(0, traces, ""))).analyze();
@@ -102,7 +124,7 @@ class SheriffDockerAnalyzerTests {
 
     @Test
     void anEmptyRunSheriffRecordedIsClean() throws IOException {
-        Files.writeString(repository.resolve("sheriff_errors.json"), "{\"file:/data\": {\"app\": {\"JAVA\": []}}}");
+        Files.writeString(state().resolve("sheriff_errors.json"), "{\"file:/data\": {\"app\": {\"JAVA\": []}}}");
         AnalysisResult result = analyzer(FakeProcessRunner.always(ProcessOutcome.completed(0, "", ""))).analyze();
         assertFalse(result.error());
         assertEquals(0, result.total());
@@ -192,14 +214,16 @@ class SheriffDockerAnalyzerTests {
     }
 
     @Test
-    @DisplayName("Sheriff's leftovers are removed, or the next run refuses to start on a dirty tree")
+    @DisplayName("Sheriff's leftovers are removed from its state folder, and none ever reach the mount")
     void deletesTheStateFilesSheriffDropsInTheRepository() throws IOException {
+        Path state = state();
         for (String name : SheriffDockerAnalyzer.STATE_FILES) {
-            Files.writeString(repository.resolve(name), "{}");
+            Files.writeString(state.resolve(name), "{}");
         }
         analyzer(FakeProcessRunner.always(ProcessOutcome.completed(0, "", ""))).analyze();
         for (String name : SheriffDockerAnalyzer.STATE_FILES) {
-            assertFalse(Files.exists(repository.resolve(name)), name + " was left behind");
+            assertFalse(Files.exists(state.resolve(name)), name + " was left behind");
+            assertFalse(Files.exists(repository.resolve(name)), name + " was written into the mount");
         }
     }
 
@@ -214,14 +238,15 @@ class SheriffDockerAnalyzerTests {
     @Test
     @DisplayName("Sheriff starts with no state on the mount: old hashes would make it skip every unchanged file")
     void noStateIsLeftForSheriffToReuse() throws IOException {
-        Files.writeString(repository.resolve("sheriff_tracked_files.json"),
+        Path state = state();
+        Files.writeString(state.resolve("sheriff_tracked_files.json"),
                 "{\"/data/app/src/A.java\": {\"hash\": \"aaa\", \"timestamp\": \"now\"}}");
-        Files.writeString(repository.resolve("sheriff_errors.json"),
+        Files.writeString(state.resolve("sheriff_errors.json"),
                 "{\"file:/data\": {\"app\": {\"JAVA_HEXAGONAL\": []}}}");
         List<String> presentAtStart = new ArrayList<>();
         ProcessRunner sheriff = (command, directory, environment, timeout) -> {
             for (String name : SheriffDockerAnalyzer.STATE_FILES) {
-                if (Files.exists(repository.resolve(name))) {
+                if (Files.exists(directory.resolve(name))) {
                     presentAtStart.add(name);
                 }
             }
@@ -233,9 +258,10 @@ class SheriffDockerAnalyzerTests {
 
     @Test
     void cleansUpEvenWhenTheRunFailed() throws IOException {
-        Files.writeString(repository.resolve(SheriffDockerAnalyzer.STATE_FILES.get(0)), "{}");
+        Path state = state();
+        Files.writeString(state.resolve(SheriffDockerAnalyzer.STATE_FILES.get(0)), "{}");
         analyzer(FakeProcessRunner.always(ProcessOutcome.timedOut("too slow"))).analyze();
-        assertFalse(Files.exists(repository.resolve(SheriffDockerAnalyzer.STATE_FILES.get(0))));
+        assertFalse(Files.exists(state.resolve(SheriffDockerAnalyzer.STATE_FILES.get(0))));
     }
 
     /**
@@ -244,9 +270,9 @@ class SheriffDockerAnalyzerTests {
     private ProcessRunner leaving(String errors, String tracked) {
         return (command, directory, environment, timeout) -> {
             try {
-                Files.writeString(repository.resolve("sheriff_errors.json"), errors);
-                Files.writeString(repository.resolve("sheriff_tracked_files.json"), tracked);
-                Files.writeString(repository.resolve("sheriff_summary.json"), "{ }");
+                Files.writeString(directory.resolve("sheriff_errors.json"), errors);
+                Files.writeString(directory.resolve("sheriff_tracked_files.json"), tracked);
+                Files.writeString(directory.resolve("sheriff_summary.json"), "{ }");
             } catch (IOException exception) {
                 throw new IllegalStateException(exception);
             }
@@ -326,14 +352,14 @@ class SheriffDockerAnalyzerTests {
 
     @Test
     @DisplayName("several profiles are one run each, in order, merged into one result and cleaned up after")
-    void runsOncePerProfileAndMerges() {
+    void runsOncePerProfileAndMerges() throws IOException {
         List<String> profiles = new ArrayList<>();
         ProcessRunner sheriff = (command, directory, environment, timeout) -> {
             String profile = command.get(command.indexOf("--test") + 1);
             profiles.add(profile);
             String own = "JAVA".equals(profile) ? "Braces are not used" : "Class outside the layers";
             try {
-                Files.writeString(repository.resolve("sheriff_errors.json"), """
+                Files.writeString(directory.resolve("sheriff_errors.json"), """
                         {"file:/data": {"app": {"%s": [
                           {"file": "/data/app/src/A.java", "description": "No JavaDoc", "referenceCode": "Doc", "type": "ERROR"},
                           {"file": "/data/app/src/A.java", "description": "%s", "referenceCode": "%s", "type": "ERROR"} ]}}}
@@ -348,6 +374,7 @@ class SheriffDockerAnalyzerTests {
         assertEquals(List.of("JAVA", "JAVA_HEXAGONAL"), profiles);
         assertFalse(result.error(), result.message());
         assertEquals(3, result.total());
+        assertFalse(Files.exists(state().resolve("sheriff_errors.json")));
         assertFalse(Files.exists(repository.resolve("sheriff_errors.json")));
     }
 

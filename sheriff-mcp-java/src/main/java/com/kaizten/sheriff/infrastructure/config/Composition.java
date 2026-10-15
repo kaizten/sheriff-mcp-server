@@ -246,6 +246,17 @@ public final class Composition {
     }
 
     /**
+     * The profile {@link #analyzerFor} analyzes a component under, which is
+     * what a recorded verdict on it is filed under too.
+     *
+     * @param component the component
+     * @return that profile, or list of them
+     */
+    public String profileFor(String component) {
+        return configuration.mockMode() ? configuration.testType() : profiles.apply(component);
+    }
+
+    /**
      * An analyzer for a component other than the configured one, which is what
      * the hooks need: they guard whatever component the edited file belongs
      * to, not whichever one configuration happens to name.
@@ -260,7 +271,7 @@ public final class Composition {
         SheriffDockerAnalyzer analyzer = exporting(new SheriffDockerAnalyzer(
                 processes,
                 configuration.image(),
-                profiles.apply(component),
+                profileFor(component),
                 component,
                 configuration.targetRepository(),
                 configuration.sheriffTimeout()));

@@ -46,10 +46,10 @@ import java.util.stream.Collectors;
  *       the component and the profile of the run, with none of the noise
  *       around them, so that file is where findings are read from. Stdout is
  *       only the fallback for a file that cannot be read.</li>
- *   <li>Every run drops three state files at the root of the mounted volume.
- *       Left there they appear as untracked files in the analyzed repository,
- *       which makes the loop's own scope check read them as "the fixer touched
- *       files nobody flagged" and refuse to continue. They are deleted after
+ *   <li>Every run drops three state files at the root of what is mounted at
+ *       {@code /data}, which {@link SheriffContainer} makes a state folder of
+ *       the component's own, outside the project, so that they never show up
+ *       in the user's tree or the loop's scope check. They are deleted after
  *       every run. They are cleared before the next run too: a stale tracked
  *       file hash can make Sheriff skip analysis and leave an old verdict.
  *       Two of them are worth keeping, and are read first and optionally
@@ -256,7 +256,26 @@ public final class SheriffDockerAnalyzer implements CodeAnalyzer {
      */
     @Override
     public AnalysisResult analyze() {
-        return MountLock.holding(repositoryRoot, this::analyzeLocked);
+        return MountLock.holding(lockKey(), this::analyzeLocked);
+    }
+
+    /**
+     * What every run of this component holds, the same path its container
+     * locks: the component's directory, whose state folder is its own.
+     *
+     * @return that path
+     */
+    Path lockKey() {
+        return container.lockFor(Optional.of(component));
+    }
+
+    /**
+     * Where Sheriff's state files are for this component.
+     *
+     * @return that folder
+     */
+    Path stateFolder() {
+        return container.stateFolder(component);
     }
 
     /**
@@ -447,7 +466,7 @@ public final class SheriffDockerAnalyzer implements CodeAnalyzer {
     private Optional<JsonNode> stateFile(String name) {
         JsonNode root;
         try {
-            root = json.readTree(Files.readString(repositoryRoot.resolve(name)));
+            root = json.readTree(Files.readString(stateFolder().resolve(name)));
         } catch (IOException exception) {
             return Optional.empty();
         }
@@ -472,7 +491,7 @@ public final class SheriffDockerAnalyzer implements CodeAnalyzer {
             return;
         }
         for (String name : EXPORTED_STATE_FILES) {
-            Path source = repositoryRoot.resolve(name);
+            Path source = stateFolder().resolve(name);
             try {
                 if (Files.isRegularFile(source)) {
                     Files.copy(source, directory.resolve(name), StandardCopyOption.REPLACE_EXISTING);
@@ -612,7 +631,7 @@ public final class SheriffDockerAnalyzer implements CodeAnalyzer {
     }
 
     /**
-     * Removes the state Sheriff leaves in the analyzed repository.
+     * Removes the state Sheriff leaves in this component's state folder.
      *
      * <p>Public because the deterministic pass has to do this itself: it asks
      * for an analyzer that keeps the state, uses it, and is then responsible
@@ -623,19 +642,10 @@ public final class SheriffDockerAnalyzer implements CodeAnalyzer {
      * succeeded.
      */
     public void removeStateFiles() {
-        removeStateFilesIn(repositoryRoot);
-    }
-
-    /**
-     * Removes the state Sheriff leaves at the root of a mounted directory,
-     * for a caller that ran Sheriff without an analyzer of its own to ask.
-     *
-     * @param repositoryRoot the directory Sheriff mounted
-     */
-    public static void removeStateFilesIn(Path repositoryRoot) {
+        Path folder = stateFolder();
         for (String name : STATE_FILES) {
             try {
-                Files.deleteIfExists(repositoryRoot.resolve(name));
+                Files.deleteIfExists(folder.resolve(name));
             } catch (IOException exception) {
                 continue;
             }

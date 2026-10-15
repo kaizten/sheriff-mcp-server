@@ -3,15 +3,26 @@ package com.kaizten.sheriff.infrastructure.docker;
 import com.kaizten.sheriff.infrastructure.process.ProcessOutcome;
 import com.kaizten.sheriff.infrastructure.process.ProcessRunner;
 import com.kaizten.sheriff.infrastructure.process.ProcessStatus;
+import com.kaizten.sheriff.infrastructure.process.TemporaryFolders;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Supplier;
+import java.util.regex.Pattern;
+import java.util.stream.Stream;
 
 /**
  * One run of the Sheriff image against a mounted repository, as a container
@@ -24,6 +35,23 @@ import java.util.function.Supplier;
  * three state files, owned by root, at the root of the repository: the next
  * run then found a dirty tree it had not made. Knowing the container's name
  * is what makes it possible to stop it.
+ *
+ * <p>Sheriff analyzes a folder of what it mounts at {@code /data}, so a run
+ * mounts at {@code /data} a state folder of the component's own, outside the
+ * project, and the component alone at {@code /data/<component>}: Sheriff's
+ * arguments and the paths it reports are the ones a mount of the parent
+ * gave, but it sees nothing beside the component, and the three state files
+ * it writes at the root land in that folder rather than in the user's tree.
+ * Mounting the parent let a component's neighbours change what Sheriff
+ * reports for it: on 16 October, {@code JAVA_HEXAGONAL} reported
+ * {@code FilenamePascalCase} in a component only when another project in the
+ * same folder had a {@code domain/} directory. Through these tools that
+ * difference did not show, as the base profile run first reports the same
+ * files and {@link KnownFalsePositives} drops {@code package-info.java}, and
+ * across three Java components, a TypeScript one and a Python one, under ten
+ * profiles, nothing else differed; but nothing makes it so for every rule.
+ * The parent's mount also left root-owned state files in the folder of
+ * every project beside it, and made each of them wait for the others' runs.
  */
 public final class SheriffContainer {
 
@@ -35,6 +63,8 @@ public final class SheriffContainer {
     private static final String MOUNT_FLAG = "--mount";
     private static final String BIND_MOUNT = "type=bind,%s,target=" + CONTAINER_MOUNT;
     private static final String SOURCE_FIELD = "source=";
+    private static final String TARGET_FIELD = "target=";
+    private static final String COMPONENT_MOUNT = "type=bind,%s,%s";
     private static final String TMPFS_MOUNT = "type=tmpfs,%s";
     private static final String DESTINATION_FIELD = "destination=";
     private static final String SLASH = "/";
@@ -56,6 +86,18 @@ public final class SheriffContainer {
     private static final String FORCE = "-f";
     private static final String NAME_PREFIX = "sheriff-agent-";
     private static final Duration REMOVAL_TIMEOUT = Duration.ofSeconds(30);
+    private static final String STATE_HOME_PROPERTY = "sheriff.state.home";
+    private static final String CACHE_HOME_VARIABLE = "XDG_CACHE_HOME";
+    private static final String USER_HOME_PROPERTY = "user.home";
+    private static final String CACHE_FOLDER = ".cache";
+    private static final String TOOL_FOLDER = "sheriff-mcp";
+    private static final String STATE_FOLDER = "state";
+    private static final String DIGEST = "SHA-256";
+    private static final int STATE_NAME_LENGTH = 16;
+    private static final int FIRST = 0;
+    private static final String NO_STATE_FOLDER = "Could not create Sheriff's state folder %s: %s";
+    private static final String STATE_NAME_REGEX = "[0-9a-f]{16}";
+    private static final Pattern STATE_NAME = Pattern.compile(STATE_NAME_REGEX);
 
     private final ProcessRunner processes;
     private final String image;
@@ -102,18 +144,132 @@ public final class SheriffContainer {
      * @return what the run produced
      */
     public ProcessOutcome run(List<String> arguments) {
-        return MountLock.holding(repositoryRoot, () -> runLocked(arguments));
+        return MountLock.holding(lockFor(componentOf(arguments)), () -> runLocked(arguments));
     }
 
     /**
-     * One run, with the mount's lock already held.
+     * What a run holds while it runs: the component it names, whose state
+     * folder nothing else may touch meanwhile, or the whole mount for a run
+     * that names none.
+     *
+     * @param component the component the run names, if any
+     * @return the path the lock is taken on
+     */
+    Path lockFor(Optional<String> component) {
+        return component.map(repositoryRoot::resolve).orElse(repositoryRoot);
+    }
+
+    /**
+     * The folder Sheriff's state files go to for one component: under
+     * {@code ${XDG_CACHE_HOME:-~/.cache}/sheriff-mcp/state/}, named after a
+     * digest of the component's absolute path, or under the folder the
+     * {@code sheriff.state.home} property names, which the tests set. A
+     * folder in the home rather than the temporary directory, because
+     * Docker installed as a snap sees a private {@code /tmp} of its own.
+     *
+     * @param component the component, as Sheriff names it
+     * @return that folder, not created
+     */
+    public Path stateFolder(String component) {
+        Path directory = repositoryRoot.resolve(component).toAbsolutePath().normalize();
+        return stateHome().resolve(digest(directory.toString()));
+    }
+
+    /**
+     * Removes the state folders no run has used for a week: each holds, after
+     * its runs, only the empty folder Docker made to mount the component on.
+     * Only folders named the way {@link #stateFolder} names them are touched.
+     * Best effort, like every clean-up here.
+     *
+     * @param home the folder that holds every component's state folder
+     */
+    static void pruneStateFolders(Path home) {
+        Instant oldest = Instant.now().minus(TemporaryFolders.MARKER_LIFETIME);
+        List<Path> folders;
+        try (Stream<Path> entries = Files.list(home)) {
+            folders = entries.filter(folder -> STATE_NAME.matcher(folder.getFileName().toString()).matches()
+                    && Files.isDirectory(folder, LinkOption.NOFOLLOW_LINKS)).toList();
+        } catch (IOException exception) {
+            return;
+        }
+        for (Path folder : folders) {
+            try {
+                if (Files.getLastModifiedTime(folder).toInstant().isBefore(oldest)) {
+                    removeFolder(folder);
+                }
+            } catch (IOException exception) {
+                continue;
+            }
+        }
+    }
+
+    /**
+     * Deletes a state folder and what is in it, the deepest first.
+     *
+     * @param folder the folder
+     * @throws IOException when something in it cannot be deleted
+     */
+    private static void removeFolder(Path folder) throws IOException {
+        List<Path> inside;
+        try (Stream<Path> walk = Files.walk(folder)) {
+            inside = walk.sorted(Comparator.reverseOrder()).toList();
+        }
+        for (Path path : inside) {
+            Files.deleteIfExists(path);
+        }
+    }
+
+    /**
+     * Where every component's state folder is.
+     *
+     * @return that folder
+     */
+    private static Path stateHome() {
+        String configured = System.getProperty(STATE_HOME_PROPERTY);
+        if (configured != null && !configured.isBlank()) {
+            return Path.of(configured);
+        }
+        String cache = System.getenv(CACHE_HOME_VARIABLE);
+        Path base = cache == null || cache.isBlank()
+                ? Path.of(System.getProperty(USER_HOME_PROPERTY), CACHE_FOLDER) : Path.of(cache);
+        return base.resolve(TOOL_FOLDER).resolve(STATE_FOLDER);
+    }
+
+    /**
+     * A short digest of a text, for a folder name.
+     *
+     * @param text what to digest
+     * @return its first hexadecimal characters
+     */
+    private static String digest(String text) {
+        try {
+            byte[] hash = MessageDigest.getInstance(DIGEST).digest(text.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(hash).substring(FIRST, STATE_NAME_LENGTH);
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException(exception);
+        }
+    }
+
+    /**
+     * One run, with its lock already held, in the component's state folder,
+     * created when missing.
      *
      * @param arguments what to pass to Sheriff
      * @return what the run produced
      */
     private ProcessOutcome runLocked(List<String> arguments) {
+        Optional<Path> state = componentOf(arguments).map(this::stateFolder);
+        Path directory = state.orElse(repositoryRoot);
+        try {
+            if (state.isPresent()) {
+                pruneStateFolders(directory.getParent());
+                Files.createDirectories(directory);
+            }
+        } catch (IOException exception) {
+            return ProcessOutcome.unavailable(String.format(NO_STATE_FOLDER, directory, exception.getMessage()));
+        }
         String name = names.get();
-        ProcessOutcome outcome = processes.run(command(name, arguments), repositoryRoot, Map.of(), timeout);
+        ProcessOutcome outcome = processes.run(command(name, arguments), directory, Map.of(), timeout);
         if (outcome.status() == ProcessStatus.TIMED_OUT) {
             processes.run(List.of(DOCKER, REMOVE_CONTAINER, FORCE, name), repositoryRoot, Map.of(), REMOVAL_TIMEOUT);
         }
@@ -121,19 +277,26 @@ public final class SheriffContainer {
     }
 
     /**
-     * The full command line for one run.
+     * The full command line for one run: the state folder at {@code /data}
+     * and the component inside it, or, for a run that names no component,
+     * the whole mount there.
      *
      * @param name the container's name
      * @param arguments what to pass to Sheriff
      * @return the {@code docker run} invocation
      */
     List<String> command(String name, List<String> arguments) {
-        List<String> command = new ArrayList<>(List.of(
-                DOCKER, RUN, REMOVE_WHEN_DONE,
-                NAME_FLAG, name,
-                MOUNT_FLAG, bindMount(repositoryRoot)));
-        componentOf(arguments).ifPresent(component -> buildOutput(repositoryRoot.resolve(component))
-                .forEach(output -> command.addAll(List.of(MOUNT_FLAG, hiddenMount(component, output)))));
+        List<String> command = new ArrayList<>(List.of(DOCKER, RUN, REMOVE_WHEN_DONE, NAME_FLAG, name));
+        Optional<String> named = componentOf(arguments);
+        if (named.isEmpty()) {
+            command.addAll(List.of(MOUNT_FLAG, bindMount(repositoryRoot)));
+        }
+        named.ifPresent(component -> {
+            command.addAll(List.of(MOUNT_FLAG, bindMount(stateFolder(component)),
+                    MOUNT_FLAG, componentMount(repositoryRoot.resolve(component), component)));
+            buildOutput(repositoryRoot.resolve(component))
+                    .forEach(output -> command.addAll(List.of(MOUNT_FLAG, hiddenMount(component, output))));
+        });
         command.add(image);
         command.addAll(arguments);
         return command;
@@ -165,7 +328,7 @@ public final class SheriffContainer {
      * @param component the component's directory
      * @return those of them that are there
      */
-    static List<String> buildOutput(Path component) {
+    public static List<String> buildOutput(Path component) {
         List<String> outputs = new ArrayList<>();
         if (Files.isRegularFile(component.resolve(MAVEN_BUILD))) {
             outputs.add(MAVEN_OUTPUT);
@@ -205,6 +368,20 @@ public final class SheriffContainer {
      */
     static String bindMount(Path directory) {
         return String.format(BIND_MOUNT, csvField(SOURCE_FIELD + directory));
+    }
+
+    /**
+     * The {@code --mount} value that binds the component's own directory at
+     * {@code /data/<component>}, inside the state folder bound at
+     * {@code /data}.
+     *
+     * @param directory the component's directory
+     * @param component its name, as Sheriff names it
+     * @return that value
+     */
+    static String componentMount(Path directory, String component) {
+        return String.format(COMPONENT_MOUNT, csvField(SOURCE_FIELD + directory),
+                csvField(TARGET_FIELD + CONTAINER_MOUNT + SLASH + component));
     }
 
     /**

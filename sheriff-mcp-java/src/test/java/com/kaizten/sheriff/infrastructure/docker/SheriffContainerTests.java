@@ -1,13 +1,18 @@
 package com.kaizten.sheriff.infrastructure.docker;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.kaizten.sheriff.infrastructure.process.FakeProcessRunner;
 import com.kaizten.sheriff.infrastructure.process.ProcessOutcome;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileTime;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
@@ -25,7 +30,11 @@ class SheriffContainerTests {
     private static final Path REPOSITORY = Path.of("/repo");
 
     private static SheriffContainer container(FakeProcessRunner runner) {
-        return new SheriffContainer(runner, "kaizten/sheriff:latest", REPOSITORY, Duration.ofSeconds(5),
+        return container(runner, REPOSITORY);
+    }
+
+    private static SheriffContainer container(FakeProcessRunner runner, Path repository) {
+        return new SheriffContainer(runner, "kaizten/sheriff:latest", repository, Duration.ofSeconds(5),
                 () -> "sheriff-agent-test");
     }
 
@@ -59,10 +68,10 @@ class SheriffContainerTests {
         Files.writeString(app.resolve("pom.xml"), "<project/>");
         Files.writeString(app.resolve("build.gradle"), "");
         FakeProcessRunner runner = FakeProcessRunner.always(ProcessOutcome.completed(0, "", ""));
-        new SheriffContainer(runner, "kaizten/sheriff:latest", repository, Duration.ofSeconds(5),
-                () -> "sheriff-agent-test").run(List.of("test", "--test", "JAVA", "--component", "app"));
+        container(runner, repository).run(List.of("test", "--test", "JAVA", "--component", "app"));
         assertEquals(List.of("docker", "run", "--rm", "--name", "sheriff-agent-test",
-                "--mount", SheriffContainer.bindMount(repository),
+                "--mount", SheriffContainer.bindMount(container(runner, repository).stateFolder("app")),
+                "--mount", "type=bind,source=" + app + ",target=/data/app",
                 "--mount", "type=tmpfs,destination=/data/app/target",
                 "--mount", "type=tmpfs,destination=/data/app/build",
                 "--mount", "type=tmpfs,destination=/data/app/.gradle",
@@ -98,6 +107,95 @@ class SheriffContainerTests {
         ProcessOutcome outcome = container(runner).run(List.of("test"));
         assertEquals("did not respond within 5s.", outcome.failure());
         assertEquals(List.of("docker", "rm", "-f", "sheriff-agent-test"), runner.commands().get(1));
+    }
+
+    @Test
+    @DisplayName("a component is mounted alone, inside a state folder of its own: nothing beside it is seen")
+    void mountsTheComponentAloneInsideItsStateFolder(@TempDir Path repository) throws IOException {
+        Path app = repository.resolve("app");
+        Files.createDirectories(app.resolve("src"));
+        Files.createDirectories(repository.resolve("neighbour/domain"));
+        FakeProcessRunner runner = FakeProcessRunner.always(ProcessOutcome.completed(0, "", ""));
+        SheriffContainer container = container(runner, repository);
+        container.run(List.of("test", "--test", "JAVA", "--uri", "file:/data", "--component", "app"));
+        Path state = container.stateFolder("app");
+        assertEquals(List.of("docker", "run", "--rm", "--name", "sheriff-agent-test",
+                "--mount", "type=bind,source=" + state + ",target=/data",
+                "--mount", "type=bind,source=" + app + ",target=/data/app",
+                "kaizten/sheriff:latest", "test", "--test", "JAVA", "--uri", "file:/data", "--component", "app"),
+                runner.command());
+        assertEquals(state, runner.directory(), "Sheriff's state lands in the folder it runs in");
+        assertTrue(Files.isDirectory(state), "the state folder is made before Docker is asked to mount it");
+        assertFalse(state.startsWith(repository), "the state folder is never inside the project");
+        assertEquals(List.of("app", "neighbour"), Files.list(repository).map(path -> path.getFileName().toString())
+                .sorted().toList(), "nothing is written into the mount");
+    }
+
+    @Test
+    @DisplayName("each component has a state folder of its own, the same every time, under sheriff.state.home")
+    void eachComponentHasItsOwnStateFolder(@TempDir Path repository) {
+        SheriffContainer container = container(FakeProcessRunner.always(ProcessOutcome.completed(0, "", "")),
+                repository);
+        Path app = container.stateFolder("app");
+        assertEquals(app, container.stateFolder("app"));
+        assertNotEquals(app, container.stateFolder("api"));
+        assertEquals(Path.of(System.getProperty("sheriff.state.home")), app.getParent());
+        assertEquals(16, app.getFileName().toString().length());
+        assertNotEquals(app, container(FakeProcessRunner.always(ProcessOutcome.completed(0, "", "")),
+                repository.resolve("elsewhere")).stateFolder("app"), "two projects with a module of the same name");
+    }
+
+    @Test
+    @DisplayName("a run locks its component, not the folder of every project beside it")
+    void locksTheComponent() {
+        SheriffContainer container = container(FakeProcessRunner.always(ProcessOutcome.completed(0, "", "")));
+        assertEquals(REPOSITORY.resolve("app"), container.lockFor(Optional.of("app")));
+        assertEquals(REPOSITORY, container.lockFor(Optional.empty()));
+    }
+
+    @Test
+    @DisplayName("the component's mount quotes its source and target the way --mount needs")
+    @DisabledOnOs(value = OS.WINDOWS, disabledReason = "':' and '\"' cannot be in a Windows file name")
+    void quotesTheComponentsMount() {
+        assertEquals("type=bind,source=/home/a/app,target=/data/app",
+                SheriffContainer.componentMount(Path.of("/home/a/app"), "app"));
+        assertEquals("type=bind,\"source=/home/a/x,y\",\"target=/data/x,y\"",
+                SheriffContainer.componentMount(Path.of("/home/a/x,y"), "x,y"));
+    }
+
+    @Test
+    @DisplayName("a state folder that cannot be made is a run that did not happen, said in words")
+    @DisabledOnOs(value = OS.WINDOWS, disabledReason = "the read-only parent is set with POSIX permissions")
+    void anUnwritableStateFolderIsReported(@TempDir Path repository) throws IOException {
+        FakeProcessRunner runner = FakeProcessRunner.always(ProcessOutcome.completed(0, "", ""));
+        SheriffContainer container = container(runner, repository);
+        Path state = container.stateFolder("app");
+        Files.createDirectories(state.getParent());
+        Files.writeString(state, "a file where the folder should be");
+        try {
+            ProcessOutcome outcome = container.run(List.of("test", "--component", "app"));
+            assertFalse(outcome.ran());
+            assertTrue(outcome.failure().contains("state folder"));
+            assertEquals(List.of(), runner.commands());
+        } finally {
+            Files.delete(state);
+        }
+    }
+
+    @Test
+    @DisplayName("state folders unused for a week go, with the empty folder Docker mounted on; nothing else does")
+    void prunesStateFoldersNoRunHasUsed(@TempDir Path home) throws IOException {
+        Path old = Files.createDirectories(home.resolve("0123456789abcdef/app"));
+        Path recent = Files.createDirectories(home.resolve("fedcba9876543210"));
+        Path foreign = Files.createDirectories(home.resolve("not-a-state-folder"));
+        FileTime longAgo = FileTime.from(Instant.now().minus(Duration.ofDays(8)));
+        Files.setLastModifiedTime(old.getParent(), longAgo);
+        Files.setLastModifiedTime(foreign, longAgo);
+        SheriffContainer.pruneStateFolders(home);
+        assertFalse(Files.exists(old.getParent()));
+        assertTrue(Files.isDirectory(recent));
+        assertTrue(Files.isDirectory(foreign));
+        SheriffContainer.pruneStateFolders(home.resolve("missing"));
     }
 
     @Test
