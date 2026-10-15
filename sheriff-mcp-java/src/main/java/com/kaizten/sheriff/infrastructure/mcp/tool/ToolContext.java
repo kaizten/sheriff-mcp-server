@@ -12,6 +12,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -34,10 +35,11 @@ import java.util.function.Supplier;
  * @param toolCall how a step names the next call
  * @param answers the errors last listed in full, per component
  * @param untested what finds the new methods no changed test calls
+ * @param image which build of Sheriff's image is here, as a person reads it
  */
 record ToolContext(McpConfig config, SheriffRunner runner, RuleCatalog catalog, Supplier<Path> catalogPath,
         Function<String, VerificationResult> tests, TaskRegistry tasks, ToolCall toolCall, AnswerMemory answers,
-        UntestedMethods untested) {
+        UntestedMethods untested, Supplier<Optional<String>> image) {
 
     static final String COMPONENT_ARGUMENT = "component";
     static final String PROFILE_ARGUMENT = "profile";

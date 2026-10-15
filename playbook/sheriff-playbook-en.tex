@@ -1071,7 +1071,9 @@ interactive session and approve it with \code{/hooks}.}
 
 Include three things: the version (the jar with \code{--version}, or ask
 \ask{which version of Sheriff do I have?}: the assistant calls
-\tool{sheriff_task}), the task id
+\tool{sheriff_task}, which also names the build of Sheriff's image you have,
+such as \code{kaizten/sheriff:latest, built on 2026-10-13 (sha256:1ad796a36fa6)}),
+the task id
 the answer shows (\code{Task 4047f176.}) and, if you can, the file
 \path{~/.local/state/sheriff-mcp/tasks/<id>/task.json}, which records the jar's
 version and the exact Sheriff image the analysis ran with. The newest 50 tasks

@@ -255,7 +255,7 @@ in the answer.
 | `sheriff_fix` | With no arguments, every repair Sheriff has for what it finds, round after round while the count drops; reports errors before and after, and with `verify` runs the tests | no |
 | `sheriff_guidelines` | The rules, before anything is broken, with the code Sheriff accepts | no |
 | `sheriff_autofix` | The agent's whole repair loop, on its own branch. Answers at once with a task id and runs in the background | yes |
-| `sheriff_task` | A task's command, state and result; without an id, the server's version and Sheriff image, and the session's tasks | no |
+| `sheriff_task` | A task's command, state and result; without an id, the server's version, the build of Sheriff's image on this machine (the day it was built and its digest, as `latest` names whichever was pulled last), and the session's tasks | no |
 
 **Every answer of `sheriff_test` and `sheriff_fix` ends with one `Next step:`**,
 its last line, worked out from the state alone. After an analysis with errors

@@ -100,6 +100,22 @@ class ImageProvisioningTests {
         }
 
         @Test
+        @DisplayName("latest names whichever build was pulled last: the digest and the day it was built say which")
+        void readsWhichBuildIsHere() {
+            ProcessOutcome inspected = ProcessOutcome.completed(0, "[\"kaizten/sheriff@sha256:1ad796a36fa6ae4a1b5f\"] "
+                    + "\"2026-10-13T11:59:45.42165046+01:00\"\n", "");
+            assertEquals(Optional.of(new LocalBuild("sha256:1ad796a36fa6ae4a1b5f", "2026-10-13")),
+                    new SheriffImage(docker(inspected, PULLED), IMAGE, image -> Optional.empty()).localBuild());
+            assertEquals(Optional.of(new LocalBuild("", "2026-10-13")), new SheriffImage(
+                    docker(ProcessOutcome.completed(0, "[] \"2026-10-13T11:59:45Z\"", ""), PULLED), IMAGE,
+                    image -> Optional.empty()).localBuild(), "an image built here has no digest");
+            assertEquals(Optional.empty(),
+                    new SheriffImage(docker(MISSING, PULLED), IMAGE, image -> Optional.empty()).localBuild());
+            assertEquals(Optional.empty(), new SheriffImage(docker(ProcessOutcome.completed(0, "not json", ""), PULLED),
+                    IMAGE, image -> Optional.empty()).localBuild());
+        }
+
+        @Test
         @DisplayName("outdated only when both digests are known and differ")
         void outdatedNeedsBothDigests() {
             assertTrue(new SheriffImage(docker(here(), PULLED), IMAGE, image -> Optional.of("sha256:bbb")).outdated());
@@ -156,6 +172,33 @@ class ImageProvisioningTests {
             release.countDown();
             image.ready().get(5, TimeUnit.SECONDS);
             assertEquals(Optional.empty(), image.blocker());
+        }
+
+        @Test
+        @DisplayName("asked which version is installed, the server says which build of the image is here")
+        void describesTheBuildHere() {
+            ProcessOutcome inspected = ProcessOutcome.completed(0, "[\"kaizten/sheriff@sha256:1ad796a36fa6ae4a1b5f\"] "
+                    + "\"2026-10-13T11:59:45.42165046+01:00\"", "");
+            ImageProvisioning image = new ImageProvisioning(
+                    new SheriffImage(docker(inspected, PULLED), IMAGE, name -> Optional.empty()), "check", log);
+            assertEquals(Optional.of("kaizten/sheriff:latest, built on 2026-10-13 (sha256:1ad796a36fa6)"),
+                    image.description());
+            assertEquals("2026-10-13", image.identity().get("sheriff_image_created"));
+            ImageProvisioning missing = new ImageProvisioning(
+                    new SheriffImage(docker(MISSING, PULLED), IMAGE, name -> Optional.empty()), "check", log);
+            assertEquals(Optional.of("kaizten/sheriff:latest, which Docker does not show on this machine"),
+                    missing.description());
+            assertEquals(Optional.empty(), ImageProvisioning.alreadyReady().description());
+        }
+
+        @Test
+        @DisplayName("a build known to be outdated says so beside the build that is here")
+        void describesAnOutdatedBuild() {
+            ImageProvisioning image = new ImageProvisioning(
+                    new SheriffImage(docker(here(), PULLED), IMAGE, name -> Optional.of("sha256:bbb")), "check", log);
+            image.now();
+            assertEquals(Optional.of("kaizten/sheriff:latest (sha256:aaa); a newer build of it has been published"),
+                    image.description());
         }
 
         @Test

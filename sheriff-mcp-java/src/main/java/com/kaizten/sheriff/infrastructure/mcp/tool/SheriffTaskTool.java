@@ -13,9 +13,11 @@ import java.util.Optional;
  * {@code sheriff_autofix}, and finds the JSON any call exported.
  *
  * <p>With no id it first says which version of this server is running and
- * which image it runs. The version was only in the handshake, which Codex does
- * not show the model: asked which version was installed, it searched the
- * project and said it could not tell.
+ * which build of Sheriff's image it runs: the day it was built and the start
+ * of its digest, as {@code latest} names whichever build was pulled last. The
+ * version was only in the handshake, which Codex does not show the model:
+ * asked which version was installed, it searched the project and said it
+ * could not tell.
  */
 final class SheriffTaskTool {
 
@@ -69,7 +71,8 @@ final class SheriffTaskTool {
     private String handle(Map<String, Object> arguments) {
         String id = ToolContext.textArgument(arguments, ID_ARGUMENT);
         if (id.isEmpty()) {
-            return String.format(VERSION_LINE, ServerVersion.current(), context.config().image()) + NEWLINE
+            String image = context.image().get().orElse(context.config().image());
+            return String.format(VERSION_LINE, ServerVersion.current(), image) + NEWLINE
                     + listing(context.tasks().all());
         }
         Optional<Task> task = context.tasks().find(id);

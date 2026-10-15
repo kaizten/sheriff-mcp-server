@@ -54,6 +54,12 @@ public final class ImageProvisioning {
     private static final int START = 0;
     private static final String IMAGE_FIELD = "sheriff_image";
     private static final String DIGEST_FIELD = "sheriff_image_digest";
+    private static final String CREATED_FIELD = "sheriff_image_created";
+    private static final String BUILT_ON = ", built on %s";
+    private static final String PULLED_BY = " (%s)";
+    private static final String NOT_HERE = ", which Docker does not show on this machine";
+    private static final String NEWER_PUBLISHED = "; a newer build of it has been published";
+    private static final int SHORT_DIGEST_LENGTH = 19;
 
     private final SheriffImage image;
     private final String policy;
@@ -166,8 +172,73 @@ public final class ImageProvisioning {
         }
         Map<String, String> identity = new LinkedHashMap<>();
         identity.put(IMAGE_FIELD, image.image());
-        image.localDigest().ifPresent(digest -> identity.put(DIGEST_FIELD, digest));
+        image.localBuild().ifPresent(build -> {
+            putKnown(identity, DIGEST_FIELD, build.digest());
+            putKnown(identity, CREATED_FIELD, build.created());
+        });
         return identity;
+    }
+
+    /**
+     * The image as a person reads it: its name, and which build of it is on
+     * this machine, the day it was built and the start of its digest, since
+     * {@code latest} alone does not say which build was pulled. It also says
+     * when a newer build is known to be published.
+     *
+     * @return that description, or empty when there is no image to ask about
+     */
+    public Optional<String> description() {
+        if (image == null) {
+            return Optional.empty();
+        }
+        Optional<LocalBuild> build = image.localBuild();
+        StringBuilder text = new StringBuilder(image.image());
+        if (build.isEmpty()) {
+            text.append(NOT_HERE);
+        } else {
+            appendKnown(text, BUILT_ON, build.get().created());
+            appendKnown(text, PULLED_BY, shortened(build.get().digest()));
+        }
+        if (!notice.isEmpty()) {
+            text.append(NEWER_PUBLISHED);
+        }
+        return Optional.of(text.toString());
+    }
+
+    /**
+     * Records a field only when Docker said what it holds.
+     *
+     * @param identity where the fields go
+     * @param field the field
+     * @param value its value, empty when unknown
+     */
+    private static void putKnown(Map<String, String> identity, String field, String value) {
+        if (!value.isEmpty()) {
+            identity.put(field, value);
+        }
+    }
+
+    /**
+     * Adds a part of the description only when Docker said what it holds.
+     *
+     * @param text the description so far
+     * @param format how the part reads
+     * @param value its value, empty when unknown
+     */
+    private static void appendKnown(StringBuilder text, String format, String value) {
+        if (!value.isEmpty()) {
+            text.append(String.format(format, value));
+        }
+    }
+
+    /**
+     * The start of a digest, as Docker and Docker Hub show it.
+     *
+     * @param digest the whole digest
+     * @return its algorithm and first twelve characters
+     */
+    private static String shortened(String digest) {
+        return digest.length() <= SHORT_DIGEST_LENGTH ? digest : digest.substring(START, SHORT_DIGEST_LENGTH);
     }
 
     /**

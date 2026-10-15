@@ -1,5 +1,6 @@
 package com.kaizten.sheriff.infrastructure.docker;
 
+import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kaizten.sheriff.infrastructure.process.ProcessOutcome;
@@ -36,7 +37,8 @@ public final class SheriffImage {
     private static final String IMAGE = "image";
     private static final String INSPECT = "inspect";
     private static final String FORMAT_FLAG = "--format";
-    private static final String REPO_DIGESTS = "{{json .RepoDigests}}";
+    private static final String LOCAL_BUILD = "{{json .RepoDigests}} {{json .Created}}";
+    private static final int DATE_LENGTH = 10;
     private static final String PULL = "pull";
     private static final String DIGEST_SEPARATOR = "@";
     private static final String TAG_SEPARATOR = ":";
@@ -110,22 +112,57 @@ public final class SheriffImage {
      * @return it, or empty when the image is missing or was built here
      */
     public Optional<String> localDigest() {
+        return localBuild().map(LocalBuild::digest).filter(digest -> !digest.isEmpty());
+    }
+
+    /**
+     * Which build of the image is on this machine: the digest it was pulled
+     * by and the day it was built. A tag such as {@code latest} names
+     * whichever build was pulled last, so only these say which one it is.
+     *
+     * @return them, or empty when Docker has no such image or cannot be asked
+     */
+    public Optional<LocalBuild> localBuild() {
         ProcessOutcome outcome = inspect();
         if (!outcome.succeeded()) {
             return Optional.empty();
         }
-        try {
-            for (JsonNode entry : json.readTree(outcome.standardOutput().strip())) {
-                String text = entry.asText();
-                int at = text.indexOf(DIGEST_SEPARATOR);
-                if (at != NOT_FOUND) {
-                    return Optional.of(text.substring(at + AFTER));
-                }
-            }
-        } catch (IOException exception) {
+        try (JsonParser values = json.createParser(outcome.standardOutput().strip())) {
+            JsonNode digests = json.readTree(values);
+            JsonNode created = json.readTree(values);
+            return Optional.of(new LocalBuild(digests == null ? LocalBuild.UNKNOWN : digestIn(digests),
+                    created == null ? LocalBuild.UNKNOWN : dayOf(created.asText())));
+        } catch (IOException | RuntimeException exception) {
             return Optional.empty();
         }
-        return Optional.empty();
+    }
+
+    /**
+     * The digest among the image's repository digests.
+     *
+     * @param repositoryDigests the list Docker gives, {@code name@sha256:...}
+     * @return the first digest, or the empty string when there is none
+     */
+    private static String digestIn(JsonNode repositoryDigests) {
+        for (JsonNode entry : repositoryDigests) {
+            String text = entry.asText();
+            int at = text.indexOf(DIGEST_SEPARATOR);
+            if (at != NOT_FOUND) {
+                return text.substring(at + AFTER);
+            }
+        }
+        return LocalBuild.UNKNOWN;
+    }
+
+    /**
+     * The day of a timestamp Docker writes, such as
+     * {@code 2026-10-13T11:59:45.42165046+01:00}.
+     *
+     * @param timestamp the timestamp
+     * @return its date, or the empty string when it is not one
+     */
+    private static String dayOf(String timestamp) {
+        return timestamp.length() < DATE_LENGTH ? LocalBuild.UNKNOWN : timestamp.substring(START, DATE_LENGTH);
     }
 
     /**
@@ -155,7 +192,7 @@ public final class SheriffImage {
      * @return what {@code docker image inspect} answered
      */
     private ProcessOutcome inspect() {
-        return processes.run(List.of(DOCKER, IMAGE, INSPECT, FORMAT_FLAG, REPO_DIGESTS, image), HERE, Map.of(),
+        return processes.run(List.of(DOCKER, IMAGE, INSPECT, FORMAT_FLAG, LOCAL_BUILD, image), HERE, Map.of(),
                 INSPECT_TIMEOUT);
     }
 
