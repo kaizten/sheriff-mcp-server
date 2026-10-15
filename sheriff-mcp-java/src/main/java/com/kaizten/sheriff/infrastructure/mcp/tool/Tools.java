@@ -157,7 +157,7 @@ public final class Tools implements AutoCloseable {
         this.image = image;
         this.tasks = new TaskRegistry(config.tasksDirectory(), () -> provenance(image));
         ToolContext context = new ToolContext(config, runner, catalog, catalogPath, tests, tasks, toolCall,
-                new AnswerMemory(), new UntestedMethods(new SystemProcessRunner()));
+                new AnswerMemory(), new UntestedMethods(new SystemProcessRunner()), image::description);
         Map<String, Tool> definitions = new LinkedHashMap<>();
         for (Tool tool : List.of(new SheriffTestTool(context).definition(), new SheriffFixTool(context).definition(),
                 new SheriffGuidelinesTool(context).definition(), new SheriffAutofixTool(context).definition(),
