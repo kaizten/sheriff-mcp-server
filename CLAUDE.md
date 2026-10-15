@@ -96,7 +96,7 @@ java -jar target/sheriff-mcp.jar --agent --help
 # The Maven plugin (needs the MCP module installed first)
 cd sheriff-maven-plugin
 mvn install
-mvn com.kaizten:sheriff-maven-plugin:0.1.0:check    # on any Maven module
+mvn com.kaizten:sheriff-maven-plugin:0.1.1:check    # on any Maven module
 ```
 
 `mvn -q test` is the wrong verification command: `-q` suppresses the lines
