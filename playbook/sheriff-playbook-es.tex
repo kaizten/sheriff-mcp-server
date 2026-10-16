@@ -1049,10 +1049,9 @@ estaba en marcha. Reinicia la sesión: arranca el servidor nuevo.}
 esta máquina: espera unos minutos.}
 \problem{\code{The analyzer could not run}}{Docker se ha parado. Arráncalo y
 vuelve a pedir la revisión.}
-\problem{\code{did not respond within 300s}}{Sheriff tarda según todo lo que
-monta, y en un proyecto de un solo módulo eso es su carpeta padre: dentro de
-una carpeta con otros repositorios puede tardar minutos, sobre todo en Windows
-con el Docker de WSL. Pon el proyecto en una carpeta propia, o sube
+\problem{\code{did not respond within 300s}}{Sheriff tarda según el
+componente que analiza, y en Windows con el Docker de WSL un proyecto en
+\code{C:} tarda mucho más que uno en el disco propio de WSL. Sube
 \code{SHERIFF_TIMEOUT}.}
 \problem{\code{Nothing was analyzed}}{El componente no tiene fuentes del
 lenguaje del perfil. Nombra el componente (\ask{revisa el módulo api}) o revisa

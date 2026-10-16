@@ -14,6 +14,7 @@ import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -193,13 +194,36 @@ class HookTests {
         }
 
         @Test
-        @DisplayName("a verdict that stopped at the first error is not served for a full one")
-        void differsWhenFailingFast() {
+        @DisplayName("a verdict that stopped at the first error is not served for a full one, and a full one is")
+        void aFailFastVerdictIsNeverServedForAFullOne(@TempDir Path cache) {
             Configuration failFast = new Configuration(
                     Map.of("TARGET_REPO", repository.toString(), "SHERIFF_FAIL_FAST", "1"), agent);
-            ComponentGate quick = new Composition(failFast,
-                    FakeProcessRunner.always(ProcessOutcome.completed(0, "", ""))).componentGate();
-            assertFalse(quick.fingerprintOf("app").equals(gate(ProcessOutcome.completed(0, "", "")).fingerprintOf("app")));
+            VerdictCache verdicts = new VerdictCache(cache, Duration.ofMinutes(15));
+            FakeProcessRunner quickRuns = FakeProcessRunner.always(ProcessOutcome.completed(0, SHERIFF_OUTPUT, ""));
+            Composition quickComposition = new Composition(failFast, quickRuns);
+            ComponentGate quick = new ComponentGate(failFast, quickComposition, verdicts);
+            assertEquals(2, quick.verdictFor("app").errors());
+            FakeProcessRunner fullRuns = FakeProcessRunner.always(ProcessOutcome.completed(0, "", ""));
+            Configuration full = new Configuration(Map.of("TARGET_REPO", repository.toString()), agent);
+            ComponentGate thorough = new ComponentGate(full, new Composition(full, fullRuns), verdicts);
+            assertEquals(0, thorough.verdictFor("app").errors(), "the fail-fast verdict was served for a full one");
+            assertEquals(1, fullRuns.commands().size());
+            int quickBefore = quickRuns.commands().size();
+            assertEquals(0, quick.verdictFor("app").errors(), "the full verdict says more, and serves");
+            assertEquals(quickBefore, quickRuns.commands().size());
+        }
+
+        @Test
+        @DisplayName("what a build writes beside its build file does not make a verdict look stale")
+        void ignoresTheBuildOutput() throws IOException {
+            Files.writeString(repository.resolve("app/pom.xml"), "<project/>");
+            Files.createDirectories(repository.resolve("app/target/generated-sources"));
+            ComponentGate gate = gate(ProcessOutcome.completed(0, "", ""));
+            String before = gate.fingerprintOf("app");
+            Files.writeString(repository.resolve("app/target/generated-sources/G.java"), "class G {}");
+            assertEquals(before, gate.fingerprintOf("app"));
+            Files.delete(repository.resolve("app/pom.xml"));
+            assertFalse(before.equals(gate.fingerprintOf("app")), "without a pom.xml, target/ may be sources");
         }
 
         @Test

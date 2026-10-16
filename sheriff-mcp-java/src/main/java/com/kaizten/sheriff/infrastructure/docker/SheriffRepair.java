@@ -5,7 +5,6 @@ import com.kaizten.sheriff.domain.valueobject.AnalysisResult;
 import com.kaizten.sheriff.domain.valueobject.SheriffFinding;
 import com.kaizten.sheriff.domain.valueobject.SheriffRule;
 import com.kaizten.sheriff.infrastructure.process.ProcessOutcome;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashSet;
@@ -66,7 +65,6 @@ public final class SheriffRepair {
     private final SheriffContainer container;
     private final SheriffDockerAnalyzer analyzer;
     private final String component;
-    private final Path repositoryRoot;
 
     /**
      * Wires the repair to one component.
@@ -76,14 +74,11 @@ public final class SheriffRepair {
      *     it reads; it is made to keep Sheriff's state, which {@code fix}
      *     needs, and the state is removed here
      * @param component the folder to repair
-     * @param repositoryRoot the directory Sheriff mounts
      */
-    public SheriffRepair(SheriffContainer container, SheriffDockerAnalyzer analyzer, String component,
-            Path repositoryRoot) {
+    public SheriffRepair(SheriffContainer container, SheriffDockerAnalyzer analyzer, String component) {
         this.container = container;
         this.analyzer = analyzer;
         this.component = component;
-        this.repositoryRoot = repositoryRoot;
     }
 
     /**
@@ -96,7 +91,7 @@ public final class SheriffRepair {
      * @return what it did, measured
      */
     public RepairOutcome everyFixer(List<SheriffRule> rules) {
-        return MountLock.holding(repositoryRoot, () -> repair(rules, Optional.empty(), EVERY_FIXER_ROUNDS));
+        return MountLock.holding(analyzer.lockKey(), () -> repair(rules, Optional.empty(), EVERY_FIXER_ROUNDS));
     }
 
     /**
@@ -106,7 +101,7 @@ public final class SheriffRepair {
      * @return what it did, measured
      */
     public RepairOutcome onlyRules(String codes) {
-        return MountLock.holding(repositoryRoot, () -> repair(List.of(), Optional.of(codes), NAMED_FIXER_ROUNDS));
+        return MountLock.holding(analyzer.lockKey(), () -> repair(List.of(), Optional.of(codes), NAMED_FIXER_ROUNDS));
     }
 
     /**

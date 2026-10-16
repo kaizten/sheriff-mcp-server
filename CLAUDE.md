@@ -232,14 +232,20 @@ Windows it has to be tried with real assistants, which CI does not have.
 ## Things about Sheriff that will waste your time otherwise
 
 - **Sheriff analyzes a *subdirectory* of what it mounts.** So a component is
-  always "mount the parent, name the directory". A repository whose root *is*
-  the module mounts its parent. **Nested components (`a/b`) are rejected.**
-  This is the single most common source of confusion here, and it is why the
-  Maven plugin needs no configuration: Maven already knows both halves.
-  **Its time grows with the whole mount, not the component**, and through
+  always "the parent and the directory's name", and **nested components
+  (`a/b`) are rejected**. This is the single most common source of confusion
+  here, and it is why the Maven plugin needs no configuration: Maven already
+  knows both halves. `SheriffContainer` does not mount the parent: it mounts a
+  state folder of the component's own at `/data` and the component alone at
+  `/data/<component>`, so Sheriff's arguments and paths are unchanged but it
+  sees nothing beside the component. With the parent mounted, a neighbour's
+  `domain/` folder changed what `JAVA_HEXAGONAL` reported for a component
+  (masked through the tools by the base profile and `KnownFalsePositives`, but
+  not by design), and a single-module project's parent got Sheriff's
+  root-owned state files. Its time grows with what it mounts, and through
   WSL's Docker from `/mnt/c` by orders of magnitude (seconds on WSL's own
-  disk, minutes from `C:` beside large sibling folders, past
-  `SHERIFF_TIMEOUT`'s 300 s).
+  disk, minutes from `C:`, past `SHERIFF_TIMEOUT`'s 300 s); whether mounting
+  the component alone shortens the `C:` case has not been measured.
 - **Sheriff analyzes every file of the component, what its build wrote
   included, and cannot be told to leave a folder out.** After a Gradle build
   almost all of a project's errors can be in `build/generated`. So
@@ -274,15 +280,20 @@ Windows it has to be tried with real assistants, which CI does not have.
 - **The TypeScript profile traces every checker on stdout**, one
   `COMMAND: node ...` line each, before any findings; the analyzer drops
   them, or a clean TypeScript run reads as "not JSON".
-- **Every run drops three `sheriff_*.json` files at the root of the mount.**
-  They must be cleaned up, except between the `test` and the `fix` of a
-  repair — `fix` analyzes nothing, it reads the state `test` left. Before the
+- **Every run drops three `sheriff_*.json` files at the root of the mount**,
+  which is the component's state folder,
+  `${XDG_CACHE_HOME:-~/.cache}/sheriff-mcp/state/<digest of its path>`
+  (`sheriff.state.home` in the tests), never the project. Docker runs there,
+  and leaves in it the empty root-owned folder it mounted the component on;
+  folders no run has used for a week are pruned. Not in `/tmp`: Docker as a
+  snap has a `/tmp` of its own. They must be cleaned up, except between the
+  `test` and the `fix` of a repair — `fix` analyzes nothing, it reads the
+  state `test` left. Before the
   clean-up, `sheriff_errors.json` is **where findings are read from** (stdout
   is the fallback) and `sheriff_tracked_files.json` gives
   `AnalysisResult.trackedFiles`, whose hashes name what a repair changed
   (`changedSince`); both can be exported. `sheriff_summary.json` is always
-  `{ }` and ignored. That shared state is why `sheriff:fix` serializes itself
-  across a reactor's modules.
+  `{ }` and ignored.
 - **Sheriff is incremental, so its state is cleared *before* every run too.**
   It skips every file whose hash is in `sheriff_tracked_files.json`, which
   records no profile and no rule version: state left by one profile makes the
@@ -394,6 +405,17 @@ code Sheriff accepts for it (`AcceptedCode`, from
 `src/main/resources/accepted-code.md`): change a shape there only after
 checking it against the image.
 
+**The hooks reuse the MCP's verdicts.** `SheriffRunner` records what a full
+`sheriff_test` or a repair found in `VerdictCache`, per component directory,
+profile and fail-fast, and the gate and the Stop hook read it before running
+Sheriff, so a turn that ended on a clean `sheriff_test` is not analyzed again.
+An entry is recorded only when every source the fingerprint covers is one
+Sheriff analyzed with that content (the SHA-256 in
+`sheriff_tracked_files.json`), and served only while the fingerprint matches
+and it is younger than `SHERIFF_GATE_TTL`. The gate looks again once it holds
+the component's lock, so parallel edits run Sheriff once. `scripts/e2e.sh`
+scenario 21 runs it.
+
 **The hooks speak the same language.** A hook ends with the step an analysis
 ends with, from `ComponentGate.repairStep`: the `sheriff_fix` tool with the
 component named, what done looks like ("Next step: none, the component is
@@ -478,9 +500,11 @@ task's failure waits 0.2 s before it is recorded, as its `git` can die first;
 a queued task never starts. Task records are written to a file of their own
 and moved into place.
 
-Every Sheriff run holds `MountLock` for its mount, across threads and
+Every Sheriff run holds `MountLock` for its component, across threads and
 processes, with the whole `test`, `fix`, `test` sequence held at once, since
-Sheriff keeps its state at the root of the mount. The lock files, and the
+Sheriff keeps its state in the component's state folder; two components, or
+two single-module projects in one folder, no longer wait for each other. The
+lock files, the record of verdicts (`VerdictCache`), and the
 markers the hooks leave for their next run, live in a folder of the temporary
 directory per user (`TemporaryFolders`). Markers older than a week are pruned
 when their folder is written; lock files never are.
@@ -570,7 +594,12 @@ batching, the scope check and the commits are identical for all of them:
 **`openai_api` and `local` are one adapter.** Ollama, LM Studio, vLLM and
 llama.cpp all speak OpenAI's `/chat/completions`, so the difference is a base
 URL (`OPENAI_BASE_URL`) and whether a key is required. It uses the JDK's HTTP
-client, not an SDK. Both API backends offer `read_file`/`write_file`, and
+client, not an SDK, and so does `anthropic_api` (`POST /v1/messages`,
+retried twice on 408, 409, 429, 5xx or a dropped connection, as the SDK
+does): the SDK and its Kotlin and HTTP stacks would be nine tenths of the
+jar and of what the Maven plugin makes every build resolve, so
+`LayeringTests` does not allow `com.anthropic`. Both API backends offer
+`read_file`/`write_file`, and
 **how well that goes is a property of the model, not of the loop**: a model
 may never call a tool, or read and stop without writing. Either way the loop
 parks the file it made no progress on and cuts. **Both tools are kept to the

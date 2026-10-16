@@ -126,6 +126,22 @@ class CompositionTests {
     }
 
     @Test
+    @DisplayName("the profile a component is analyzed under is the one its verdicts are filed under")
+    void namesTheProfileOfEachComponent() {
+        Configuration configuration = new Configuration(Map.of(), Path.of("/repo/sheriff-mcp-java"));
+        Composition composition = new Composition(configuration,
+                FakeProcessRunner.always(ProcessOutcome.completed(0, "", "")),
+                component -> component.equals("web") ? "TYPESCRIPT" : "JAVA");
+        assertEquals("TYPESCRIPT", composition.profileFor("web"));
+        assertEquals("JAVA", composition.profileFor("api"));
+        assertEquals("JAVA", composition.profileFor(""));
+        Configuration mock = new Configuration(Map.of("SHERIFF_MOCK", "1", "SHERIFF_TEST_TYPE", "VUEJS"),
+                Path.of("/repo/sheriff-mcp-java"));
+        assertEquals("VUEJS", new Composition(mock, FakeProcessRunner.always(ProcessOutcome.completed(0, "", "")),
+                component -> "JAVA").profileFor("web"), "the mock analyzes under the configured profile");
+    }
+
+    @Test
     void withoutAChoiceEveryComponentGetsTheConfiguredProfile() {
         FakeProcessRunner runner = FakeProcessRunner.always(ProcessOutcome.completed(0, "", ""));
         Configuration configuration = new Configuration(

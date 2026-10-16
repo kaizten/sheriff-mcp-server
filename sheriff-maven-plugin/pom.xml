@@ -59,6 +59,15 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>3.2.5</version>
+                <configuration>
+                    <!--
+                      Sheriff's state folders, which the container puts under
+                      the user's cache, go inside the build for the tests.
+                    -->
+                    <systemPropertyVariables>
+                        <sheriff.state.home>${project.build.directory}/sheriff-state</sheriff.state.home>
+                    </systemPropertyVariables>
+                </configuration>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

@@ -43,7 +43,7 @@ class SheriffRepairTests {
         SheriffDockerAnalyzer analyzer = new SheriffDockerAnalyzer(runner, "kaizten/sheriff:latest", "JAVA", "app",
                 repository, timeout, false);
         return new SheriffRepair(new SheriffContainer(runner, "kaizten/sheriff:latest", repository, timeout),
-                analyzer, "app", repository);
+                analyzer, "app");
     }
 
     private static List<String> steps(FakeProcessRunner runner) {

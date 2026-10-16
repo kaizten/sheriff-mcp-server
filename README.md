@@ -146,8 +146,8 @@ its own from the image on first use (about 6 s), into `~/.cache/sheriff-mcp/`.
 
 **3. Open the project and check it.** Start Claude Code in the project's root
 and ask *"check the code standards"*. The server works out the component and
-the profile by itself. For a project that is itself one module, Sheriff mounts
-its parent and leaves nothing behind there. Nothing else is needed on this
+the profile by itself. Sheriff is given the component alone, a project that is
+itself one module included, and leaves nothing behind in it. Nothing else is needed on this
 machine. To share the setup with a team, commit this as `.mcp.json` in the
 project's root instead of relying on each machine's registration (use one or
 the other: a user registration and a `.mcp.json` both named `sheriff` make
@@ -226,7 +226,7 @@ fails on errors. For a CI runner, install the plugin there too
 | "The analyzer could not run" | Docker stopped after the image was pulled |
 | "The Sheriff server cannot load its own code" | An update on Windows replaced the jar under the running server: restart the session |
 | "A Sheriff server was running from the jar this replaced", while installing on Windows | Windows lets no one delete or rename a jar a running server holds, so the installer overwrites it, and that server fails at its next call: restart the open sessions |
-| "The analyzer could not run: did not respond within 300s" | Sheriff's time grows with the whole folder it mounts, which for a single-module project is its parent: from a folder of other repositories it can take minutes, worst through WSL's `/mnt/c`. Keep the project in a folder of its own, or raise `SHERIFF_TIMEOUT` |
+| "The analyzer could not run: did not respond within 300s" | Sheriff's time grows with the component it analyzes, and through WSL's Docker a project on `C:` takes far longer than one on WSL's own disk. Raise `SHERIFF_TIMEOUT` |
 | "Nothing was analyzed" | The component holds no sources of that profile's language: pass `component`, or check the profile the project declares |
 | "No rule catalog is available" | No Docker when the server first started: start Docker, and the next rule lookup tries again (at most a minute later) |
 | The hooks do nothing | The session did not pick up the change to its settings: restart it, and check them with `/hooks` |
@@ -341,8 +341,8 @@ not run or found nothing of the profile's language to analyze:
 java -jar sheriff-mcp.jar --check [--component api] [--profile JAVA_HEXAGONAL]
 ```
 
-**In Maven**, with no configuration: the module's parent is mounted and its
-directory name is the component.
+**In Maven**, with no configuration: the module's directory is the component,
+and Maven knows where it is.
 
 ```xml
 <plugin>
@@ -425,7 +425,8 @@ session ends (SIGTERM to the whole process group, SIGKILL about 0.3 s later),
 and the repair loop stops with the server. Its task ends as `interrupted`,
 and the repository may be left on the loop's branch with a pass uncommitted,
 to review before anything else. Sheriff's `sheriff_*.json` files may be left
-at the root of what it mounts too; the next run clears them by itself. In an interactive session the loop runs on between turns, and
+in its state folder, under `~/.cache/sheriff-mcp/state/`, outside the project;
+the next run clears them by itself. In an interactive session the loop runs on between turns, and
 `sheriff_task` reports on it, for as long as the session stays open; quitting
 cuts it the same way. `codex exec` ends its session as soon as the model
 answers, so from `exec` the loop never gets anywhere: run it from the agent's

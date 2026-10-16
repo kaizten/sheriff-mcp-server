@@ -551,6 +551,31 @@ check "the same file anywhere else does, so it was not skipped for being clean" 
 check "and what the build wrote is still there, as it was" \
   '[[ -f "$built/target/generated-sources/demo/generated_by_a_build.java" && -f "$built/build/generated/demo/generated_by_a_build.java" ]]'
 
+# The Stop hook used to analyze again what the turn's last sheriff_test had just
+# analyzed, and every run left Sheriff's state at the root of the parent folder
+# a single-module project is mounted from.
+echo "21. The verdict sheriff_test reaches is the Stop hook's too, and Sheriff's state stays out of the tree"
+shared="$work/shared/app"
+component "$shared"
+repository "$shared"
+echo "// changed in this turn" >> "$shared/src/main/java/demo/Thermometer.java"
+counted="$work/counted-bin"
+mkdir -p "$counted"
+printf '#!/bin/sh\necho "$*" >> "%s"\nexec "%s" "$@"\n' "$work/21-docker.log" "$(command -v docker)" > "$counted/docker"
+chmod +x "$counted/docker"
+(cd "$shared" && PATH="$counted:$PATH" java -jar "$mcp_jar" --call sheriff_test component=app >"$work/21a.out" 2>&1)
+runs_for_test=$(grep -c '^run ' "$work/21-docker.log")
+echo '{"stop_hook_active":false}' | CLAUDE_PROJECT_DIR="$shared" XDG_CACHE_HOME="$lone/cache" PATH="$counted:$PATH" \
+  java -jar "$mcp_jar" --hook-stop >"$work/21b.out" 2>&1
+shared_stop=$?
+runs_for_stop=$(( $(grep -c '^run ' "$work/21-docker.log") - runs_for_test ))
+check "sheriff_test runs Sheriff and finds the errors" \
+  '(( runs_for_test >= 1 )) && grep -q "^app has [0-9]* error" "$work/21a.out"'
+check "the Stop hook refuses the turn over them" '(( shared_stop == 2 )) && grep -q "sheriff_fix" "$work/21b.out"'
+check "without running Sheriff again on the same files" '(( runs_for_stop == 0 ))'
+check "and no state file of Sheriff's is in the component or the folder beside it" \
+  '(( $(find "$work/shared" -maxdepth 2 -name "sheriff_*.json" | wc -l) == 0 ))'
+
 echo
 if (( failures > 0 )); then
   echo "$failures check(s) failed. The repositories and outputs are kept in $work."

@@ -106,6 +106,15 @@ class PlatformTests {
                 Platform.dockerCommand(List.of("docker", "run", "--mount", "type=bind,\"source=D:\\a,b\\c\",target=/data"),
                         true, Map.of("SHERIFF_DOCKER", "wsl")));
         assertEquals(
+                List.of("wsl.exe", "-e", "docker", "run",
+                        "--mount", "type=bind,source=/mnt/c/Users/a/.cache/sheriff-mcp/state/0a1b,target=/data",
+                        "--mount", "type=bind,source=/mnt/c/work/app,target=/data/app", "img"),
+                Platform.dockerCommand(List.of("docker", "run",
+                        "--mount", "type=bind,source=C:\\Users\\a\\.cache\\sheriff-mcp\\state\\0a1b,target=/data",
+                        "--mount", "type=bind,source=C:\\work\\app,target=/data/app", "img"),
+                        true, Map.of("SHERIFF_DOCKER", "wsl")),
+                "the state folder and the component are both mounts, and both are translated");
+        assertEquals(
                 List.of("wsl.exe", "-d", "Ubuntu", "-e", "docker", "pull", "img"),
                 Platform.dockerCommand(List.of("docker", "pull", "img"), true, Map.of("SHERIFF_DOCKER", "wsl:Ubuntu")));
     }

@@ -1040,10 +1040,10 @@ was running. Restart the session: it starts the new server.}
 this machine: wait a few minutes.}
 \problem{\code{The analyzer could not run}}{Docker has stopped. Start it and ask
 for the check again.}
-\problem{\code{did not respond within 300s}}{Sheriff's time grows with all it
-mounts, which for a single-module project is its parent folder: inside a folder
-of other repositories it can take minutes, worst on Windows with WSL's Docker.
-Keep the project in a folder of its own, or raise \code{SHERIFF_TIMEOUT}.}
+\problem{\code{did not respond within 300s}}{Sheriff's time grows with the
+component it analyzes, and on Windows with WSL's Docker a project on
+\code{C:} takes far longer than one on WSL's own disk. Raise
+\code{SHERIFF_TIMEOUT}.}
 \problem{\code{Nothing was analyzed}}{The component holds no sources of the
 profile's language. Name the component (\ask{check the api module}) or check
 the profile the project declares.}

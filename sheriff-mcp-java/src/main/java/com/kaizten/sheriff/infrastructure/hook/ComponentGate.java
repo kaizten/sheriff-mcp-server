@@ -1,28 +1,19 @@
 package com.kaizten.sheriff.infrastructure.hook;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.kaizten.sheriff.domain.valueobject.AnalysisResult;
-import com.kaizten.sheriff.domain.valueobject.SheriffFinding;
 import com.kaizten.sheriff.infrastructure.config.Composition;
 import com.kaizten.sheriff.infrastructure.config.Configuration;
+import com.kaizten.sheriff.infrastructure.docker.MountLock;
 import com.kaizten.sheriff.infrastructure.mcp.tool.ToolCall;
 import com.kaizten.sheriff.infrastructure.process.Platform;
-import java.io.IOException;
 import java.net.URISyntaxException;
 import java.nio.file.Files;
-import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.Set;
-import java.util.TreeSet;
-import java.util.stream.Stream;
 
 /**
  * What both hooks need: which component a file belongs to, and whether that
@@ -33,8 +24,9 @@ import java.util.stream.Stream;
  * whichever one happens to be configured. The agent's own tree is never
  * guarded: it is the tool, not something Sheriff analyzes.
  *
- * <p>A verdict is cached per component and expires two ways — on time, and on
- * a fingerprint of the component's source files. Time alone failed in both
+ * <p>A verdict is recorded per component and profile in {@link VerdictCache},
+ * which the MCP's tools write too, and expires two ways — on time, and on a
+ * fingerprint of the component's source files. Time alone failed in both
  * directions: a dirty verdict outlived the fix, so the loop would clean a
  * component and the gate would keep refusing edits for another quarter of an
  * hour; and a clean verdict outlived any breakage introduced by a route the
@@ -45,7 +37,6 @@ public final class ComponentGate {
     private static final String AT_LEAST = "at least %d";
     private static final String FLOOR_NOTE = "%nSheriff was asked to stop at the first error, so this is a floor and not the total: "
             + "sheriff_test lists every one.%n";
-    private static final String FAIL_FAST_MARK = "fail-fast";
     private static final String JAVA_SUFFIX = ".java";
     private static final String TYPESCRIPT_SUFFIX = ".ts";
     private static final String TYPESCRIPT_JSX_SUFFIX = ".tsx";
@@ -68,29 +59,9 @@ public final class ComponentGate {
             PERL_MODULE_SUFFIX,
             PYTHON_SUFFIX);
 
-    private static final String DEPENDENCIES_FOLDER = "node_modules";
-    private static final String GIT_FOLDER = ".git";
-    private static final Set<String> NEVER_SOURCES = Set.of(DEPENDENCIES_FOLDER, GIT_FOLDER);
-
-    private static final String COMPONENTS_FIELD = "components";
-    private static final String CHECKED_AT_FIELD = "checked_at";
-    private static final String ERRORS_FIELD = "errors";
-    private static final String SAMPLE_FIELD = "sample";
-    private static final String FINGERPRINT_FIELD = "fingerprint";
-    private static final String FILES_FIELD = "files";
-    private static final String STATE_FILE = "gate_state.json";
     private static final String ALLOWED_COMPONENTS = "SHERIFF_GATE_COMPONENTS";
-    private static final String TTL_VARIABLE = "SHERIFF_GATE_TTL";
-    private static final String SAMPLE_LINE = "  - %s: %s";
-    private static final String MORE = "%n  ... and %d more";
-    private static final String SEPARATOR = ":";
     private static final String LIST_SEPARATOR = ",";
-    private static final String ENTRY_SEPARATOR = "|";
-    private static final long DEFAULT_TTL_SECONDS = 900L;
-    private static final int SAMPLE_SIZE = 5;
-    private static final int FINGERPRINT_LENGTH = 16;
     private static final int COMPONENT_DEPTH = 2;
-    private static final String DIGEST = "SHA-256";
 
     private static final String FIX_TOOL = "sheriff_fix";
     private static final String NO_PROFILE = "";
@@ -110,17 +81,30 @@ public final class ComponentGate {
 
     private final Configuration configuration;
     private final Composition composition;
-    private final ObjectMapper json = new ObjectMapper();
+    private final VerdictCache verdicts;
 
     /**
-     * Wires the gate.
+     * Wires the gate to the user's own record of verdicts, the one the MCP's
+     * tools write too.
      *
      * @param configuration what was configured
      * @param composition what builds the analyzer
      */
     public ComponentGate(Configuration configuration, Composition composition) {
+        this(configuration, composition, new VerdictCache());
+    }
+
+    /**
+     * Wires the gate to a chosen record of verdicts.
+     *
+     * @param configuration what was configured
+     * @param composition what builds the analyzer
+     * @param verdicts where verdicts are recalled from and recorded
+     */
+    public ComponentGate(Configuration configuration, Composition composition, VerdictCache verdicts) {
         this.configuration = configuration;
         this.composition = composition;
+        this.verdicts = verdicts;
     }
 
     /**
@@ -255,197 +239,61 @@ public final class ComponentGate {
     }
 
     /**
-     * Whether a component is clean, from cache when that can be trusted.
+     * Whether a component is clean, from the record of verdicts when that can
+     * be trusted.
+     *
+     * <p>The record is looked at twice: once before waiting for the
+     * component's lock, and again once it is held, as the run that held it
+     * may have just recorded the answer. Edits made in parallel each run a
+     * hook, all of them before any edit lands, and they used to run Sheriff
+     * one after another on the same files.
      *
      * @param component the component to judge
      * @return its verdict, unavailable when Sheriff could not run
      */
     public GateVerdict verdictFor(String component) {
+        Path directory = configuration.targetRepository().resolve(component);
+        String profile = composition.profileFor(component);
+        Optional<GateVerdict> recorded =
+                verdicts.recalled(directory, profile, configuration.failFast(), fingerprintOf(component));
+        if (recorded.isPresent()) {
+            return recorded.get();
+        }
+        return MountLock.holding(directory, () -> verdictHolding(component, directory, profile));
+    }
+
+    /**
+     * The verdict with the component's lock held: the record once more, and
+     * Sheriff only when it still has no answer, measured against the
+     * fingerprint taken before the run.
+     *
+     * @param component the component to judge
+     * @param directory its directory
+     * @param profile the profile it is judged under
+     * @return its verdict, unavailable when Sheriff could not run
+     */
+    private GateVerdict verdictHolding(String component, Path directory, String profile) {
         String fingerprint = fingerprintOf(component);
-        GateVerdict cached = cachedVerdict(component, fingerprint);
-        if (cached != null) {
-            return cached;
+        Optional<GateVerdict> recorded = verdicts.recalled(directory, profile, configuration.failFast(), fingerprint);
+        if (recorded.isPresent()) {
+            return recorded.get();
         }
         AnalysisResult result = composition.analyzerFor(component).analyze();
         if (result.error()) {
             return GateVerdict.UNAVAILABLE;
         }
-        GateVerdict verdict = new GateVerdict(result.total(), sampleOf(result), filesOf(result));
-        remember(component, verdict, fingerprint);
-        return verdict;
+        return verdicts.remember(directory, profile, configuration.failFast(), fingerprint, result);
     }
 
     /**
-     * A cheap signature of a component's source files.
-     *
-     * <p>Any edit changes it, whichever tool made the edit, which is what lets
-     * a cached verdict expire on content instead of only on time. An
-     * unreadable or missing tree returns the empty string, meaning "cannot
-     * tell" — which must stay distinguishable from "no files". It also tells
-     * a verdict reached stopping at the first error from a full one, so that
-     * neither is served for the other.
+     * A cheap signature of the sources Sheriff reads in a component, as
+     * {@link VerdictCache#fingerprintOf} takes it.
      *
      * @param component the component to fingerprint
-     * @return that signature, or the empty string
+     * @return that signature, or the empty string when it cannot be told
      */
     String fingerprintOf(String component) {
-        Path root = configuration.targetRepository().resolve(component);
-        if (!Files.isDirectory(root)) {
-            return "";
-        }
-        try {
-            List<String> entries = new ArrayList<>();
-            for (Path file : guardedFilesUnder(root)) {
-                entries.add(file + SEPARATOR + Files.size(file) + SEPARATOR
-                        + Files.getLastModifiedTime(file).toMillis());
-            }
-            entries.sort(String::compareTo);
-            if (configuration.failFast()) {
-                entries.add(FAIL_FAST_MARK);
-            }
-            return digest(String.join(ENTRY_SEPARATOR, entries));
-        } catch (IOException exception) {
-            return "";
-        }
-    }
-
-    /**
-     * Every file of a guarded language under a directory, without going into
-     * the folders that never hold a project's own sources.
-     *
-     * <p>{@code node_modules} alone can hold a hundred thousand files, and
-     * walking them only to filter them out afterwards cost every edit and
-     * every end of a turn once the hooks were on in every project.
-     *
-     * @param directory where to look
-     * @return those files
-     * @throws IOException when a directory cannot be listed
-     */
-    private static List<Path> guardedFilesUnder(Path directory) throws IOException {
-        List<Path> found = new ArrayList<>();
-        try (Stream<Path> children = Files.list(directory)) {
-            for (Path child : children.toList()) {
-                if (Files.isDirectory(child, LinkOption.NOFOLLOW_LINKS)) {
-                    if (!NEVER_SOURCES.contains(child.getFileName().toString())) {
-                        found.addAll(guardedFilesUnder(child));
-                    }
-                } else if (Files.isRegularFile(child) && isGuardedSuffix(child)) {
-                    found.add(child);
-                }
-            }
-        }
-        return found;
-    }
-
-    /**
-     * The verdict already on record for a component, when it can still be
-     * trusted.
-     *
-     * @param component the component to look up
-     * @param fingerprint that component's current signature
-     * @return the cached verdict, or {@code null} when there is none, it has
-     *     expired, or the sources moved underneath it
-     */
-    private GateVerdict cachedVerdict(String component, String fingerprint) {
-        JsonNode entry = readState().path(COMPONENTS_FIELD).path(component);
-        if (entry.isMissingNode() || !entry.has(CHECKED_AT_FIELD) || !entry.has(ERRORS_FIELD)) {
-            return null;
-        }
-        long age = System.currentTimeMillis() / 1000L - entry.path(CHECKED_AT_FIELD).asLong();
-        if (age > ttlSeconds()) {
-            return null;
-        }
-        if (!fingerprint.isEmpty() && !fingerprint.equals(entry.path(FINGERPRINT_FIELD).asText())) {
-            return null;
-        }
-        Set<String> files = new TreeSet<>();
-        entry.path(FILES_FIELD).forEach(file -> files.add(file.asText()));
-        return new GateVerdict(entry.path(ERRORS_FIELD).asInt(), entry.path(SAMPLE_FIELD).asText(), files);
-    }
-
-    /**
-     * Puts a fresh verdict on record, together with the signature it was
-     * measured against.
-     *
-     * @param component the component it judges
-     * @param verdict what Sheriff said about it
-     * @param fingerprint the signature of the sources that produced it
-     */
-    private void remember(String component, GateVerdict verdict, String fingerprint) {
-        ObjectNode state = (ObjectNode) readState();
-        ObjectNode components = state.has(COMPONENTS_FIELD)
-                ? (ObjectNode) state.get(COMPONENTS_FIELD)
-                : state.putObject(COMPONENTS_FIELD);
-        ObjectNode entry = components.putObject(component);
-        entry.put(CHECKED_AT_FIELD, System.currentTimeMillis() / 1000L);
-        entry.put(ERRORS_FIELD, verdict.errors());
-        entry.put(SAMPLE_FIELD, verdict.sample());
-        entry.put(FINGERPRINT_FIELD, fingerprint);
-        verdict.files().stream().sorted().forEach(entry.putArray(FILES_FIELD)::add);
-        writeState(state);
-    }
-
-    /**
-     * Loads the cache from disk.
-     *
-     * <p>Best effort, like saving it: an unreadable cache means a slower gate,
-     * not a broken one, so anything unusable reads back as an empty cache.
-     *
-     * @return what was saved, or an empty object
-     */
-    private JsonNode readState() {
-        try {
-            JsonNode state = json.readTree(Files.readString(stateFile()));
-            return state.isObject() ? state : json.createObjectNode();
-        } catch (IOException exception) {
-            return json.createObjectNode();
-        }
-    }
-
-    /**
-     * Saves the cache. Best effort: an unwritable cache means a slower gate,
-     * not a broken one.
-     *
-     * @param state what to save
-     */
-    private void writeState(JsonNode state) {
-        try {
-            Files.createDirectories(stateFile().getParent());
-            Files.writeString(stateFile(), json.writeValueAsString(state));
-        } catch (IOException exception) {
-            return;
-        }
-    }
-
-    /**
-     * Where the cache lives: beside the prompt logs, which is the agent's own
-     * scratch space rather than anything in the analyzed repository.
-     *
-     * @return that file's path
-     */
-    private Path stateFile() {
-        return configuration.promptLogDirectory().resolve(STATE_FILE);
-    }
-
-    /**
-     * How long a verdict may be reused before it is measured again.
-     *
-     * <p>Only half of the expiry: content expiry is the other half, and the
-     * one that catches a component cleaned or broken inside the window.
-     *
-     * @return the configured lifetime in seconds, or the default when it is
-     *     unset or not a number; a hook must not fail over a typo
-     */
-    private long ttlSeconds() {
-        String configured = System.getenv(TTL_VARIABLE);
-        if (configured == null || configured.isBlank()) {
-            return DEFAULT_TTL_SECONDS;
-        }
-        try {
-            return Long.parseLong(configured.strip());
-        } catch (NumberFormatException exception) {
-            return DEFAULT_TTL_SECONDS;
-        }
+        return VerdictCache.fingerprintOf(configuration.targetRepository().resolve(component));
     }
 
     /**
@@ -481,55 +329,4 @@ public final class ComponentGate {
         return GUARDED_SUFFIXES.stream().anyMatch(name::endsWith);
     }
 
-    /**
-     * The first few errors, as the text a blocked edit is refused with.
-     *
-     * <p>A handful is the point: a hook message is read in passing, so it
-     * shows enough to recognise the problem and says how much it left out.
-     *
-     * @param result what Sheriff reported
-     * @return those lines, empty when there were no errors
-     */
-    private static String sampleOf(AnalysisResult result) {
-        List<SheriffFinding> errors = result.errors();
-        List<String> lines = new ArrayList<>();
-        for (SheriffFinding finding : errors.subList(0, Math.min(SAMPLE_SIZE, errors.size()))) {
-            lines.add(String.format(SAMPLE_LINE, finding.file(), finding.description()));
-        }
-        String sample = String.join(System.lineSeparator(), lines);
-        return errors.size() > SAMPLE_SIZE
-                ? sample + String.format(MORE, errors.size() - SAMPLE_SIZE)
-                : sample;
-    }
-
-    /**
-     * Every file Sheriff reported an error in.
-     *
-     * @param result what Sheriff reported
-     * @return those files, as Sheriff names them
-     */
-    private static Set<String> filesOf(AnalysisResult result) {
-        Set<String> files = new TreeSet<>();
-        result.errors().forEach(finding -> files.add(finding.file()));
-        return files;
-    }
-
-    /**
-     * A short hash of the fingerprint material.
-     *
-     * <p>Short on purpose: this only has to change when the sources change,
-     * not to resist anyone trying to make it collide.
-     *
-     * @param content what to hash
-     * @return the truncated hexadecimal digest, or the empty string when the
-     *     algorithm is unavailable
-     */
-    private static String digest(String content) {
-        try {
-            byte[] hash = MessageDigest.getInstance(DIGEST).digest(content.getBytes());
-            return HexFormat.of().formatHex(hash).substring(0, FINGERPRINT_LENGTH);
-        } catch (NoSuchAlgorithmException exception) {
-            return "";
-        }
-    }
 }

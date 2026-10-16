@@ -50,7 +50,7 @@ public final class DeterministicFixer implements AutomaticRepair {
             Duration timeout) {
         this.catalog = catalog;
         this.repair = new SheriffRepair(new SheriffContainer(processes, image, repositoryRoot, timeout), analyzer,
-                component, repositoryRoot);
+                component);
     }
 
     /**
