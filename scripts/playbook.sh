@@ -13,13 +13,28 @@
 # Needs a TeX distribution with latexmk and pdflatex, and the packages the
 # style loads (sheriff-playbook.sty): on Debian or Ubuntu, latexmk,
 # texlive-latex-extra, texlive-fonts-extra and texlive-lang-spanish.
+#
+#   scripts/playbook.sh --key [VERSION]   names the PDF files that would come out
+#   scripts/playbook.sh --tex-packages    the Ubuntu packages they need
+#
+# The key is the two versions and a hash of the sources, this script among
+# them, so the workflows cache the PDF files by it and skip TeX, about two
+# minutes of the three a build takes, when nothing that goes into them changed.
+# The cover's date is then the day of the build that was kept.
 set -euo pipefail
 
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source_dir="$repo/playbook"
 pom="$repo/sheriff-mcp-java/pom.xml"
+tex_packages="latexmk texlive-latex-extra texlive-fonts-extra texlive-lang-spanish texlive-pictures"
 
-if ! command -v latexmk >/dev/null 2>&1; then
+mode=build
+case "${1:-}" in
+  --tex-packages) echo "$tex_packages"; exit 0 ;;
+  --key) mode=key; shift ;;
+esac
+
+if [[ "$mode" == build ]] && ! command -v latexmk >/dev/null 2>&1; then
   echo "playbook.sh: latexmk is not installed. On Debian or Ubuntu:" >&2
   echo "  sudo apt-get install latexmk texlive-latex-extra texlive-fonts-extra texlive-lang-spanish" >&2
   exit 1
@@ -36,6 +51,12 @@ fi
 # The Maven plugin's example names the plugin's own version, which a
 # prerelease tag (0.1.1-rc.1) is not.
 plugin_version="$(sed -n '/<artifactId>sheriff-maven-plugin<\/artifactId>/,/<version>/s|.*<version>\(.*\)</version>.*|\1|p' "$repo/sheriff-maven-plugin/pom.xml" | head -n 1)"
+
+if [[ "$mode" == key ]]; then
+  sources="$(cd "$repo" && cat playbook/*.sty playbook/*.tex scripts/playbook.sh | tr -d '\r' | sha256sum | cut -c1-16)"
+  echo "playbook-$version-$plugin_version-$sources"
+  exit 0
+fi
 
 cd "$source_dir"
 for language in es en; do
