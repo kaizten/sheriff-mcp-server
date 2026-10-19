@@ -594,7 +594,12 @@ the image as profiles. When writing code here:
   "outdated", whose version is the Maven the plugin requires, as
   maven-plugin-plugin writes it into the descriptor (3.10.0 refused Maven
   3.9). Its outdated-dependency rule asks the network, so a new release
-  anywhere can turn a module red with no change here.
+  anywhere can turn a module red with no change here. **That rule has a
+  fixer, and `sheriff_fix` on `sheriff-maven-plugin` runs it**: it writes
+  `maven.version` 3.10.0 and reformats the pom's XML declaration, its
+  `<project>` element and final newline. That is the one change of
+  `sheriff_fix`'s to undo here: put `sheriff-maven-plugin/pom.xml` back as
+  it was, or the plugin refuses Maven 3.9.
 - **JavaDoc is at least three lines** (`/**`, text, `*/`, each on its own
   line) on every method, constructor and field, with `@param` and `@return`.
   No hardcoded strings or numbers in a call, braces on every branch, imports
