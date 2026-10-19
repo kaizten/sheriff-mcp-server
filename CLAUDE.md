@@ -42,8 +42,12 @@ and attached to every release as `sheriff-playbook-es.pdf` and
 user types or reads (the install line, an option, a tool's answer, a hook's
 message) goes into both languages in the same change, and its answers are
 copied from a real run. It must build with only the TeX packages
-`release.yml` installs on Ubuntu (not `pifont`); `playbook.yml` checks that
-on the pull request.
+`scripts/playbook.sh --tex-packages` names, which both workflows install on
+Ubuntu (not `pifont`); `playbook.yml` checks that on the pull request.
+Installing TeX is two of a build's three minutes, so both workflows cache
+the two PDF files under `playbook.sh --key` (both versions and a hash of the
+sources) and skip TeX when they find them; the release finds the ones main
+built for its version, and their cover carries that day's date.
 
 The fourth reader is Sheriff's own team, who can change anything in the
 image: `docs/sheriff/`, one request per document, in Spanish. **It is

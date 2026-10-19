@@ -626,7 +626,9 @@ scripts/playbook.sh  # the user's playbook, both languages, into playbook/build/
 
 CI (`.github/workflows/ci.yml`) runs both on every push to `main` and every
 pull request; `.github/workflows/playbook.yml` builds the playbook when its
-sources change, and keeps the two PDF files as the run's artifact. The MCP module also runs in a container (`sheriff-mcp-java/Dockerfile`),
+sources or a version change, and keeps the two PDF files as the run's
+artifact. It caches them by what goes into them, so a run with nothing new
+skips installing TeX. The MCP module also runs in a container (`sheriff-mcp-java/Dockerfile`),
 with the host's Docker socket and the repository mounted at its own path:
 
 ```bash

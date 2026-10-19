@@ -61,11 +61,25 @@ jobs:
               exit 1
             fi
           done
+      # The PDF files main built for this version (playbook.yml), when it did:
+      # the same sources and versions, so TeX's two minutes are skipped and
+      # the cover's date is the day main built them. A prerelease's version
+      # is never on main, so a prerelease always builds its own.
+      - name: Which playbook this release needs
+        id: playbook
+        run: echo "key=$(scripts/playbook.sh --key "${GITHUB_REF_NAME#v}")" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        id: playbook-built
+        with:
+          path: |
+            playbook/build/sheriff-playbook-es.pdf
+            playbook/build/sheriff-playbook-en.pdf
+          key: ${{ steps.playbook.outputs.key }}
       - name: The user's playbook, in Spanish and English
+        if: steps.playbook-built.outputs.cache-hit != 'true'
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            latexmk texlive-latex-extra texlive-fonts-extra texlive-lang-spanish texlive-pictures
+          sudo apt-get install -y --no-install-recommends $(scripts/playbook.sh --tex-packages)
           scripts/playbook.sh "${GITHUB_REF_NAME#v}"
       - name: Assets
         run: |

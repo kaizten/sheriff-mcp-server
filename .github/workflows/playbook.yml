@@ -3,16 +3,22 @@
 # workflow after the tag has been pushed. The two PDF files are kept as the
 # run's artifact, for a reviewer to read the change as the user will.
 #
-# The release builds them again with its own version on the cover
-# (release.yml); this run prints the version in the poms.
+# The two PDF files are cached by what goes into them (scripts/playbook.sh
+# --key: both versions and a hash of the sources), and a run that finds them
+# skips TeX, about two of its three minutes. A pull request's cache is its
+# own, so main builds once more after a merge. It also runs when a pom
+# changes, so that the PDF files of a new version are on main, under the key
+# the release looks for (release.yml), before its tag is pushed.
 name: Playbook
 
 on:
   push:
     branches: [main]
-    paths: ['playbook/**', 'scripts/playbook.sh', '.github/workflows/playbook.yml']
+    paths: ['playbook/**', 'scripts/playbook.sh', '.github/workflows/playbook.yml',
+            'sheriff-mcp-java/pom.xml', 'sheriff-maven-plugin/pom.xml']
   pull_request:
-    paths: ['playbook/**', 'scripts/playbook.sh', '.github/workflows/playbook.yml']
+    paths: ['playbook/**', 'scripts/playbook.sh', '.github/workflows/playbook.yml',
+            'sheriff-mcp-java/pom.xml', 'sheriff-maven-plugin/pom.xml']
   workflow_dispatch:
 
 permissions:
@@ -24,12 +30,23 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
+      - name: What the PDF files are made of
+        id: sources
+        run: echo "key=$(scripts/playbook.sh --key)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        id: built
+        with:
+          path: |
+            playbook/build/sheriff-playbook-es.pdf
+            playbook/build/sheriff-playbook-en.pdf
+          key: ${{ steps.sources.outputs.key }}
       - name: TeX
+        if: steps.built.outputs.cache-hit != 'true'
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            latexmk texlive-latex-extra texlive-fonts-extra texlive-lang-spanish texlive-pictures
+          sudo apt-get install -y --no-install-recommends $(scripts/playbook.sh --tex-packages)
       - name: Spanish and English
+        if: steps.built.outputs.cache-hit != 'true'
         run: scripts/playbook.sh
       - uses: actions/upload-artifact@v4
         with:
