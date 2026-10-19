@@ -438,7 +438,9 @@ printed, as it stands.
 records, which hold every answer of every session. `sheriff_test` answers
 with counts (`FindingsRenderer.summary`), as its step is the repair. The
 repair's list writes the shared folder once, one line per error and a rule's
-`howToSolve` once, only for rules `accepted-code.md` does not show. It holds
+`howToSolve` once, only for rules `accepted-code.md` does not show. A line is
+`SheriffFinding.brief`, as the hooks' sample is: Sheriff pastes Maven's whole
+output into a description, and one finding took twenty lines. It holds
 whole files, in path order, until they reach
 `SheriffFixTool.ERRORS_PER_ANSWER` (20) errors, with the rest counted per
 file, and the step names those files and no other (`NextStep.afterRepair`).
@@ -572,7 +574,15 @@ Kaizten's rules are not a convention to interpret — they are compiled into
 the image as profiles. When writing code here:
 
 - **Both modules must stay green under `JAVA`.** Check before finishing, and
-  prefer the plugin's own goal for the plugin.
+  prefer the plugin's own goal for the plugin. Since the image of 19
+  October, `JAVA` checks `pom.xml` too, and six findings stay, each a
+  false positive of the checker: `jackson-module-scala_2.11`, `_2.12`,
+  `_2.13` and `_3` "must not contain underscores", names of Jackson's that
+  its imported BOM brings in; and `maven-core` and `maven-plugin-api`
+  "outdated", whose version is the Maven the plugin requires, as
+  maven-plugin-plugin writes it into the descriptor (3.10.0 refused Maven
+  3.9). Its outdated-dependency rule asks the network, so a new release
+  anywhere can turn a module red with no change here.
 - **JavaDoc is at least three lines** (`/**`, text, `*/`, each on its own
   line) on every method, constructor and field, with `@param` and `@return`.
   No hardcoded strings or numbers in a call, braces on every branch, imports
