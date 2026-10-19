@@ -107,7 +107,7 @@ public record SheriffFinding(
     /**
      * A text of Sheriff's on one line, and cut at {@link #BRIEF_LENGTH}, for
      * a list that gives one line to each finding. Sheriff quotes code in a
-     * description, line breaks included, and the image of 19 October pastes
+     * description, line breaks included, and the image of 16 October pastes
      * Maven's whole output, twenty-odd lines, into the description of a
      * {@code pom.xml} it cannot build: a hook's message of five findings grew
      * from 14 lines to 34.
