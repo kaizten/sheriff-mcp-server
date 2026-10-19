@@ -82,6 +82,16 @@ class SystemProcessRunnerTests {
     }
 
     @Test
+    @DisplayName("an argument with double quotes and backslashes reaches the program as it was given, Windows "
+            + "included, where Java left the quotes for the program to end the argument at")
+    void passesQuotesAndBackslashesThrough() {
+        String argument = "say \"one two\"\nfor f in a,b; do \"${f%.c}\" \\\" end\\";
+        ProcessOutcome outcome = runner.run(
+                List.of("sh", "-c", "printf '%s' \"$1\"", "probe", argument), HERE, Map.of(), GENEROUS);
+        assertEquals(argument, outcome.standardOutput());
+    }
+
+    @Test
     void passesTheEnvironmentThrough() {
         ProcessOutcome outcome = runner.run(
                 List.of("sh", "-c", "echo $SHERIFF_PROBE"), HERE, Map.of("SHERIFF_PROBE", "visible"), GENEROUS);

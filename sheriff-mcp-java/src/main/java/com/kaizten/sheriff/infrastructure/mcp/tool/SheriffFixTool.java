@@ -175,7 +175,8 @@ final class SheriffFixTool {
             body.append(otherFiles(left, files));
             body.append(NextStep.afterRepair(repairable, files, context.fixCall(component, asked)));
         } else if (tests != null) {
-            body.append(tests.ok() ? NextStep.afterPassingTests() : NextStep.afterFailingTests(context.testCall(component, asked)));
+            body.append(tests.ok() ? context.passingTestsStep(component, asked)
+                    : NextStep.afterFailingTests(context.testCall(component, asked)));
         } else {
             body.append(context.cleanStep(component, asked));
         }
