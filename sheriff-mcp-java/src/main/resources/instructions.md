@@ -8,4 +8,4 @@ Every answer from sheriff_test and sheriff_fix ends with a line that starts "Nex
 
 Finished means 0 errors and green tests. Only a false positive of the checker may stay: name it and say why. Report the work in terms of the standards and say which errors were already there. Leave the profile out of every call. If the tools cannot run, say the check was unavailable and still run the tests.
 
-sheriff_autofix hands the whole component to a repair loop on its own branch; use it only when the user asks for it. It answers at once with a task id and runs in the background: check it with sheriff_task and tell the user it is running.
+sheriff_autofix hands the whole component to a repair loop on its own branch; use it only when the user asks for it. It answers at once with a task id and runs in the background: check it with sheriff_task and tell the user it is running. Asked which version of these tools or of Sheriff's image is running, call sheriff_task with no id: it says both.
