@@ -4,6 +4,10 @@
 demo/
 .demo-work/
 
+# Requests for Sheriff's own team, kept on this machine and never published:
+# what Kaizten's image does and what we ask of it is between them and us.
+docs/sheriff/
+
 # Kaizten Analytics' own helpers, not part of this project: a generic commit
 # script, and the one that pulls or refreshes the Sheriff image. Nothing here
 # calls either; the agent runs the image through Docker directly.
