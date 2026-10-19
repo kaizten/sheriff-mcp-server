@@ -45,6 +45,14 @@ copied from a real run. It must build with only the TeX packages
 `release.yml` installs on Ubuntu (not `pifont`); `playbook.yml` checks that
 on the pull request.
 
+The fourth reader is Sheriff's own team, who can change anything in the
+image: `docs/sheriff/`, one request per document, in Spanish. **It is
+gitignored and never published**, so it exists only on the machine that
+wrote it: never commit it, push it, or put its content in a pull request,
+and do not move it back into the README. A new defence against something
+Sheriff does gets its request there, measured, with the image it was
+measured on.
+
 **Docker and the `kaizten/sheriff` image are required** for anything that
 actually analyzes. The test suites are not: none of the tests needs Docker.
 
@@ -254,8 +262,10 @@ Windows it has to be tried with real assistants, which CI does not have.
   `tmpfs`: Sheriff neither reads nor repairs them, and nothing on the disk
   changes. It goes by the build file, not by name alone, since a `build/` may
   be a project's own source. `scripts/e2e.sh` scenario 20 checks it.
-- **`test` always exits 0**, however many errors it found, and **`fix` always
-  exits 1**, whatever happened. Decide what happened from the output, or by
+- **`test` exits 0 however many errors it found**, and with a profile it does
+  not know; only a component that does not exist exits 1. `fix` used to exit
+  1 whatever happened; with the image of 19 October it exits 0 when it runs
+  and 1 when it cannot start. Decide what happened from the output, or by
   analyzing again.
 - **A fixer that cannot run looks like one that changed nothing**, and one
   that lies looks like one that worked. Two defences, both needed:
