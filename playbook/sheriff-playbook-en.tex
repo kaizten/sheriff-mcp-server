@@ -77,7 +77,7 @@ These tools bring Sheriff to where you write code. With them, your assistant:
 \begin{tikzpicture}[node distance=4mm and 7mm]
   \node[pbstrong,minimum width=17mm,minimum height=13mm] (you) {You};
   \node[pbbox,right=of you,minimum width=29mm,minimum height=13mm] (assistant) {\textbf{Your assistant}\\[1pt]\scriptsize Claude Code, Codex\\\scriptsize or Antigravity};
-  \node[pbbox,right=15mm of assistant,minimum width=37mm] (server) {\textbf{MCP server}\\[1pt]\scriptsize five tools};
+  \node[pbbox,right=15mm of assistant,minimum width=37mm] (server) {\textbf{MCP server}\\[1pt]\scriptsize six tools};
   \node[pbbox,below=of server,minimum width=37mm] (hooks) {\textbf{Hooks}\\[1pt]\scriptsize before an edit, at the end};
   \node[pbbox,below=of hooks,minimum width=37mm] (agent) {\textbf{Repair agent}\\[1pt]\scriptsize \code{sheriff_autofix}, \code{--agent}};
   \node[pbbox,below=of agent,minimum width=37mm] (check) {\textbf{CI check}\\[1pt]\scriptsize \code{--check}};
@@ -291,10 +291,10 @@ Options go at the end of the install line: in bash, after \code{bash -s --};
 in PowerShell, after the script block. For example:
 
 \begin{command}{bash}
-curl -fsSL .../install.sh | bash -s -- --pull-always
+curl -fsSL .../install.sh | bash -s -- --no-hooks
 \end{command}
 \begin{command}{PowerShell}
-& ([scriptblock]::Create((irm "$u/install.ps1"))) -PullAlways
+& ([scriptblock]::Create((irm "$u/install.ps1"))) -NoHooks
 \end{command}
 
 \begin{center}
@@ -307,10 +307,9 @@ curl -fsSL .../install.sh | bash -s -- --pull-always
   Desktop. It goes into each assistant's registration too, as Codex passes the
   server none of your variables. Restart Claude Code afterwards. To go back to
   Docker Desktop, remove the variable (see Update and uninstall) and run the line again. \\
--{}-pull-always & -PullAlways & Pulls a newer Sheriff image each time the server
-  starts. Without it a newer image is only reported, once per session, so that
-  rules do not change in the middle of someone's work. Give it again on every
-  update. \\
+-{}-pull-always & -PullAlways & Nothing any more: the server pulls a newer
+  Sheriff image each time it starts anyway. It is accepted so that older install
+  lines still work. \\
 -{}-no-pull & -NoPull & Does not pull the image now; the server pulls it when
   it needs it. \\
 -{}-no-hooks & -NoHooks & Installs the MCP server without the hooks. \\
@@ -447,9 +446,30 @@ how many different items it holds}.
   \item It runs the project's tests.
   \item In Java, if it added a non-private method that no test calls, it writes
         that test, edge cases included (an empty list, a \code{null}).
+  \item In Java with Maven, it measures how well the tests test the lines the
+        change wrote: which of them they run, which ways their conditions go
+        (each side of every \code{\&\&} and \code{||}), with JaCoCo, and which
+        changes PIT makes to them they notice (mutation testing: each
+        condition forced true and false, a limit moved, a value returned
+        replaced). Below what the project asks, the answer lists the lines,
+        the conditions and the changes, and it writes tests until they are
+        covered:
+\begin{command}[basicstyle=\ttfamily\footnotesize]{answer}
+The tests run 4 of the 8 lines of code this change wrote (50%, 100% required),
+take 3 of the 8 branches of their conditions (37%, 100% required) and kill 10
+of the 27 mutants PIT made of them (37%, 80% required).
+Lines of code this change wrote that no test runs:
+  - src/main/java/demo/Calc.java: 10, 13, 14, 16
+Conditions this change wrote that the tests take only some ways, each side of
+every && and || counted:
+  - src/main/java/demo/Calc.java:20 takes 3 of its 4 branches
+Changes PIT made to those lines that every test still passed with:
+  - src/main/java/demo/Calc.java:20 changed conditional boundary
+\end{command}
 \end{enumerate}
-\done It reports 0 errors and green tests, and which errors were there before
-it started.
+\done It reports 0 errors and green tests that run every line the change wrote,
+take every branch of its conditions and kill at least 80\% of its mutants, and
+which errors were there before it started.
 \end{play}
 
 \begin{play}{Review a project without changing anything}
@@ -659,8 +679,9 @@ may stay, named, with the reason.
   \item \textbf{Where there is nothing Sheriff analyzes}, they let everything
         through in a tenth of a second.
   \item \textbf{They do not loop.} The Stop hook sends the turn back at most
-        five times in a row, and if the assistant cannot change anything, it
-        lets the turn end.
+        five times in a row, and if the assistant cannot change anything, once
+        more and then it lets the turn end. Both numbers are settings
+        (\code{SHERIFF\_STOP\_MAX\_BLOCKS} and \code{\_MAX\_STALLS}).
   \item \textbf{They stand aside for the repair agent}, which runs its own
         checks.
 \end{itemize}
@@ -748,6 +769,28 @@ The architecture's rules \textbf{are added} to the language's, never put in
 their place. Several can be listed, separated by commas
 (\code{JAVA_HEXAGONAL,JAVA_DDD}); each one adds one more analysis.
 
+\subsection{Declare how well the tests must test a change}
+
+In Java with Maven, the tests of a change must run every line it wrote, take
+every branch of its conditions and kill 80\% of PIT's mutants of those lines.
+Only what the change wrote counts, never the rest of the project. To ask for
+other shares, or for every mutator PIT has (\code{ALL}), in the same place as
+the profile:
+
+\begin{command}{pom.xml}
+<properties>
+  <sheriff.coverage>90</sheriff.coverage>
+  <sheriff.branches>90</sheriff.branches>
+  <sheriff.mutation>70</sheriff.mutation>
+  <sheriff.mutators>ALL</sheriff.mutators>
+</properties>
+\end{command}
+
+Or \code{coverage}, \code{branches}, \code{mutation} and \code{mutators} in
+\code{.sheriff.properties}.
+Nothing is added to the \code{pom.xml}: Maven downloads JaCoCo and PIT the first
+time.
+
 \subsection{Every profile}
 
 Sheriff has more profiles than the ones above. This is the full list of its
@@ -809,32 +852,64 @@ servers in different scopes.
 }
 \end{command}
 
-\subsection{Useful variables}
+\subsection{Your settings}\label{sec:settings}
 
-With Claude Code, exporting them before you open it is enough. With Codex, they
-do not arrive from your terminal (section~\ref{sec:codex}).
+Every number and choice the tools use has a default, and you can change it. The
+first time the server starts it writes your settings file,
+\code{\textasciitilde/.config/sheriff-mcp/sheriff.properties}
+(\code{\%APPDATA\%\textbackslash sheriff-mcp} on Windows), with every setting at
+its default and commented out. There are three ways to change one:
+
+\begin{itemize}
+  \item \textbf{Ask the assistant}, which calls \code{sheriff\_config}:
+        \ask{pin Sheriff's image to the build I have now}, \ask{let a stop with
+        nothing changed through}. It checks the value before writing it.
+  \item \textbf{Edit the file}: take the \code{\#} off a line and change its value.
+  \item \textbf{For the whole team}, put the same line in the project's
+        \code{.sheriff.properties}; it wins over yours for that project.
+\end{itemize}
+
+An environment variable of the same name wins over both files. The tools read
+the settings when a session starts, the hooks on every run. To see each one,
+its value and where it comes from:
+
+\begin{command}{bash}
+java -jar ~/.local/share/sheriff-agent/sheriff-mcp.jar --config
+\end{command}
+
+What a change answers (copied from a real run):
+
+\begin{command}[basicstyle=\ttfamily\footnotesize]{answer}
+SHERIFF_STOP_MAX_STALLS is 0 in /home/you/.config/sheriff-mcp/sheriff.properties.
+The tools take it when the next session starts; the hooks, from their next run.
+\end{command}
 
 \begin{center}
 \rowcolors{2}{pbcode}{white}
 \begin{tabularx}{\linewidth}{@{\hspace{6pt}}>{\ttfamily\small}p{50mm}L}
-\headrow \thead{Variable} & \thead{What for} \\
-SHERIFF\_PULL=always & Pull a newer Sheriff image at startup (with
-  \code{never}, Docker Hub is not even asked). \\
+\headrow \thead{Setting} & \thead{What for} \\
 SHERIFF\_IMAGE & Pin the image by its digest
   (\code{kaizten/sheriff@sha256:...}), so that the rules do not change until
   you decide. \\
-SHERIFF\_TIMEOUT & Seconds per analysis; 300 by default, 900 with WSL's
-  Docker. \\
-SHERIFF\_DOCKER=wsl & On Windows, use WSL's Docker; \code{-{}-docker-wsl} sets
-  it. \\
-SHERIFF\_STOP\_RUNS\_TESTS=1 & The Stop hook requires green tests too. \\
-SHERIFF\_STOP\_MAX\_BLOCKS & How many times in a row it sends the turn back; 5
-  by default. \\
-VERIFICATION\_TEST\_CMD & The test command, when it is not the one the build
-  tool gives. \\
-AI\_BACKEND & Who answers in the terminal's repair loop. \\
+SHERIFF\_PULL & \code{always} (default) pulls a newer image at startup;
+  \code{check} only reports it; \code{never} does not ask Docker Hub. \\
+SHERIFF\_STOP\_MAX\_BLOCKS & Times in a row the Stop hook sends the turn back
+  while errors remain; 5. \\
+SHERIFF\_STOP\_MAX\_STALLS & Stops in a row with nothing changed it still sends
+  back; 1. Set 0 while a false positive of the checker is left. \\
+SHERIFF\_STOP\_RUNS\_TESTS & 1: the Stop hook requires green tests too. \\
+SHERIFF\_TIMEOUT & Seconds per analysis; 300, 900 with WSL's Docker. \\
+SHERIFF\_COVERAGE, \_BRANCHES, \_MUTATION & What the tests of a change must
+  reach: 100, 100 and 80. \\
+SHERIFF\_TEST\_TIMEOUT, \_COVERAGE\_TIMEOUT, \_MUTATION\_TIMEOUT & Seconds for
+  the tests, JaCoCo and PIT: 600, 600 and 1800. \\
+AI\_BACKEND & Who answers in the terminal's repair loop (yours only). \\
 \end{tabularx}
 \end{center}
+
+\code{sheriff\_config} with no arguments lists all of them. Only your
+environment can set \code{SHERIFF\_DOCKER} (\code{-{}-docker-wsl} does) and
+\code{VERIFICATION\_TEST\_CMD}.
 
 % ---------------------------------------------------------------------------
 \section{Codex}
@@ -881,8 +956,8 @@ PetClinic, asked for a single method, it stopped halfway twice, with 133 and
 AI_BACKEND=codex_cli java -jar ~/.local/share/sheriff-agent/sheriff-mcp.jar --agent
 \end{command}
   \item \textbf{Your terminal's variables do not arrive} at the server or the
-        hooks. Use the installer's options (\code{--pull-always},
-        \code{--fail-fast}) or write them into the server's entry in
+        hooks. Put them in your settings file (section~\ref{sec:settings}), use the
+        installer's options (\code{--fail-fast}) or write them into the server's entry in
         \code{config.toml}: \texttt{env = \{ SHERIFF\_TIMEOUT = "600" \}}.
 \end{itemize}
 
@@ -1049,9 +1124,16 @@ the profile the project declares.}
 \problem{\code{No rule catalog is available}}{There was no Docker when the
 server started. Start Docker: the next rule lookup tries again, at most a
 minute later.}
-\problem{\code{a newer kaizten/sheriff:latest has been published}}{There are new
-rules. Run the install line again to pull them, or install with
-\code{--pull-always}.}
+\problem{\code{a newer kaizten/sheriff:latest has been published, and it is
+being downloaded}}{The server found new rules when it started and is pulling
+them. Until they are here, it uses the image you had. Nothing to do.}
+\problem{\code{... but it could not be downloaded}}{The server found new rules
+and Docker could not pull them (the reason is in the message). Run
+\code{docker pull kaizten/sheriff:latest}, or restart the session.}
+\problem{\code{could not be measured: JaCoCo wrote no report}}{The tests ran
+without JaCoCo's agent. If the \code{pom.xml} sets surefire's \code{argLine},
+it must keep JaCoCo's: \code{<argLine>@\{argLine\} ...</argLine>}. The work is
+not held up meanwhile.}
 
 \subsection{With Codex}
 
@@ -1103,10 +1185,11 @@ request.}
 rule catalog is extracted from it (about 6 seconds). After that, an analysis
 takes a few seconds.}
 
-\faq{Do new rules arrive by themselves?}{No, on purpose: rules that change in
-the middle of a piece of work confuse. When there is a newer image, it is
-reported once per session. To pull it, install again; to always pull it,
-install with \code{--pull-always}.}
+\faq{Do new rules arrive by themselves?}{Yes. Kaizten publishes Sheriff only
+as \code{latest}, with no versions, so each time it starts the server compares
+the digest Docker Hub publishes with that of your image, and pulls it when they
+differ. To be told instead, set \code{SHERIFF\_PULL=check}; to keep one image,
+pin it with \code{SHERIFF\_IMAGE}.}
 
 \faq{What if Docker is not running?}{There is no analysis. The tools say so,
 the assistant goes on with the work and runs the tests, and the hooks let you
@@ -1184,7 +1267,7 @@ docker rmi kaizten/sheriff:latest
   \item \ask{\ldots{} leave the errors that were already there}
 \end{itemize}
 
-\cardhead{The five tools}
+\cardhead{The six tools}
 \rowcolors{2}{pbcode}{white}
 \begin{tabularx}{\linewidth}{@{\hspace{4pt}}>{\ttfamily\small}p{33mm}>{\small\raggedright\arraybackslash}X}
 \headrow \thead{Tool} & \thead{What it does} \\
@@ -1193,6 +1276,7 @@ sheriff\_fix & Automatic repairs; lists what is left. \\
 sheriff\_guidelines & The rules and the code accepted. \\
 sheriff\_autofix & Repairs it all on a branch. \textbf{Spends tokens.} \\
 sheriff\_task & A task's state. \\
+sheriff\_config & See and change your settings. \\
 \end{tabularx}
 
 \cardhead{Exit codes of \code{--check}}

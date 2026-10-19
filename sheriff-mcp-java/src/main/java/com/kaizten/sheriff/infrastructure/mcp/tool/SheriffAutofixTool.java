@@ -131,7 +131,7 @@ final class SheriffAutofixTool {
      */
     private String autofix(Task task, String component, String profile, String maxIterations) {
         McpConfig config = context.config();
-        Map<String, String> inherited = System.getenv();
+        Map<String, String> inherited = config.settings();
         boolean tested = inherited.containsKey(VERIFICATION_VARIABLE) || config.layout().hasTests(component);
         Map<String, String> environment = config.agentEnvironment(inherited, component);
         environment.put(SHERIFF_TEST_TYPE_VARIABLE, profile);

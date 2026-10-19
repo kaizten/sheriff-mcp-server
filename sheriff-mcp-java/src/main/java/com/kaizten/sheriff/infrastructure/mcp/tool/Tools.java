@@ -2,6 +2,7 @@ package com.kaizten.sheriff.infrastructure.mcp.tool;
 
 import com.kaizten.sheriff.domain.port.RuleCatalog;
 import com.kaizten.sheriff.domain.valueobject.VerificationResult;
+import com.kaizten.sheriff.infrastructure.coverage.ChangeCoverage;
 import com.kaizten.sheriff.infrastructure.docker.ImageProvisioning;
 import com.kaizten.sheriff.infrastructure.git.UntestedMethods;
 import com.kaizten.sheriff.infrastructure.mcp.McpConfig;
@@ -27,11 +28,11 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 
 /**
- * The five tools this server exposes, by name, and how a call to one of them
+ * The six tools this server exposes, by name, and how a call to one of them
  * becomes an answer. Each tool is its own class; this one wires them to what
  * they share and turns whatever they throw into a failure the client can read.
  *
- * <p>Four of the five call no model at all. There the model is the client:
+ * <p>Five of the six call no model at all. There the model is the client:
  * it reads a finding, edits the code, and calls {@code sheriff_test} again,
  * which is what lets one server work from Claude or from an OpenAI client
  * with no provider-specific code and no tokens spent here.
@@ -53,7 +54,6 @@ public final class Tools implements AutoCloseable {
     private static final String EXCEPTION_MESSAGE_SEPARATOR = ": ";
     private static final String FAILED_TASK_FOOTER =
             "%n%nRecorded as task %s, failed. Whatever Sheriff wrote before it failed is in %s.";
-    private static final Duration TEST_TIMEOUT = Duration.ofMinutes(10);
     private static final String NOTICE_FORMAT = "%n%n%s";
     private static final String MISCONFIGURED =
             "The server is misconfigured: %s Fix it in the MCP server's environment (for Claude Code, in "
@@ -65,6 +65,7 @@ public final class Tools implements AutoCloseable {
     private final Map<String, Tool> byName;
     private final ImageProvisioning image;
     private final String taskTool;
+    private final String configTool;
     private final String testCall;
     private final String guidelinesTool;
     private final McpConfig configuration;
@@ -154,18 +155,38 @@ public final class Tools implements AutoCloseable {
      */
     public Tools(McpConfig config, SheriffRunner runner, RuleCatalog catalog, Supplier<Path> catalogPath,
             Function<String, VerificationResult> tests, ImageProvisioning image, ToolCall toolCall) {
+        this(config, runner, catalog, catalogPath, tests, image, toolCall, changeCoverage(config));
+    }
+
+    /**
+     * Every collaborator, with a chosen way of measuring how well the tests
+     * test a change, so that can be tested without a build.
+     *
+     * @param config where the server runs and with what
+     * @param runner what runs Sheriff
+     * @param catalog the rules
+     * @param catalogPath where the catalog file is, for the fix loop
+     * @param tests what runs a component's own tests
+     * @param image whether Sheriff's image is here yet
+     * @param toolCall how a step names the next call
+     * @param coverage what measures how well the tests test a change
+     */
+    public Tools(McpConfig config, SheriffRunner runner, RuleCatalog catalog, Supplier<Path> catalogPath,
+            Function<String, VerificationResult> tests, ImageProvisioning image, ToolCall toolCall,
+            ChangeCoverage coverage) {
         this.image = image;
         this.tasks = new TaskRegistry(config.tasksDirectory(), () -> provenance(image));
         ToolContext context = new ToolContext(config, runner, catalog, catalogPath, tests, tasks, toolCall,
-                new AnswerMemory(), new UntestedMethods(new SystemProcessRunner()), image::description);
+                new AnswerMemory(), new UntestedMethods(new SystemProcessRunner()), coverage, image::description);
         Map<String, Tool> definitions = new LinkedHashMap<>();
         for (Tool tool : List.of(new SheriffTestTool(context).definition(), new SheriffFixTool(context).definition(),
                 new SheriffGuidelinesTool(context).definition(), new SheriffAutofixTool(context).definition(),
-                new SheriffTaskTool(context).definition())) {
+                new SheriffTaskTool(context).definition(), new SheriffConfigTool(context).definition())) {
             definitions.put(tool.name(), tool);
         }
         this.byName = Collections.unmodifiableMap(definitions);
         this.taskTool = context.taskTool();
+        this.configTool = context.configTool();
         this.testCall = context.testCall(ToolContext.EMPTY, ToolContext.EMPTY);
         this.guidelinesTool = context.guidelinesTool();
         this.configuration = config;
@@ -181,7 +202,20 @@ public final class Tools implements AutoCloseable {
      */
     public static Function<String, VerificationResult> projectTests(McpConfig config) {
         return component -> new ShellTestRunner(new SystemProcessRunner(),
-                config.layout().verificationCommand(component), config.repository(), TEST_TIMEOUT).run();
+                config.layout().verificationCommand(component), config.repository(), config.testTimeout()).run();
+    }
+
+    /**
+     * What measures how well a component's tests test a change: JaCoCo and
+     * PIT through the component's Maven, from the mount, held to what the
+     * project declares.
+     *
+     * @param config where the project is
+     * @return that measure
+     */
+    public static ChangeCoverage changeCoverage(McpConfig config) {
+        return new ChangeCoverage(new SystemProcessRunner(), config.repository(), config.layout()::mavenCommand,
+                config::coverageThresholds, config.coverageTimeout(), config.mutationTimeout());
     }
 
     /**
@@ -251,6 +285,9 @@ public final class Tools implements AutoCloseable {
             return ToolOutcome.failure(NextStep.afterFailure(reasonFor((RuntimeException) failure.getCause())
                     + String.format(FAILED_TASK_FOOTER, task.id(), task.directory()), testCall));
         } catch (RuntimeException exception) {
+            if (name.equals(configTool)) {
+                return ToolOutcome.failure(reasonFor(exception));
+            }
             return ToolOutcome.failure(NextStep.afterFailure(reasonFor(exception), testCall));
         }
     }
@@ -260,17 +297,19 @@ public final class Tools implements AutoCloseable {
      * and so need not wait behind a call that does.
      *
      * @param name the tool asked for
-     * @return {@code true} for {@code sheriff_guidelines} and
-     *     {@code sheriff_task}
+     * @return {@code true} for {@code sheriff_guidelines},
+     *     {@code sheriff_task} and {@code sheriff_config}
      */
     public boolean answersAtOnce(String name) {
-        return name.equals(taskTool) || name.equals(guidelinesTool);
+        return name.equals(taskTool) || name.equals(guidelinesTool) || name.equals(configTool);
     }
 
     /**
      * Why a tool cannot run right now, when it cannot.
      *
-     * <p>{@code sheriff_task} always can. {@code sheriff_guidelines} runs no
+     * <p>{@code sheriff_task} and {@code sheriff_config} always can, the
+     * second so that a setting that stops the rest can be changed.
+     * {@code sheriff_guidelines} runs no
      * Sheriff, so a bad configuration does not stop it, and while the image
      * is being pulled it still answers when a catalog is already on disk.
      * The rest need Sheriff: a configuration problem, then the image.
@@ -279,7 +318,7 @@ public final class Tools implements AutoCloseable {
      * @return the reason to answer with instead, or empty
      */
     private Optional<String> blockerFor(String name) {
-        if (name.equals(taskTool)) {
+        if (name.equals(taskTool) || name.equals(configTool)) {
             return Optional.empty();
         }
         boolean runsSheriff = !name.equals(guidelinesTool);

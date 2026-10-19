@@ -16,6 +16,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 /**
  * What a project looks like to Sheriff, worked out from the project itself so
@@ -81,6 +82,7 @@ public final class ProjectLayout {
     private static final String NO_BUILD_TOOL = ShellTestRunner.NO_TESTS_COMMAND;
     private static final String QUOTE = "'";
     private static final String ESCAPED_QUOTE = "'\\''";
+    private static final String ARGUMENT_SEPARATOR = " ";
     private static final int NONE = 0;
     private static final int ONLY_ONE = 1;
 
@@ -280,6 +282,42 @@ public final class ProjectLayout {
      * @return the declared profile, or empty when nothing declares one
      */
     public Optional<String> declaredProfile(String component) {
+        return DeclaredProfile.in(declaringDirectories(component));
+    }
+
+    /**
+     * Another setting the project declares for a component, where and as the
+     * profile is declared.
+     *
+     * @param component the component, relative to the mount
+     * @param property the property that declares it in a {@code pom.xml}
+     * @param key the key that declares it in a {@code .sheriff.properties}
+     * @return its value, or empty when nothing declares it
+     */
+    public Optional<String> declaredSetting(String component, String property, String key) {
+        return DeclaredProfile.setting(declaringDirectories(component), property, key);
+    }
+
+    /**
+     * The project's own folder: the module, for a project that is one, else
+     * the folder mounted, which resolving no component gives.
+     *
+     * @return that folder
+     */
+    public Path projectRoot() {
+        return mount.resolve(ownComponent);
+    }
+
+    /**
+     * Where a component's declarations are read from, nearest first: its own
+     * directory, then, when the mount is the project and not only its
+     * parent, the project's root.
+     *
+     * @param component the component, relative to the mount, or empty for
+     *     the project as a whole
+     * @return those directories
+     */
+    private List<Path> declaringDirectories(String component) {
         List<Path> directories = new ArrayList<>();
         if (!component.isEmpty()) {
             directories.add(mount.resolve(component));
@@ -287,7 +325,7 @@ public final class ProjectLayout {
         if (ownComponent.isEmpty() && searchable) {
             directories.add(mount);
         }
-        return DeclaredProfile.in(directories);
+        return directories;
     }
 
     /**
@@ -343,6 +381,49 @@ public final class ProjectLayout {
      */
     public String verificationCommand(String component) {
         return verificationCommand(component, Platform.windows());
+    }
+
+    /**
+     * The command that runs Maven on a component with arguments of the
+     * caller's, through its wrapper when it has one, as the server runs a
+     * command: from the mount, in {@code cmd.exe} on Windows.
+     *
+     * @param component the component, relative to the mount
+     * @param arguments Maven's options and goals, each quoted for the shell
+     * @return the command, or empty when the component does not build with
+     *     Maven
+     */
+    public Optional<String> mavenCommand(String component, List<String> arguments) {
+        return mavenCommand(component, arguments, Platform.windows());
+    }
+
+    /**
+     * The command that runs Maven on a component, written for a given
+     * platform's shell.
+     *
+     * @param component the component, relative to the mount
+     * @param arguments Maven's options and goals
+     * @param windows whether the command runs on Windows
+     * @return the command, or empty when the component does not build with
+     *     Maven
+     */
+    Optional<String> mavenCommand(String component, List<String> arguments, boolean windows) {
+        Path root = mount.resolve(component);
+        TestShell shell = windows ? TestShell.CMD : TestShell.POSIX;
+        String format;
+        if (Files.isRegularFile(root.resolve(MAVEN_WRAPPER))) {
+            format = shell.mavenWrapperGoals();
+        } else if (Files.isRegularFile(root.resolve(MAVEN_BUILD))) {
+            format = shell.mavenGoals();
+        } else {
+            return Optional.empty();
+        }
+        String options = arguments.stream()
+                .map(argument -> ARGUMENT_SEPARATOR + (windows ? WINDOWS_QUOTE + argument + WINDOWS_QUOTE
+                        : quoted(argument)))
+                .collect(Collectors.joining());
+        String directory = windows ? WINDOWS_QUOTE + component + WINDOWS_QUOTE : quoted(component);
+        return Optional.of(String.format(format, directory, options));
     }
 
     /**

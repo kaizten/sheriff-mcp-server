@@ -42,6 +42,17 @@ public record ToolAnnotations(
     }
 
     /**
+     * A tool that changes the user's settings, and nothing in the project's
+     * code: the same call twice leaves them as once.
+     *
+     * @param title the name a client shows people
+     * @return its annotations
+     */
+    static ToolAnnotations changingSettings(String title) {
+        return new ToolAnnotations(title, false, false, true, false);
+    }
+
+    /**
      * A tool that edits files in place, on whatever branch is checked out:
      * what it writes can overwrite work that was not committed.
      *

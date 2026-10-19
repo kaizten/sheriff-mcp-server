@@ -95,6 +95,17 @@ public final class VerdictCache {
     }
 
     /**
+     * The user's own cache, with a chosen lifetime: the hooks', which read it
+     * from the settings rather than the process's environment.
+     *
+     * @param lifetime how long an entry is served
+     * @return that cache
+     */
+    public static VerdictCache lasting(Duration lifetime) {
+        return new VerdictCache(TemporaryFolders.forUser(DIRECTORY), lifetime);
+    }
+
+    /**
      * A cache in a chosen folder, with a chosen lifetime.
      *
      * @param directory where the entries go

@@ -3,6 +3,9 @@ package com.kaizten.sheriff.infrastructure.mcp;
 import com.kaizten.sheriff.domain.Rules;
 import com.kaizten.sheriff.infrastructure.catalog.CatalogProvisioning;
 import com.kaizten.sheriff.infrastructure.config.Configuration;
+import com.kaizten.sheriff.infrastructure.config.Settings;
+import com.kaizten.sheriff.infrastructure.coverage.CoverageThresholds;
+import com.kaizten.sheriff.infrastructure.docker.ImageProvisioning;
 import com.kaizten.sheriff.infrastructure.process.Platform;
 import java.net.URISyntaxException;
 import java.nio.file.Files;
@@ -53,11 +56,23 @@ public final class McpConfig {
     private static final String DEFAULT_TOOL_PREFIX = "sheriff";
     private static final String NOT_A_NUMBER = "%s must be a whole number of seconds, but it is '%s'.";
     private static final int MINIMUM_TIMEOUT_SECONDS = 1;
+    private static final String TEST_TIMEOUT = "SHERIFF_TEST_TIMEOUT";
+    private static final String COVERAGE_TIMEOUT = "SHERIFF_COVERAGE_TIMEOUT";
+    private static final String MUTATION_TIMEOUT = "SHERIFF_MUTATION_TIMEOUT";
+    private static final Duration DEFAULT_TEST_TIMEOUT = Duration.ofMinutes(10);
+    private static final Duration DEFAULT_COVERAGE_TIMEOUT = Duration.ofMinutes(10);
+    private static final Duration DEFAULT_MUTATION_TIMEOUT = Duration.ofMinutes(30);
+    private static final String LINES_SETTING = "SHERIFF_COVERAGE";
+    private static final String BRANCHES_SETTING = "SHERIFF_BRANCHES";
+    private static final String MUTANTS_SETTING = "SHERIFF_MUTATION";
+    private static final String MUTATORS_SETTING = "SHERIFF_MUTATORS";
+    private static final String NO_VALUE = "";
     private static final String NOT_POSITIVE = "%s must be at least 1 second, but it is '%s'.";
 
     private final Map<String, String> environment;
     private final Path workingDirectory;
     private ProjectLayout layout;
+    private Map<String, String> settings;
 
     /**
      * Wires the configuration to a set of environment variables, in the
@@ -228,7 +243,7 @@ public final class McpConfig {
      * @return the problem, in words the user can act on, or empty
      */
     public Optional<String> problem() {
-        String configured = environment.get(TIMEOUT);
+        String configured = settings().get(TIMEOUT);
         if (configured == null || configured.isBlank()) {
             return Optional.empty();
         }
@@ -250,9 +265,9 @@ public final class McpConfig {
      *     number
      */
     public Duration timeout() {
-        String configured = environment.get(TIMEOUT);
+        String configured = settings().get(TIMEOUT);
         if (configured == null || configured.isBlank() || problem().isPresent()) {
-            return Duration.ofSeconds(Configuration.defaultSheriffTimeout(Platform.windows(), environment));
+            return Duration.ofSeconds(Configuration.defaultSheriffTimeout(Platform.windows(), settings()));
         }
         return Duration.ofSeconds(Integer.parseInt(configured.strip()));
     }
@@ -358,6 +373,132 @@ public final class McpConfig {
     }
 
     /**
+     * The environment the server was given, with every setting it leaves
+     * unset taken from the project's {@code .sheriff.properties}, then from
+     * the user's own file ({@link Settings}).
+     *
+     * @return that environment, read once
+     */
+    public Map<String, String> settings() {
+        if (settings == null) {
+            settings = Settings.layered(environment, settingsProject());
+        }
+        return settings;
+    }
+
+    /**
+     * The environment the server was given, before any file: an environment
+     * variable is the one setting no file overrides.
+     *
+     * @return that environment
+     */
+    public Map<String, String> givenEnvironment() {
+        return environment;
+    }
+
+    /**
+     * The project whose {@code .sheriff.properties} holds its settings: the
+     * module itself for a project that is one, else the folder it is
+     * mounted from.
+     *
+     * @return that folder
+     */
+    public Path settingsProject() {
+        return layout().projectRoot();
+    }
+
+    /**
+     * What to do about Sheriff's image when it is missing or out of date.
+     *
+     * @return the {@code SHERIFF_PULL} policy
+     */
+    public String pullPolicy() {
+        return ImageProvisioning.policyIn(settings());
+    }
+
+    /**
+     * How long the project's tests get when the tools run them.
+     *
+     * @return {@code SHERIFF_TEST_TIMEOUT}, ten minutes by default
+     */
+    public Duration testTimeout() {
+        return seconds(TEST_TIMEOUT, DEFAULT_TEST_TIMEOUT);
+    }
+
+    /**
+     * How long the tests get under JaCoCo.
+     *
+     * @return {@code SHERIFF_COVERAGE_TIMEOUT}, ten minutes by default
+     */
+    public Duration coverageTimeout() {
+        return seconds(COVERAGE_TIMEOUT, DEFAULT_COVERAGE_TIMEOUT);
+    }
+
+    /**
+     * How long PIT gets.
+     *
+     * @return {@code SHERIFF_MUTATION_TIMEOUT}, half an hour by default
+     */
+    public Duration mutationTimeout() {
+        return seconds(MUTATION_TIMEOUT, DEFAULT_MUTATION_TIMEOUT);
+    }
+
+    /**
+     * How well a component's tests must test what a change writes: an
+     * environment variable first, then what the project declares where its
+     * profile is ({@code sheriff.coverage} in a {@code pom.xml}), then the
+     * project's settings file and the user's, then the defaults.
+     *
+     * @param component the component, relative to the mount
+     * @return those thresholds
+     */
+    public CoverageThresholds coverageThresholds(String component) {
+        return CoverageThresholds.declared(
+                threshold(component, LINES_SETTING, CoverageThresholds.LINES_PROPERTY, CoverageThresholds.LINES_KEY),
+                threshold(component, BRANCHES_SETTING, CoverageThresholds.BRANCHES_PROPERTY,
+                        CoverageThresholds.BRANCHES_KEY),
+                threshold(component, MUTANTS_SETTING, CoverageThresholds.MUTANTS_PROPERTY,
+                        CoverageThresholds.MUTANTS_KEY),
+                threshold(component, MUTATORS_SETTING, CoverageThresholds.MUTATORS_PROPERTY,
+                        CoverageThresholds.MUTATORS_KEY));
+    }
+
+    /**
+     * One threshold, from the first place that gives it.
+     *
+     * @param component the component
+     * @param setting the setting that gives it
+     * @param property the {@code pom.xml} property that declares it
+     * @param key the {@code .sheriff.properties} key that declares it
+     * @return its value as written, or empty for the default
+     */
+    private Optional<String> threshold(String component, String setting, String property, String key) {
+        String given = environment.get(setting);
+        if (given != null && !given.isBlank()) {
+            return Optional.of(given);
+        }
+        return layout().declaredSetting(component, property, key)
+                .or(() -> Optional.ofNullable(settings().get(setting)));
+    }
+
+    /**
+     * A number of seconds a setting gives, or its default when it gives none
+     * that is a whole number from one.
+     *
+     * @param name the setting
+     * @param fallback its default
+     * @return that duration
+     */
+    private Duration seconds(String name, Duration fallback) {
+        try {
+            int configured = Integer.parseInt(value(name, NO_VALUE).strip());
+            return configured >= MINIMUM_TIMEOUT_SECONDS ? Duration.ofSeconds(configured) : fallback;
+        } catch (NumberFormatException exception) {
+            return fallback;
+        }
+    }
+
+    /**
      * One variable's value, treating an unset or empty one as the default.
      *
      * @param name the variable to read
@@ -365,7 +506,7 @@ public final class McpConfig {
      * @return the configured value, or the fallback
      */
     private String value(String name, String fallback) {
-        String configured = environment.get(name);
+        String configured = settings().get(name);
         return configured == null || configured.isEmpty() ? fallback : configured;
     }
 }

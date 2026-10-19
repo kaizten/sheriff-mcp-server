@@ -25,11 +25,11 @@
 #                        image through it and sets SHERIFF_DOCKER=wsl for this
 #                        user, so the server and the hooks run docker as
 #                        'wsl docker' (needs a jar that knows the variable)
-#   -PullAlways          have the MCP server pull a newer Sheriff image each
-#                        time it starts (SHERIFF_PULL=always, written into the
-#                        server's registration); without it a newer image is
-#                        only reported. Pass it each time: a run without it
-#                        resets the default
+#   -PullAlways          write SHERIFF_PULL=always into the server's
+#                        registration. It is the default: the server pulls a
+#                        newer Sheriff image (another digest on Docker Hub)
+#                        each time it starts. Kept so older install lines
+#                        still work
 #   -NoHooks             set up the MCP server without the hooks
 #   -NoCodex             leave Codex's config alone
 #   -NoAntigravity       leave Antigravity's config alone

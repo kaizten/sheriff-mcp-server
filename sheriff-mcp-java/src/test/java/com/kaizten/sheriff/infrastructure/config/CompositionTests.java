@@ -1,6 +1,8 @@
 package com.kaizten.sheriff.infrastructure.config;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -171,5 +173,13 @@ class CompositionTests {
         composition.provisionCatalog();
         assertEquals(cached, composition.catalogPath());
         assertEquals("CACHED", composition.ruleCatalog().allRules().get(0).code());
+    }
+
+    @Test
+    @DisplayName("the measure of a change's tests is the composition's own, and its Stop hook is built with it")
+    void theChangeCoverageIsWired() {
+        Composition composition = with(Map.of("SHERIFF_STOP_RUNS_TESTS", "1"));
+        assertSame(composition, composition.withChangeCoverage(component -> null));
+        assertNotNull(composition.stopHook());
     }
 }

@@ -3,6 +3,8 @@ package com.kaizten.sheriff.infrastructure.mcp.tool;
 import com.kaizten.sheriff.domain.Rules;
 import com.kaizten.sheriff.domain.port.RuleCatalog;
 import com.kaizten.sheriff.domain.valueobject.VerificationResult;
+import com.kaizten.sheriff.infrastructure.coverage.ChangeCoverage;
+import com.kaizten.sheriff.infrastructure.coverage.CoverageVerdict;
 import com.kaizten.sheriff.infrastructure.git.UntestedMethods;
 import com.kaizten.sheriff.infrastructure.mcp.McpConfig;
 import com.kaizten.sheriff.infrastructure.mcp.SheriffRunner;
@@ -18,7 +20,7 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 
 /**
- * What the five tools share: what runs Sheriff, what reads its rules, the
+ * What the six tools share: what runs Sheriff, what reads its rules, the
  * session's tasks, the tools' names, and how a call's component and profile
  * are worked out when it does not name them.
  *
@@ -35,11 +37,12 @@ import java.util.function.Supplier;
  * @param toolCall how a step names the next call
  * @param answers the errors last listed in full, per component
  * @param untested what finds the new methods no changed test calls
+ * @param coverage what measures how well the tests test a change
  * @param image which build of Sheriff's image is here, as a person reads it
  */
 record ToolContext(McpConfig config, SheriffRunner runner, RuleCatalog catalog, Supplier<Path> catalogPath,
         Function<String, VerificationResult> tests, TaskRegistry tasks, ToolCall toolCall, AnswerMemory answers,
-        UntestedMethods untested, Supplier<Optional<String>> image) {
+        UntestedMethods untested, ChangeCoverage coverage, Supplier<Optional<String>> image) {
 
     static final String COMPONENT_ARGUMENT = "component";
     static final String PROFILE_ARGUMENT = "profile";
@@ -56,6 +59,7 @@ record ToolContext(McpConfig config, SheriffRunner runner, RuleCatalog catalog, 
     private static final String GUIDELINES_SUFFIX = "guidelines";
     private static final String AUTOFIX_SUFFIX = "autofix";
     private static final String TASK_SUFFIX = "task";
+    private static final String CONFIG_SUFFIX = "config";
     private static final String NAME_SEPARATOR = "_";
     private static final String ARGUMENT_FORMAT = " %s=%s";
     private static final String TASK_FOOTER = "%n%nTask %s.";
@@ -103,7 +107,9 @@ record ToolContext(McpConfig config, SheriffRunner runner, RuleCatalog catalog, 
 
     /**
      * The step once a component is clean: a test for each new method no
-     * changed test calls, else the project's tests.
+     * changed test calls; else, for a change whose tests can be measured,
+     * the repair with {@code verify}, which runs and measures them; else the
+     * project's tests.
      *
      * @param component the component
      * @param profile the profile the caller asked for, or empty
@@ -111,9 +117,13 @@ record ToolContext(McpConfig config, SheriffRunner runner, RuleCatalog catalog, 
      */
     String cleanStep(String component, String profile) {
         List<String> missing = untested.in(config.repository(), component);
-        return missing.isEmpty()
-                ? NextStep.afterClean(testCommand(component), testCall(component, profile))
-                : NextStep.afterUntested(missing, testCommand(component), testCall(component, profile));
+        if (!missing.isEmpty()) {
+            return NextStep.afterUntested(missing, testCommand(component), testCall(component, profile));
+        }
+        if (config().layout().hasTests(component) && coverage.applies(component)) {
+            return NextStep.afterCleanToMeasure(fixVerifyingCall(component, profile));
+        }
+        return NextStep.afterClean(testCommand(component), testCall(component, profile));
     }
 
     /**
@@ -129,9 +139,32 @@ record ToolContext(McpConfig config, SheriffRunner runner, RuleCatalog catalog, 
      */
     String passingTestsStep(String component, String profile) {
         List<String> missing = untested.in(config.repository(), component);
-        return missing.isEmpty()
-                ? NextStep.afterPassingTests()
-                : NextStep.afterUntested(missing, testCommand(component), testCall(component, profile));
+        if (!missing.isEmpty()) {
+            return NextStep.afterUntested(missing, testCommand(component), testCall(component, profile));
+        }
+        CoverageVerdict verdict = coverage.measure(component);
+        if (!verdict.applies()) {
+            return NextStep.afterPassingTests();
+        }
+        if (!verdict.measured()) {
+            return NextStep.afterUnmeasuredTests(verdict.problem());
+        }
+        if (verdict.passes()) {
+            return NextStep.afterMeasuredTests(verdict.summary());
+        }
+        return NextStep.afterWeakTests(verdict.summary(), verdict.shortfall(), fixVerifyingCall(component, profile));
+    }
+
+    /**
+     * The call to the repair tool with {@code verify} for a component, as a
+     * step names it.
+     *
+     * @param component the component
+     * @param profile the profile the caller asked for, or empty
+     * @return the call, written to be made as it stands
+     */
+    private String fixVerifyingCall(String component, String profile) {
+        return toolCall.phraseVerifying(fixTool(), component, profile);
     }
 
     /**
@@ -199,6 +232,15 @@ record ToolContext(McpConfig config, SheriffRunner runner, RuleCatalog catalog, 
      */
     String taskTool() {
         return named(TASK_SUFFIX);
+    }
+
+    /**
+     * The name of {@code sheriff_config}, under the configured prefix.
+     *
+     * @return that name
+     */
+    String configTool() {
+        return named(CONFIG_SUFFIX);
     }
 
     /**

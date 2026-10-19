@@ -15,10 +15,11 @@ import java.util.concurrent.CompletableFuture;
  *
  * <p>A missing image is pulled, on purpose and with its own time limit, rather
  * than left to the first {@code docker run} to pull silently inside an
- * analysis's limit. An image that is here but out of date is reported, not
- * replaced: a new image can bring new rules, and the rules a project is held
- * to should not change in the middle of someone's work without them deciding
- * it. {@code SHERIFF_PULL=always} makes it replace, {@code never} skips even
+ * analysis's limit. An image that is here but out of date is replaced as well:
+ * Kaizten publishes Sheriff only as {@code latest}, with no versions, so the
+ * build to hold a project to is the newest one, and the only way to tell that
+ * one from the one here is the digest Docker Hub publishes for the tag, never
+ * the tag. {@code SHERIFF_PULL=check} only reports it, {@code never} skips even
  * asking Docker Hub, for a machine with no network or a pinned setup.
  *
  * <p>The MCP server runs it in the background from startup and answers "being
@@ -31,7 +32,7 @@ public final class ImageProvisioning {
     private static final String POLICY_VARIABLE = "SHERIFF_PULL";
     private static final String ALWAYS = "always";
     private static final String NEVER = "never";
-    private static final String DEFAULT_POLICY = "check";
+    private static final String DEFAULT_POLICY = ALWAYS;
     private static final String PULLING =
             "Sheriff's image (%s) is not on this machine yet, so it is being downloaded: about 4 GB, "
             + "started %d minute(s) ago. Try again in a few minutes; nothing else is needed.";
@@ -40,13 +41,19 @@ public final class ImageProvisioning {
             + "Docker is running and the network is up, then restart the session.";
     private static final String OUTDATED =
             "Note: a newer %s has been published than the one on this machine, and its rules may "
-            + "differ. Update it with `docker pull %s`, or by running the install line again. To have "
-            + "the server update it each time it starts, install with --pull-always: Codex passes a "
-            + "server none of the shell's variables, so SHERIFF_PULL=always set there never reaches it.";
+            + "differ. SHERIFF_PULL=check keeps the one here: update it with `docker pull %s`.";
+    private static final String NOT_UPDATED =
+            "Note: a newer %s has been published than the one on this machine, and its rules may "
+            + "differ, but it could not be downloaded (%s), so the one here is used. Update it with "
+            + "`docker pull %s`.";
+    private static final String UPDATING =
+            "Note: a newer %s has been published, and it is being downloaded. Until it is here, Sheriff "
+            + "runs the one on this machine, whose rules may differ.";
     private static final String PULLING_LOG = "Sheriff's image %s is not here; pulling it (about 4 GB)...%n";
     private static final String PULLED_LOG = "Pulled %s.%n";
     private static final String FAILED_LOG = "Could not pull %s: %s%n";
-    private static final String UPDATING_LOG = "A newer %s is published; pulling it (SHERIFF_PULL=always)...%n";
+    private static final String UPDATING_LOG =
+            "A newer %s is published (its digest differs from the one here); pulling it...%n";
     private static final String LINE_FORMAT = "%s%n";
     private static final String EMPTY = "";
     private static final String EXIT_CODE = "docker pull exited with %d";
@@ -59,6 +66,7 @@ public final class ImageProvisioning {
     private static final String PULLED_BY = " (%s)";
     private static final String NOT_HERE = ", which Docker does not show on this machine";
     private static final String NEWER_PUBLISHED = "; a newer build of it has been published";
+    private static final String NEWER_ARRIVING = "; a newer build of it is being downloaded";
     private static final int SHORT_DIGEST_LENGTH = 19;
 
     private final SheriffImage image;
@@ -68,6 +76,7 @@ public final class ImageProvisioning {
     private volatile Instant pullStarted;
     private volatile String failure = EMPTY;
     private volatile String notice = EMPTY;
+    private volatile boolean updating;
 
     /**
      * Wires it to the image and to a policy.
@@ -87,7 +96,8 @@ public final class ImageProvisioning {
      * The policy an environment sets through {@code SHERIFF_PULL}.
      *
      * @param environment the environment to read
-     * @return that policy, lower-cased, or the default that only reports
+     * @return that policy, lower-cased, or the default that replaces an
+     *     outdated image
      */
     public static String policyIn(Map<String, String> environment) {
         String configured = environment.get(POLICY_VARIABLE);
@@ -152,9 +162,13 @@ public final class ImageProvisioning {
     /**
      * Something worth telling whoever uses the tools, without stopping them.
      *
-     * @return the note that a newer image is published, or empty
+     * @return the note that a newer image is published, or is being
+     *     downloaded, or empty
      */
     public Optional<String> notice() {
+        if (updating) {
+            return Optional.of(String.format(UPDATING, image.image()));
+        }
         return notice.isEmpty() ? Optional.empty() : Optional.of(notice);
     }
 
@@ -183,7 +197,7 @@ public final class ImageProvisioning {
      * The image as a person reads it: its name, and which build of it is on
      * this machine, the day it was built and the start of its digest, since
      * {@code latest} alone does not say which build was pulled. It also says
-     * when a newer build is known to be published.
+     * when a newer build is known to be published, or is being downloaded.
      *
      * @return that description, or empty when there is no image to ask about
      */
@@ -199,7 +213,9 @@ public final class ImageProvisioning {
             appendKnown(text, BUILT_ON, build.get().created());
             appendKnown(text, PULLED_BY, shortened(build.get().digest()));
         }
-        if (!notice.isEmpty()) {
+        if (updating) {
+            text.append(NEWER_ARRIVING);
+        } else if (!notice.isEmpty()) {
             text.append(NEWER_PUBLISHED);
         }
         return Optional.of(text.toString());
@@ -242,7 +258,7 @@ public final class ImageProvisioning {
     }
 
     /**
-     * Pulls a missing image, and reports or replaces an outdated one.
+     * Pulls a missing image, and replaces or reports an outdated one.
      */
     private void provision() {
         try {
@@ -278,20 +294,29 @@ public final class ImageProvisioning {
     }
 
     /**
-     * Replaces an outdated image when told to, and reports it otherwise.
+     * Replaces an outdated image, unless told only to report it.
+     *
+     * <p>The image here stays usable while the newer one downloads: a tool
+     * call meanwhile runs it, and says a newer one is on its way. Docker
+     * moves the tag only once the pull is whole.
      */
     private void refresh() {
-        if (ALWAYS.equals(policy)) {
-            log.printf(UPDATING_LOG, image.image());
-            ProcessOutcome outcome = image.pull();
-            if (outcome.succeeded()) {
-                log.printf(PULLED_LOG, image.image());
-                return;
-            }
-            log.printf(FAILED_LOG, image.image(), reasonOf(outcome));
+        if (!ALWAYS.equals(policy)) {
+            notice = String.format(OUTDATED, image.image(), image.image());
+            log.printf(LINE_FORMAT, notice);
+            return;
         }
-        notice = String.format(OUTDATED, image.image(), image.image());
-        log.printf(LINE_FORMAT, notice);
+        log.printf(UPDATING_LOG, image.image());
+        updating = true;
+        ProcessOutcome outcome = image.pull();
+        if (outcome.succeeded()) {
+            updating = false;
+            log.printf(PULLED_LOG, image.image());
+            return;
+        }
+        notice = String.format(NOT_UPDATED, image.image(), reasonOf(outcome), image.image());
+        updating = false;
+        log.printf(FAILED_LOG, image.image(), reasonOf(outcome));
     }
 
     /**

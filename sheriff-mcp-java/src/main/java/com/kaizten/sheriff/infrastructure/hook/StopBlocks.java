@@ -31,6 +31,7 @@ public final class StopBlocks {
     private static final int LINES = 3;
     private static final String STALLED = "stalled";
     private static final String NOT_STALLED = "";
+    private static final int ONE_STALL = 1;
 
     private final Path directory;
 
@@ -76,14 +77,23 @@ public final class StopBlocks {
     }
 
     /**
-     * Whether the last block was already sent back for a stop with nothing
-     * changed since the one before.
+     * How many blocks in a row, up to the last, were sent back for a stop
+     * with nothing changed since the one before.
      *
      * @param session the Claude Code session, or empty when unknown
-     * @return {@code true} when the session has stalled once already
+     * @return that number, zero when unknown; a record written before it was
+     *     counted reads as one
      */
-    public boolean stalled(String session) {
-        return STALLED.equals(lines(session)[STALLED_LINE]);
+    public int stalls(String session) {
+        String recorded = lines(session)[STALLED_LINE].strip();
+        if (STALLED.equals(recorded)) {
+            return ONE_STALL;
+        }
+        try {
+            return Integer.parseInt(recorded);
+        } catch (NumberFormatException exception) {
+            return NONE;
+        }
     }
 
     /**
@@ -119,11 +129,11 @@ public final class StopBlocks {
             return;
         }
         int next = count(session) + 1;
+        int stalls = stalledNow ? stalls(session) + ONE_STALL : NONE;
         try {
             Files.createDirectories(directory);
             TemporaryFolders.prune(directory, TemporaryFolders.MARKER_LIFETIME);
-            Files.writeString(fileFor(session),
-                    next + SEPARATOR + sources + SEPARATOR + (stalledNow ? STALLED : NOT_STALLED));
+            Files.writeString(fileFor(session), next + SEPARATOR + sources + SEPARATOR + stalls);
         } catch (IOException exception) {
             return;
         }

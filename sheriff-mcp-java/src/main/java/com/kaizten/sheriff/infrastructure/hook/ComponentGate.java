@@ -75,6 +75,10 @@ public final class ComponentGate {
             + "each method above that calls it and checks what it returns, edge cases included (nothing to "
             + "return, a null among the inputs). Then run %s, and call the sheriff_test tool with component '%s' "
             + "once more. Do not ask the user whether to.";
+    private static final String COVERAGE_STEP = "Next step: add tests under the component's src/test that run "
+            + "each line listed, take every branch of each condition listed (each side of every && and ||) and "
+            + "fail on each change listed, by checking what the code returns, edge cases included. Then call the sheriff_fix tool with component '%s' and verify true, and do the step each "
+            + "answer ends with. Do not ask the user whether to.%nWithout the sheriff tools, %s instead.";
     private static final String TESTS_STEP = "Next step: run %s and fix what fails until it passes, then call "
             + "the sheriff_test tool with component '%s' once more, as a fix can break a rule. If the tests "
             + "already failed before this turn, say so instead of leaving them.";
@@ -91,7 +95,7 @@ public final class ComponentGate {
      * @param composition what builds the analyzer
      */
     public ComponentGate(Configuration configuration, Composition composition) {
-        this(configuration, composition, new VerdictCache());
+        this(configuration, composition, VerdictCache.lasting(configuration.gateTtl()));
     }
 
     /**
@@ -160,6 +164,20 @@ public final class ComponentGate {
      */
     public String testsStep(String component, String testCommand) {
         return String.format(TESTS_STEP, testCommand, component);
+    }
+
+    /**
+     * The step a hook ends with when a component's tests pass but do not test
+     * what the turn wrote as well as the project asks: more tests, then the
+     * repair with {@code verify}, which measures them again.
+     *
+     * @param component the component
+     * @return the step
+     */
+    public String coverageStep(String component) {
+        String command = ToolCall.throughCommandLine(configuration.projectDirectory(), runningJar())
+                .phraseVerifying(FIX_TOOL, component, NO_PROFILE);
+        return String.format(COVERAGE_STEP, component, command);
     }
 
     /**

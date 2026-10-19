@@ -6,15 +6,49 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 /** Tests for the configuration layer, with the environment supplied as a map. */
 class ConfigurationTests {
+
+    @TempDir
+    Path folder;
+
+    @Test
+    @DisplayName("the hooks read their settings from the files too: the project's over the user's, the environment "
+            + "over both")
+    void theHooksReadTheSettingsFiles() throws IOException {
+        Path project = Files.createDirectories(folder.resolve("app"));
+        Path config = Files.createDirectories(folder.resolve("config/sheriff-mcp"));
+        Files.writeString(config.resolve("sheriff.properties"), "SHERIFF_STOP_MAX_STALLS=0\nSHERIFF_GATE_TTL=60\n");
+        Files.writeString(project.resolve(".sheriff.properties"), "SHERIFF_GATE_TTL=30\n");
+        Map<String, String> environment = Map.of("CLAUDE_PROJECT_DIR", project.toString(), "XDG_CONFIG_HOME",
+                folder.resolve("config").toString(), "APPDATA", folder.resolve("config").toString());
+
+        Configuration configuration = new Configuration(environment, folder);
+
+        assertEquals(0, configuration.stopMaxStalls());
+        assertEquals(Duration.ofSeconds(30), configuration.gateTtl());
+        assertEquals(1, new Configuration(Map.of(), folder).stopMaxStalls(), "the default, with no file");
+        assertEquals(3, new Configuration(Map.of("SHERIFF_STOP_MAX_STALLS", "3", "CLAUDE_PROJECT_DIR",
+                project.toString()), folder).stopMaxStalls());
+        assertEquals("SHERIFF_STOP_MAX_STALLS must be 0 or more, but it is '-1'.", assertThrows(
+                IllegalArgumentException.class, () -> new Configuration(Map.of("SHERIFF_STOP_MAX_STALLS", "-1"),
+                        folder).stopMaxStalls()).getMessage());
+        assertEquals(Duration.ofSeconds(30), new Configuration(Map.of("CLAUDE_PROJECT_DIR", " ", "TARGET_REPO",
+                project.toString(), "XDG_CONFIG_HOME", folder.resolve("config").toString(), "APPDATA",
+                folder.resolve("config").toString()), folder).gateTtl(), "a blank project is the repository");
+    }
+
 
     private static final Path AGENT = Path.of("/repo/sheriff-mcp-java");
 

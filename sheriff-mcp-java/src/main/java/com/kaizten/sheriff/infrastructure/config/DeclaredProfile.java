@@ -35,6 +35,10 @@ import org.xml.sax.helpers.DefaultHandler;
  * properties file: a Maven build resolves the property
  * through inheritance and never sees the file, so a tool that preferred the
  * file could analyze the same module under another profile than the build.
+ *
+ * <p>Every other setting a project declares for these tools is read the same
+ * way, from a property of its own and a key of its own
+ * ({@link #setting}): the thresholds its tests are held to, for one.
  */
 public final class DeclaredProfile {
 
@@ -66,18 +70,31 @@ public final class DeclaredProfile {
      * @return the profile, or empty when none of them declares one
      */
     public static Optional<String> in(List<Path> directories) {
+        return setting(directories, PROPERTY_ELEMENT, FILE_KEY);
+    }
+
+    /**
+     * A setting declared in any of these directories, as the profile is:
+     * every {@code pom.xml} of the chain first, then the properties files.
+     *
+     * @param directories where to look, nearest first
+     * @param property the property that declares it in a {@code pom.xml}
+     * @param key the key that declares it in a {@code .sheriff.properties}
+     * @return its value, or empty when none of them declares it
+     */
+    public static Optional<String> setting(List<Path> directories, String property, String key) {
         for (Path directory : directories) {
             Path pom = directory.resolve(MAVEN_BUILD);
             if (!Files.isRegularFile(pom)) {
                 break;
             }
-            Optional<String> declared = fromPom(pom);
+            Optional<String> declared = fromPom(pom, property);
             if (declared.isPresent()) {
                 return declared;
             }
         }
         for (Path directory : directories) {
-            Optional<String> declared = fromFile(directory.resolve(FILE_NAME));
+            Optional<String> declared = fromFile(directory.resolve(FILE_NAME), key);
             if (declared.isPresent()) {
                 return declared;
             }
@@ -86,19 +103,20 @@ public final class DeclaredProfile {
     }
 
     /**
-     * The {@code sheriff.profile} property of a {@code pom.xml}: only the
-     * project's own {@code <properties>}, never one inside a Maven build
-     * profile, which applies only when that build profile is active.
+     * A property of a {@code pom.xml}: only the project's own
+     * {@code <properties>}, never one inside a Maven build profile, which
+     * applies only when that build profile is active.
      *
      * @param pom the file
+     * @param name the property
      * @return the value, or empty when the file, the property or a usable
      *     value is missing
      */
-    private static Optional<String> fromPom(Path pom) {
+    private static Optional<String> fromPom(Path pom, String name) {
         try (InputStream input = Files.newInputStream(pom)) {
             Element project = parser().parse(input).getDocumentElement();
             return child(project, PROPERTIES_ELEMENT)
-                    .flatMap(properties -> child(properties, PROPERTY_ELEMENT))
+                    .flatMap(properties -> child(properties, name))
                     .flatMap(property -> usable(property.getTextContent()));
         } catch (IOException | ParserConfigurationException | SAXException exception) {
             return Optional.empty();
@@ -106,19 +124,20 @@ public final class DeclaredProfile {
     }
 
     /**
-     * The {@code profile} key of a {@code .sheriff.properties} file.
+     * A key of a {@code .sheriff.properties} file.
      *
      * @param file the file
+     * @param key the key
      * @return the value, or empty when the file or the key is missing
      */
-    private static Optional<String> fromFile(Path file) {
+    private static Optional<String> fromFile(Path file, String key) {
         if (!Files.isRegularFile(file)) {
             return Optional.empty();
         }
         Properties properties = new Properties();
         try (Reader reader = Files.newBufferedReader(file)) {
             properties.load(reader);
-            return usable(properties.getProperty(FILE_KEY));
+            return usable(properties.getProperty(key));
         } catch (IOException | IllegalArgumentException exception) {
             return Optional.empty();
         }

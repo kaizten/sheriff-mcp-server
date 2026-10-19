@@ -26,6 +26,23 @@ class ToolCallTest {
 
     @Test
     @DisabledOnOs(value = OS.WINDOWS, disabledReason = "cmd.exe takes double quotes")
+    @DisplayName("a call with verify says so, as a tool call and as a command")
+    void namesAVerifyingCall() {
+        assertEquals("call the sheriff_fix tool with component 'api' and verify true",
+                ToolCall.throughMcp().phraseVerifying("sheriff_fix", "api", ""));
+        assertEquals("call the sheriff_fix tool with verify true",
+                ToolCall.throughMcp().phraseVerifying("sheriff_fix", "", ""));
+        ToolCall command = ToolCall.throughCommandLine(Path.of("/work"), Path.of("/opt/sheriff-mcp.jar"));
+        assertEquals("run `cd '/work' && java -jar '/opt/sheriff-mcp.jar' --call sheriff_fix component='api' "
+                + "verify=true`", command.phraseVerifying("sheriff_fix", "api", ""));
+        assertEquals("run `cd '/work' && java -jar '/opt/sheriff-mcp.jar' --call sheriff_fix component='api' "
+                + "profile='JAVA' verify=true`", command.phraseVerifying("sheriff_fix", "api", "JAVA"));
+        assertEquals("call the sheriff_fix tool with component 'api' and profile 'JAVA' and verify true",
+                ToolCall.throughMcp().phraseVerifying("sheriff_fix", "api", "JAVA"));
+    }
+
+    @Test
+    @DisabledOnOs(value = OS.WINDOWS, disabledReason = "cmd.exe takes double quotes")
     @DisplayName("through the command line, the command that makes the same call, runnable as it stands")
     void namesACommand() {
         ToolCall command = ToolCall.throughCommandLine(Path.of("/work/my app"), Path.of("/opt/sheriff-mcp.jar"));

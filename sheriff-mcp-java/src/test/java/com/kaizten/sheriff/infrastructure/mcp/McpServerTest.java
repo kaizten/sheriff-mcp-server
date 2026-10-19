@@ -190,4 +190,40 @@ final class McpServerTest {
             assertEquals(Optional.of(java), McpServer.chosenJava(Map.of("SHERIFF_JAVA", java.toString())));
         }
     }
+
+    @Test
+    @DisplayName("every start writes the user's settings at their defaults; --config lists them and nothing else runs")
+    void theSettingsAreWrittenAndListed() throws IOException {
+        Map<String, String> environment = Map.of("XDG_CONFIG_HOME", workspace.toString(), "APPDATA",
+                workspace.toString());
+        McpConfig config = new McpConfig(environment, workspace);
+        ByteArrayOutputStream printed = new ByteArrayOutputStream();
+        PrintStream protocol = new PrintStream(printed, true, StandardCharsets.UTF_8);
+
+        assertFalse(McpServer.answeredSettings(config, List.of("--tools"), protocol));
+        assertTrue(Files.exists(workspace.resolve("sheriff-mcp/sheriff.properties")));
+        assertEquals("", printed.toString(StandardCharsets.UTF_8));
+        assertTrue(McpServer.answeredSettings(config, List.of("--config"), protocol));
+        String listing = printed.toString(StandardCharsets.UTF_8);
+        assertTrue(listing.startsWith("Settings, each from the first that sets it"), listing);
+        assertTrue(listing.contains("--call sheriff_config setting=NAME value=VALUE"), listing);
+    }
+
+    @Test
+    @DisplayName("the image is made sure of as the settings say: never asks Docker Hub nothing and pulls nothing")
+    void theImageFollowsThePullSetting() throws IOException {
+        Files.createDirectories(workspace.resolve("app/src"));
+        Files.writeString(workspace.resolve("app/src/A.java"), "class A {}");
+        Files.writeString(workspace.resolve(".sheriff.properties"), "SHERIFF_PULL=never\n");
+        List<List<String>> commands = new java.util.ArrayList<>();
+        com.kaizten.sheriff.infrastructure.process.ProcessRunner docker = (command, directory, environment, timeout)
+                -> {
+            commands.add(command);
+            return com.kaizten.sheriff.infrastructure.process.ProcessOutcome.completed(0,
+                    "[\"kaizten/sheriff@sha256:aaa\"] \"2026-10-16T12:00:00Z\"", "");
+        };
+
+        assertTrue(McpServer.imageFor(new McpConfig(Map.of(), workspace), docker).now());
+        assertTrue(commands.stream().noneMatch(command -> command.contains("pull")), commands.toString());
+    }
 }

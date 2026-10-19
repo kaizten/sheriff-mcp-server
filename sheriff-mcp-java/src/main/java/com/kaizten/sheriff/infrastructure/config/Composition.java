@@ -23,6 +23,7 @@ import com.kaizten.sheriff.infrastructure.catalog.MarkdownRuleCatalog;
 import com.kaizten.sheriff.infrastructure.claude.ClaudeCliFixer;
 import com.kaizten.sheriff.infrastructure.claude.PromptLog;
 import com.kaizten.sheriff.infrastructure.codex.CodexCliFixer;
+import com.kaizten.sheriff.infrastructure.coverage.CoverageVerdict;
 import com.kaizten.sheriff.infrastructure.docker.DeterministicFixer;
 import com.kaizten.sheriff.infrastructure.docker.DockerFixerScriptSource;
 import com.kaizten.sheriff.infrastructure.docker.ImageProvisioning;
@@ -90,6 +91,7 @@ public final class Composition {
     private final UnaryOperator<String> verifications;
     private final UnaryOperator<String> modelTests;
     private Path provisionedCatalog;
+    private Function<String, CoverageVerdict> changeCoverage;
 
     /**
      * Wires a composition to a configuration, analyzing every component
@@ -148,6 +150,18 @@ public final class Composition {
         this.profiles = profiles;
         this.verifications = verifications;
         this.modelTests = modelTests;
+    }
+
+    /**
+     * The same composition, whose Stop hook, when it runs the tests, also
+     * measures how well they test what the turn wrote.
+     *
+     * @param measure what measures it for a component
+     * @return this composition
+     */
+    public Composition withChangeCoverage(Function<String, CoverageVerdict> measure) {
+        this.changeCoverage = measure;
+        return this;
     }
 
     /**
@@ -550,7 +564,8 @@ public final class Composition {
                 : null;
         return new SheriffStopHook(componentGate(), git, tests, new StopBlocks(), new TurnStart(),
                 configuration.stopMaxBlocks()).withTestCommands(modelTests)
-                .withUntestedMethods(new UntestedMethods(processes));
+                .withUntestedMethods(new UntestedMethods(processes)).withChangeCoverage(changeCoverage)
+                .withMaxStalls(configuration.stopMaxStalls());
     }
 
     /**

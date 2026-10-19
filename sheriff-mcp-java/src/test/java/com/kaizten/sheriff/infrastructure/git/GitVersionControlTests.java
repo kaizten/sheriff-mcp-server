@@ -14,6 +14,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -280,6 +281,49 @@ class GitVersionControlTests {
             assertTrue(git.modifiedFiles().contains("app/src/A.java"));
             assertTrue(git.commitIfChanges("sheriff-agent: iteration 1"));
             assertFalse(git.hasUncommittedChanges());
+        }
+
+        @Test
+        @DisplayName("the lines a change wrote: added and changed ones, in the file as it is now; every line of a "
+                + "new file")
+        void changedLinesAreThoseNotAsTheLastCommitHasThem() throws IOException, InterruptedException {
+            assumeTrue(gitIsInstalled(), "git is not installed");
+            Path app = Files.createDirectories(mount.resolve("app"));
+            Path source = Files.createDirectories(app.resolve("src")).resolve("A.java");
+            Files.writeString(source, "a\nb\nc\nd\n");
+            git(app, "init", "-q");
+            git(app, "config", "user.email", "agent@example.com");
+            git(app, "config", "user.name", "agent");
+            git(app, "add", "-A");
+            git(app, "commit", "-q", "-m", "seed");
+            GitVersionControl git = new GitVersionControl(new SystemProcessRunner(), mount, app, "stamp");
+            assertEquals(Set.of(), git.changedLines(source));
+            Files.writeString(source, "a\nB\nc\nnew\nother\n");
+            assertEquals(Set.of(2, 4, 5), git.changedLines(source));
+            Files.writeString(source, "a\nc\nd\n");
+            assertEquals(Set.of(), git.changedLines(source), "a removed line leaves no line behind");
+            Path created = app.resolve("src/B.java");
+            Files.writeString(created, "x\ny\n");
+            assertEquals(Set.of(1, 2), git.changedLines(created));
+        }
+
+        @Test
+        @DisabledOnOs(value = OS.WINDOWS, disabledReason = "a symbolic link needs rights Windows does not give")
+        @DisplayName("a repository reached through a symbolic link reads the same lines, as git names the real path")
+        void changedLinesThroughALink() throws IOException, InterruptedException {
+            assumeTrue(gitIsInstalled(), "git is not installed");
+            Path real = Files.createDirectories(mount.resolve("real"));
+            Path source = Files.createDirectories(real.resolve("src")).resolve("A.java");
+            Files.writeString(source, "a\nb\n");
+            git(real, "init", "-q");
+            git(real, "config", "user.email", "agent@example.com");
+            git(real, "config", "user.name", "agent");
+            git(real, "add", "-A");
+            git(real, "commit", "-q", "-m", "seed");
+            Files.writeString(source, "a\nB\n");
+            Path link = Files.createSymbolicLink(mount.resolve("link"), real);
+            GitVersionControl git = new GitVersionControl(new SystemProcessRunner(), mount, link, "stamp");
+            assertEquals(Set.of(2), git.changedLines(link.resolve("src/A.java")));
         }
 
         @Test
