@@ -268,9 +268,9 @@ Windows it has to be tried with real assistants, which CI does not have.
   be a project's own source. `scripts/e2e.sh` scenario 20 checks it.
 - **`test` exits 0 however many errors it found**, and with a profile it does
   not know; only a component that does not exist exits 1. `fix` used to exit
-  1 whatever happened; with the image of 19 October it exits 0 when it runs
-  and 1 when it cannot start. Decide what happened from the output, or by
-  analyzing again.
+  1 whatever happened; with the image of 16 October (`sha256:4127439f`) it
+  exits 0 when it runs and 1 when it cannot start. Decide what happened from
+  the output, or by analyzing again.
 - **A fixer that cannot run looks like one that changed nothing**, and one
   that lies looks like one that worked. Two defences, both needed:
   - A fixer that *fails* says so on stdout: `Could not apply fixer for error
@@ -388,9 +388,9 @@ component from the working directory (the `src/` rule; a directory inside a
 module's `src/` is that module when it has a build file, as Codex runs the
 server in the session's directory), the profile the project declares or else
 the one its sources call for (`.vue` decides Vue; Sheriff's Vue profile also
-reads `.ts`/`.js`, so those cannot; `.py` is not analyzed yet), and the test
-command from the build tool. `scripts/e2e.sh` scenarios 8, 9 and 14 exercise
-it.
+reads `.ts`/`.js`, so those cannot; `.py` calls for `PYTHON`), and the test
+command from the build tool. `scripts/e2e.sh` scenarios 8, 9, 14 and 18
+exercise it.
 
 **A project declares its profile once, and the plugin and the MCP must agree
 on where** (`DeclaredProfile`): the `sheriff.profile` property of a
@@ -586,9 +586,9 @@ Kaizten's rules are not a convention to interpret — they are compiled into
 the image as profiles. When writing code here:
 
 - **Both modules must stay green under `JAVA`.** Check before finishing, and
-  prefer the plugin's own goal for the plugin. Since the image of 19
-  October, `JAVA` checks `pom.xml` too, and six findings stay, each a
-  false positive of the checker: `jackson-module-scala_2.11`, `_2.12`,
+  prefer the plugin's own goal for the plugin. Since the image of 16
+  October (`sha256:4127439f`), `JAVA` checks `pom.xml` too, and six findings
+  stay, each a false positive of the checker: `jackson-module-scala_2.11`, `_2.12`,
   `_2.13` and `_3` "must not contain underscores", names of Jackson's that
   its imported BOM brings in; and `maven-core` and `maven-plugin-api`
   "outdated", whose version is the Maven the plugin requires, as
