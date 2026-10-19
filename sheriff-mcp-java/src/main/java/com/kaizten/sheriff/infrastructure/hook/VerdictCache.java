@@ -386,7 +386,7 @@ public final class VerdictCache {
         List<SheriffFinding> errors = result.errors();
         List<String> lines = new ArrayList<>();
         for (SheriffFinding finding : errors.subList(FIRST, Math.min(SAMPLE_SIZE, errors.size()))) {
-            lines.add(String.format(SAMPLE_LINE, finding.file(), finding.description()));
+            lines.add(String.format(SAMPLE_LINE, finding.file(), SheriffFinding.brief(finding.description())));
         }
         String sample = String.join(System.lineSeparator(), lines);
         return errors.size() > SAMPLE_SIZE
