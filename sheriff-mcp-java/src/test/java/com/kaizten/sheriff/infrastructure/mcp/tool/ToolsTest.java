@@ -796,6 +796,35 @@ final class ToolsTest {
     }
 
     @Test
+    @DisplayName("sheriff_fix with verify and passing tests still names a new method no test calls, rather than "
+            + "saying the component is done")
+    void passingTestsDoNotCoverAnUntestedMethod() throws IOException, InterruptedException {
+        mavenComponent("app");
+        Path app = repository.resolve("app");
+        Path source = Files.createDirectories(app.resolve("src/main/java/demo")).resolve("Calc.java");
+        Files.writeString(source, "package demo;\n\npublic class Calc {\n}\n");
+        for (List<String> step : List.of(List.of("init", "-q"), List.of("add", "-A"), List.of("commit", "-q", "-m", "seed"))) {
+            List<String> command = new ArrayList<>(List.of("git", "-c", "user.email=t@example.com", "-c", "user.name=t"));
+            command.addAll(step);
+            Process git = new ProcessBuilder(command).directory(app.toFile()).redirectErrorStream(true).start();
+            git.getInputStream().readAllBytes();
+            assertEquals(0, git.waitFor(), String.join(" ", command));
+        }
+        Files.writeString(source, "package demo;\n\npublic class Calc {\n\n    public int minus(int a, int b) {\n"
+                + "        return a - b;\n    }\n}\n");
+        String before = "[{\"file\":\"/data/app/A.java\",\"description\":\"d\",\"howToSolve\":\"h\","
+                + "\"referenceCode\":\"R\",\"type\":\"ERROR\"}]";
+        Tools tools = toolsWithTests(VerificationResult.passed("Tests run: 1, Failures: 0"),
+                ProcessOutcome.completed(0, before, ""), ProcessOutcome.completed(1, "fixed", ""),
+                ProcessOutcome.completed(1, "fixed", ""), ProcessOutcome.completed(0, "", ""));
+
+        String text = tools.call("sheriff_fix", Map.of("component", "app", "verify", true)).text();
+
+        assertTrue(text.contains("src/main/java/demo/Calc.java: minus"), text);
+        assertFalse(text.contains("the component is done"), text);
+    }
+
+    @Test
     @DisplayName("a flag or a number is read as it is written, and anything else as nothing")
     void flagsAndNumbersAreReadAsWritten() {
         Map<String, Object> arguments = new LinkedHashMap<>();

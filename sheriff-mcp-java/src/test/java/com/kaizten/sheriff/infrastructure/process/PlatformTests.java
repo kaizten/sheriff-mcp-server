@@ -120,6 +120,34 @@ class PlatformTests {
     }
 
     @Test
+    @DisplayName("on Windows an argument with a double quote is quoted for the program's command line, backslashes "
+            + "before a quote doubled, so wsl.exe and docker read it whole")
+    void anArgumentWithAQuoteIsQuotedOnWindows() {
+        assertEquals("\"echo \\\"a b\\\"\"", Platform.quotedArgument("echo \"a b\""));
+        assertEquals("\"x\\\\\\\"y\"", Platform.quotedArgument("x\\\"y"), "a backslash before a quote is doubled");
+        assertEquals("\"\\\"q\\\" end\\\\\"", Platform.quotedArgument("\"q\" end\\"), "and before the closing one");
+        assertEquals("C:\\a b\\c", Platform.quotedArgument("C:\\a b\\c"), "with no quote Java quotes it itself");
+        List<String> mount = List.of("wsl.exe", "-e", "docker", "run", "--mount",
+                "type=bind,\"source=/mnt/c/par,ent/app\",target=/data/app", "img");
+        assertEquals(List.of("wsl.exe", "-e", "docker", "run", "--mount",
+                "\"type=bind,\\\"source=/mnt/c/par,ent/app\\\",target=/data/app\"", "img"),
+                Platform.quotedForCommandLine(mount, true));
+    }
+
+    @Test
+    @DisplayName("cmd.exe, a .cmd or a .bat, and every program off Windows, get their arguments as they are")
+    void cmdAndOtherPlatformsAreLeftAlone() {
+        List<String> tests = List.of("cmd.exe", "/c", "cd \"app\" && .\\mvnw.cmd -q test");
+        assertEquals(tests, Platform.quotedForCommandLine(tests, true));
+        List<String> full = List.of("C:\\Windows\\System32\\CMD.EXE", "/c", "echo \"x\"");
+        assertEquals(full, Platform.quotedForCommandLine(full, true));
+        List<String> shim = List.of("C:\\Users\\a\\.local\\bin\\docker.cmd", "run", "\"x\"");
+        assertEquals(shim, Platform.quotedForCommandLine(shim, true));
+        List<String> sh = List.of("sh", "-c", "echo \"x\"");
+        assertEquals(sh, Platform.quotedForCommandLine(sh, false));
+    }
+
+    @Test
     @DisplayName("Docker goes through WSL only on Windows with SHERIFF_DOCKER=wsl, never on Linux")
     void dockerThroughWslOnlyOnWindows() {
         assertTrue(Platform.dockerThroughWsl(true, Map.of("SHERIFF_DOCKER", "wsl")));
