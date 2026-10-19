@@ -348,7 +348,7 @@ and Maven knows where it is.
 <plugin>
   <groupId>com.kaizten</groupId>
   <artifactId>sheriff-maven-plugin</artifactId>
-  <version>0.1.2</version>
+  <version>0.1.3</version>
   <executions><execution><goals><goal>check</goal></goals></execution></executions>
 </plugin>
 ```
