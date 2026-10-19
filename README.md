@@ -675,10 +675,3 @@ Most of the defensive code here exists for one of these. From Sheriff's side:
 5. State files in a configurable path, not the root of the mount.
 6. Jar fixers that run: both in the image of 21 September are broken.
 7. `FilenamePascalCase` exempting `package-info.java` and `module-info.java`.
-8. Descriptions of one line, with no tool's output pasted into them: a
-   `pom.xml` Maven cannot read gets its whole log as one finding's text.
-9. The same answer for the same code: whether a dependency is outdated is
-   asked of the network, so a release elsewhere turns a build red.
-10. `pom.xml` rules that judge what the file declares, not what an imported
-    BOM brings in: Jackson's BOM draws four `jackson-module-scala_*`
-    findings no project can fix.
