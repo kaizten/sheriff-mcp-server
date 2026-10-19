@@ -663,15 +663,3 @@ nothing.
 ```bash
 git tag v0.1.1 && git push origin v0.1.1     # after the version in the poms says 0.1.1
 ```
-
-## What Sheriff could change
-
-Most of the defensive code here exists for one of these. From Sheriff's side:
-
-1. JSON only on stdout: no header, no `COMMAND:` traces, no usage banner.
-2. Exit codes that mean something (`test` always exits 0, `fix` always 1).
-3. Telling "nothing was analyzed" apart from "0 errors".
-4. A rule export with reference code, fixer and message, for every profile.
-5. State files in a configurable path, not the root of the mount.
-6. Jar fixers that run: both in the image of 21 September are broken.
-7. `FilenamePascalCase` exempting `package-info.java` and `module-info.java`.

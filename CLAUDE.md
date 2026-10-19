@@ -45,6 +45,14 @@ copied from a real run. It must build with only the TeX packages
 `release.yml` installs on Ubuntu (not `pifont`); `playbook.yml` checks that
 on the pull request.
 
+The fourth reader is Sheriff's own team, who can change anything in the
+image: `docs/sheriff/`, in Spanish, one request per document (what happens,
+how to reproduce it with Sheriff's CLI alone, what we ask, what we do
+meanwhile, what goes away here if it is done), listed in `index.md`. A new
+defence against something Sheriff does gets its request there, measured,
+with the image it was measured on; when Sheriff fixes one, the defence and
+the document go in the same change.
+
 **Docker and the `kaizten/sheriff` image are required** for anything that
 actually analyzes. The test suites are not: none of the tests needs Docker.
 
@@ -254,8 +262,10 @@ Windows it has to be tried with real assistants, which CI does not have.
   `tmpfs`: Sheriff neither reads nor repairs them, and nothing on the disk
   changes. It goes by the build file, not by name alone, since a `build/` may
   be a project's own source. `scripts/e2e.sh` scenario 20 checks it.
-- **`test` always exits 0**, however many errors it found, and **`fix` always
-  exits 1**, whatever happened. Decide what happened from the output, or by
+- **`test` exits 0 however many errors it found**, and with a profile it does
+  not know; only a component that does not exist exits 1. `fix` used to exit
+  1 whatever happened; with the image of 19 October it exits 0 when it runs
+  and 1 when it cannot start. Decide what happened from the output, or by
   analyzing again.
 - **A fixer that cannot run looks like one that changed nothing**, and one
   that lies looks like one that worked. Two defences, both needed:
@@ -352,7 +362,7 @@ the profiles; whole families share one leaf, so the tree alone leaves codes
 attached to no profile, which is why `CatalogBuilder` merges it with the
 bytecode. If Sheriff ever exports those fields, the extractor, the bytecode
 reading, the freshness check and the provisioning all go away. Push for the
-export rather than for a better extractor.
+export rather than for a better extractor (`docs/sheriff/04`).
 
 There is one copy, in `sheriff-mcp-java/`; the Maven plugin's is
 **generated at build time** from it. **No tool depends on anyone running the
