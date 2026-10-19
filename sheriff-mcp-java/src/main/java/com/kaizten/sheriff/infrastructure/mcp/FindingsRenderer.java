@@ -276,10 +276,10 @@ public final class FindingsRenderer {
             Optional<SheriffRule> rule = ruleFor(finding);
             String identifier = identifierOf(finding);
             String suffix = finding.referenceCode().isEmpty() ? RECOVERED_SUFFIX : EMPTY;
-            lines.add(String.format(FINDING_LINE, finding.description(), identifier, suffix,
+            lines.add(String.format(FINDING_LINE, SheriffFinding.brief(finding.description()), identifier, suffix,
                     markerFor(rule, fixToolName, failedFixers)));
             if (!finding.howToSolve().isEmpty() && explained.add(identifier)) {
-                lines.add(String.format(HOW_LINE, finding.howToSolve()));
+                lines.add(String.format(HOW_LINE, SheriffFinding.brief(finding.howToSolve())));
             }
         }
     }

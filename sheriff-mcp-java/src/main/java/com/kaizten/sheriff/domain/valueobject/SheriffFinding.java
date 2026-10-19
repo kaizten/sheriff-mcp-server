@@ -40,7 +40,18 @@ public record SheriffFinding(
      */
     public static final String WARNING = "WARNING";
 
+    /**
+     * The longest a text is kept by {@link #brief(String)}: twice Sheriff's
+     * longest one-line description, so only an output pasted into one is
+     * cut.
+     */
+    public static final int BRIEF_LENGTH = 300;
+
     private static final String DESCRIBE_FORMAT = "%s: %s%n  -> %s";
+    private static final String LINE_BREAK = "\\s*\\R\\s*";
+    private static final String SPACE = " ";
+    private static final String CUT = "...";
+    private static final int START = 0;
     private static final String ERROR_FILE_NOT_DEFINED = "File is not defined";
     private static final String ERROR_DESCRIPTION_NOT_DEFINED = "Description is not defined";
     private static final String ERROR_HOW_TO_SOLVE_NOT_DEFINED = "How to solve is not defined";
@@ -91,6 +102,23 @@ public record SheriffFinding(
      */
     public boolean isWarning() {
         return WARNING.equals(type);
+    }
+
+    /**
+     * A text of Sheriff's on one line, and cut at {@link #BRIEF_LENGTH}, for
+     * a list that gives one line to each finding. Sheriff quotes code in a
+     * description, line breaks included, and the image of 19 October pastes
+     * Maven's whole output, twenty-odd lines, into the description of a
+     * {@code pom.xml} it cannot build: a hook's message of five findings grew
+     * from 14 lines to 34.
+     *
+     * @param text a description or a how-to-solve
+     * @return it, with every line break and the spaces around it one space,
+     *     and cut with {@code ...} when it is longer than the limit
+     */
+    public static String brief(String text) {
+        String single = text.strip().replaceAll(LINE_BREAK, SPACE);
+        return single.length() <= BRIEF_LENGTH ? single : single.substring(START, BRIEF_LENGTH).stripTrailing() + CUT;
     }
 
     /**
