@@ -108,6 +108,20 @@ class VerdictCacheTests {
     }
 
     @Test
+    @DisplayName("an error with Maven's whole output in its description takes one line of the message, not twenty")
+    void samplesAPastedOutputOnOneLine() {
+        String pasted = "Cannot complete Maven dependency/version checks for '/data/app/pom.xml': Maven POM checks "
+                + "failed: [INFO] Scanning for projects..." + "\n[ERROR] 'groupId' is missing. @ line 1, column 11".repeat(20);
+        String quoted = "Braces are not used in if statement 'if (a > 1)\n    return a;' (lines 6-6).";
+        AnalysisResult result = AnalysisResult.of(List.of(
+                new SheriffFinding("app/pom.xml", pasted, "", "", "ERROR", Map.of()),
+                new SheriffFinding("app/src/A.java", quoted, "", "JavaBraces", "ERROR", Map.of())));
+        String sample = VerdictCache.sampleOf(result);
+        assertEquals(2, sample.lines().count(), sample);
+        assertTrue(sample.contains("'if (a > 1) return a;' (lines 6-6)."), sample);
+    }
+
+    @Test
     @DisplayName("past its lifetime a verdict is measured again")
     void expires() {
         String fingerprint = VerdictCache.fingerprintOf(app);

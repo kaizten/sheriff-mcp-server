@@ -143,6 +143,30 @@ class SheriffFindingTests {
     }
 
     /**
+     * A description that quotes code over two lines reads on one, whole.
+     */
+    @Test
+    void shouldPutAQuotedStatementOnOneLine() {
+        final String quoted = "Braces are not used in if statement 'if (a > 100)\n    return a;' (lines 6-6).";
+        assertEquals("Braces are not used in if statement 'if (a > 100) return a;' (lines 6-6).",
+                SheriffFinding.brief(quoted));
+    }
+
+    /**
+     * A description with a build's whole output pasted into it is cut.
+     */
+    @Test
+    void shouldCutAPastedOutput() {
+        final String pasted = "Cannot complete Maven dependency/version checks: Maven POM checks failed:"
+                + "\n[ERROR] 'modelVersion' is missing. @ line 1, column 11".repeat(20);
+        final String brief = SheriffFinding.brief(pasted);
+        assertTrue(brief.startsWith("Cannot complete Maven dependency/version checks: Maven POM checks failed: [ERROR]"));
+        assertTrue(brief.endsWith("..."));
+        assertTrue(brief.length() <= SheriffFinding.BRIEF_LENGTH + "...".length());
+        assertTrue(brief.lines().count() == 1);
+    }
+
+    /**
      * A value that breaks a domain rule is refused at construction.
      */
     @Test
