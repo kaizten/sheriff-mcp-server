@@ -117,6 +117,24 @@ record ToolContext(McpConfig config, SheriffRunner runner, RuleCatalog catalog, 
     }
 
     /**
+     * The step once a component is clean and its tests pass: a test for each
+     * new method no changed test calls, else done. Tests that pass say
+     * nothing of a method none of them calls, so a {@code sheriff_fix} with
+     * {@code verify} answered done with one left (measured 19 October),
+     * which only the Stop hook then caught.
+     *
+     * @param component the component
+     * @param profile the profile the caller asked for, or empty
+     * @return the step, as the answer's last line
+     */
+    String passingTestsStep(String component, String profile) {
+        List<String> missing = untested.in(config.repository(), component);
+        return missing.isEmpty()
+                ? NextStep.afterPassingTests()
+                : NextStep.afterUntested(missing, testCommand(component), testCall(component, profile));
+    }
+
+    /**
      * The call to the repair tool for a component, as a step names it.
      *
      * @param component the component

@@ -70,6 +70,13 @@ public final class Platform {
     private static final int SOURCE_DRIVE_GROUP = 2;
     private static final int SOURCE_REST_GROUP = 3;
     private static final int SECOND = 1;
+    private static final char QUOTE = '"';
+    private static final int NO_BACKSLASHES = 0;
+    private static final int TWICE = 2;
+    private static final String WINDOWS_COMMAND_INTERPRETER = "cmd";
+    private static final String COMMAND_SCRIPT_EXTENSION = ".cmd";
+    private static final String BATCH_SCRIPT_EXTENSION = ".bat";
+    private static final String EXECUTABLE_EXTENSION = ".exe";
     private static final String ERROR_UTILITY_CLASS = "This is a utility class and cannot be instantiated.";
 
     /**
@@ -283,6 +290,80 @@ public final class Platform {
         return matcher.replaceAll(found -> Matcher.quoteReplacement(found.group(SOURCE_PREFIX_GROUP)
                 + WSL_MOUNT_ROOT + found.group(SOURCE_DRIVE_GROUP).toLowerCase(Locale.ROOT) + ROOT
                 + found.group(SOURCE_REST_GROUP).replace(BACKSLASH, SLASH)));
+    }
+
+    /**
+     * The command with every argument that holds a double quote quoted for
+     * the command line Windows hands a program, so that the program reads
+     * the argument it was given. On Windows a process gets one line, not a
+     * list, and Java quotes an argument only when it holds a space, leaving
+     * a double quote inside it as it is: {@code wsl.exe} and {@code docker}
+     * then ended the argument at that quote. Sheriff's catalog was never
+     * extracted on Windows, the script reaching {@code sh -c} cut after its
+     * first quote, and a project under a folder with a comma was never
+     * analyzed, its mount's quotes dropped (both measured 19 October).
+     *
+     * <p>{@code cmd.exe} is left alone, as it reads its line by rules of its
+     * own and the test command it runs already quotes for them, and so are
+     * {@code .cmd} and {@code .bat} scripts, which Java refuses an argument
+     * with a quote inside.
+     *
+     * @param command the command, its executable first
+     * @param windows whether the platform is Windows
+     * @return the command, unchanged off Windows or with no double quote
+     */
+    public static List<String> quotedForCommandLine(List<String> command, boolean windows) {
+        if (!windows || command.isEmpty() || readsItsOwnCommandLine(command.get(FIRST))) {
+            return command;
+        }
+        List<String> quoted = new ArrayList<>(List.of(command.get(FIRST)));
+        command.stream().skip(SECOND).map(Platform::quotedArgument).forEach(quoted::add);
+        return quoted;
+    }
+
+    /**
+     * Whether an executable reads its command line other than as Windows
+     * programs written in C do: {@code cmd.exe}, and the scripts it runs.
+     *
+     * @param executable the executable, as the command names it
+     * @return {@code true} for {@code cmd}, {@code cmd.exe}, a {@code .cmd} or a {@code .bat}
+     */
+    private static boolean readsItsOwnCommandLine(String executable) {
+        String slashed = executable.replace(BACKSLASH, SLASH);
+        String name = slashed.substring(slashed.lastIndexOf(SLASH) + SECOND).toLowerCase(Locale.ROOT);
+        return name.equals(WINDOWS_COMMAND_INTERPRETER) || name.equals(WINDOWS_COMMAND_INTERPRETER + EXECUTABLE_EXTENSION)
+                || name.endsWith(COMMAND_SCRIPT_EXTENSION) || name.endsWith(BATCH_SCRIPT_EXTENSION);
+    }
+
+    /**
+     * One argument as a Windows program reads it back: in double quotes, a
+     * quote inside it as {@code \"}, and the backslashes before a quote, or
+     * before the closing one, doubled. Java passes an argument that starts
+     * and ends with a quote as it is.
+     *
+     * @param argument the argument
+     * @return it, quoted, or unchanged when it holds no double quote
+     */
+    static String quotedArgument(String argument) {
+        if (argument.indexOf(QUOTE) < FIRST) {
+            return argument;
+        }
+        StringBuilder quoted = new StringBuilder().append(QUOTE);
+        int backslashes = NO_BACKSLASHES;
+        for (char character : argument.toCharArray()) {
+            if (character == BACKSLASH) {
+                backslashes++;
+                continue;
+            }
+            if (character == QUOTE) {
+                quoted.append(String.valueOf(BACKSLASH).repeat(backslashes * TWICE + SECOND));
+            } else {
+                quoted.append(String.valueOf(BACKSLASH).repeat(backslashes));
+            }
+            quoted.append(character);
+            backslashes = NO_BACKSLASHES;
+        }
+        return quoted.append(String.valueOf(BACKSLASH).repeat(backslashes * TWICE)).append(QUOTE).toString();
     }
 
     /**

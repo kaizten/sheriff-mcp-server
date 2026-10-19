@@ -454,7 +454,8 @@ name, which models copy.
 **A clean component is not finished while a method the change added has no
 test** (`UntestedMethods`): a non-private method with a body in `src/main`
 that the last commit does not have must be called from a test file that
-changed too. The MCP's clean step names them, and the Stop hook blocks on
+changed too. The MCP's clean step names them, after `sheriff_fix` with
+`verify` too, as passing tests say nothing of a method none calls, and the Stop hook blocks on
 them before the tests. It reads Java declarations by pattern, compares with
 `git show HEAD:`, and with no repository checks nothing. `scripts/e2e.sh`
 scenario 19 runs it.
@@ -538,6 +539,13 @@ as npm's `claude.cmd` found on the `PATH`. The end-to-end job stays on Linux.
   which would expand a `$` in a path. A `docker` of the user's own on the
   PATH that forwards to WSL hides every problem here, so measure with it off
   the PATH.
+- **A program gets one command line, not a list**, and Java leaves a `"`
+  inside an argument for the program to end the argument at. So
+  `SystemProcessRunner` quotes every argument holding one by the rules C
+  programs read (`Platform.quotedForCommandLine`), except for `cmd.exe` and
+  `.cmd`/`.bat`, which read their own way. Without it the extractor's
+  `sh -c` scripts reached the container cut, so no catalog was ever
+  extracted on Windows, and a mount with a comma lost its quotes.
 - **Every shell is a different one.** The server and the hooks run commands
   through `cmd.exe`, Claude Code runs its Bash tool in Git Bash, Codex runs
   PowerShell (5.1 for hooks). A command a model is told to run
