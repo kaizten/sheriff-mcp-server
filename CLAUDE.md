@@ -499,8 +499,9 @@ user each one and why it cannot be fixed (`NextStep.afterExhausted`). When the
 Stop hook's stops with nothing changed run out, the errors still there are
 left for the end at once. A component whose only errors are left for the end
 does not block an edit at the gate nor send a turn back: a checker's false
-positive (the Jackson ones in this repository's `pom.xml`) held up every new
-file and every turn. A verdict that stopped at the first error knows only one,
+positive (the names Jackson's imported BOM brought into this repository's
+`pom.xml`, until the image of 20 October) held up every new file and every
+turn. A verdict that stopped at the first error knows only one,
 so it never counts as only deferred.
 
 **A clean component is not finished while a method the change added has no
@@ -674,11 +675,9 @@ the image as profiles. When writing code here:
 
 - **Both modules must stay green under `JAVA`.** Check before finishing, and
   prefer the plugin's own goal for the plugin. Since the image of 19
-  October, `JAVA` checks `pom.xml` too, and six findings stay, each a
-  false positive of the checker: `jackson-module-scala_2.11`, `_2.12`,
-  `_2.13` and `_3` "must not contain underscores", names of Jackson's that
-  its imported BOM brings in; and `maven-core` and `maven-plugin-api`
-  "outdated", whose version is the Maven the plugin requires, as
+  October, `JAVA` checks `pom.xml` too, and two findings stay on the
+  plugin, each a false positive of the checker: `maven-core` and
+  `maven-plugin-api` "outdated", whose version is the Maven the plugin requires, as
   maven-plugin-plugin writes it into the descriptor (3.10.0 refused Maven
   3.9). Its outdated-dependency rule asks the network, so a new release
   anywhere can turn a module red with no change here. **That rule has a
