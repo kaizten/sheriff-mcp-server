@@ -46,6 +46,13 @@ import java.util.stream.Collectors;
  * change anything, and sending it back would only loop. A session the payload does not name is
  * still blocked once, since there is nothing to count it by.
  *
+ * <p>Errors left for the end ({@link StuckErrors}) do not hold a turn: when the
+ * stops with nothing changed run out, the errors still there are left for the
+ * end, and from then on a component whose only errors are those is let
+ * through, here and at the gate, so a false positive of the checker no longer
+ * sends every later turn back. The MCP's answers still put them before the
+ * user at the end.
+ *
  * <p>Only what the turn changed is checked. The turn hook ({@link #startTurn})
  * records the fingerprint of every component git already reported when the
  * prompt arrived, and a component still the same at the stop is left alone,
@@ -96,6 +103,8 @@ public final class SheriffStopHook {
             %s
             """;
     private static final String COMPONENT_REPORT = "%s: %s error(s)%n%s";
+    private static final String DEFERRED = "%s: its %s error(s) are left for the end, as they stayed through the "
+            + "work done for them -- not holding the turn for them.%n";
     private static final String UNTESTED_BLOCKED = """
             Not done: methods this turn added have no test that calls them, so nothing checks they work.
 
@@ -136,6 +145,7 @@ public final class SheriffStopHook {
     private UntestedMethods untested;
     private Function<String, CoverageVerdict> coverage;
     private int maxStalls = DEFAULT_MAX_STALLS;
+    private final Map<String, GateVerdict> dirtyVerdicts = new LinkedHashMap<>();
     private String reason = "";
     private final ObjectMapper json = new ObjectMapper();
 
@@ -289,6 +299,7 @@ public final class SheriffStopHook {
         int exit = check(session);
         boolean stalledNow = exit == HookExit.BLOCK && again && sources.equals(blocks.lastSources(session));
         if (stalledNow && blocks.stalls(session) >= maxStalls) {
+            dirtyVerdicts.forEach(gate::stalledOn);
             System.err.printf(NO_PROGRESS, blocks.stalls(session) + BLOCK_ONCE);
             exit = HookExit.ALLOW;
         }
@@ -325,7 +336,13 @@ public final class SheriffStopHook {
         String first = NO_COMPONENT;
         for (String component : touched) {
             GateVerdict verdict = gate.verdictFor(component);
-            if (verdict.known() && !verdict.clean()) {
+            if (!verdict.known() || verdict.clean()) {
+                continue;
+            }
+            if (gate.onlyDeferred(component, verdict)) {
+                System.err.printf(DEFERRED, component, gate.countOf(verdict));
+            } else {
+                dirtyVerdicts.put(component, verdict);
                 dirty.add(String.format(COMPONENT_REPORT, component, gate.countOf(verdict), verdict.sample()));
                 first = first.isEmpty() ? component : first;
             }

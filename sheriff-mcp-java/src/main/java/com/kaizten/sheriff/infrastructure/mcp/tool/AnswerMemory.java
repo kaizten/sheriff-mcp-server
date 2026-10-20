@@ -3,6 +3,7 @@ package com.kaizten.sheriff.infrastructure.mcp.tool;
 import com.kaizten.sheriff.domain.valueobject.SheriffFinding;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -20,6 +21,7 @@ final class AnswerMemory {
     private static final String LINE_SEPARATOR = "\n";
 
     private final Map<String, String> listed = new ConcurrentHashMap<>();
+    private final Map<String, Set<String>> shown = new ConcurrentHashMap<>();
 
     /**
      * Records the errors listed for a component, and says whether they are
@@ -35,5 +37,27 @@ final class AnswerMemory {
                         + error.description())
                 .sorted().toList());
         return signature.equals(listed.put(component, signature));
+    }
+
+    /**
+     * The errors the last answer for a component listed one by one, as
+     * {@link com.kaizten.sheriff.infrastructure.hook.StuckErrors#key} knows
+     * them: the ones the model was asked to fix.
+     *
+     * @param component the component
+     * @return their keys, none before the first answer
+     */
+    Set<String> lastShown(String component) {
+        return shown.getOrDefault(component, Set.of());
+    }
+
+    /**
+     * Records the errors an answer listed one by one.
+     *
+     * @param component the component
+     * @param keys their keys
+     */
+    void shown(String component, Set<String> keys) {
+        shown.put(component, Set.copyOf(keys));
     }
 }

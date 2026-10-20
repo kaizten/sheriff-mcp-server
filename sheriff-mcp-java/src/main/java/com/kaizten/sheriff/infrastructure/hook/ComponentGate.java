@@ -86,6 +86,7 @@ public final class ComponentGate {
     private final Configuration configuration;
     private final Composition composition;
     private final VerdictCache verdicts;
+    private StuckErrors stuck = new StuckErrors();
 
     /**
      * Wires the gate to the user's own record of verdicts, the one the MCP's
@@ -198,6 +199,40 @@ public final class ComponentGate {
      */
     public Path mount() {
         return configuration.targetRepository();
+    }
+
+    /**
+     * The same gate, with a chosen record of the errors left for the end.
+     *
+     * @param record that record
+     * @return this gate
+     */
+    public ComponentGate withStuckErrors(StuckErrors record) {
+        this.stuck = record;
+        return this;
+    }
+
+    /**
+     * Whether all a verdict found is errors left for the end: nothing to hold
+     * new work up for.
+     *
+     * @param component the component the verdict is of
+     * @param verdict the verdict
+     * @return {@code true} when every error it knows is left for the end
+     */
+    public boolean onlyDeferred(String component, GateVerdict verdict) {
+        return verdict.onlyAmong(stuck.deferred(mount().resolve(component)));
+    }
+
+    /**
+     * Leaves for the end every error a verdict found: a stop with nothing
+     * changed since the last one said the work on them is over.
+     *
+     * @param component the component the verdict is of
+     * @param verdict the verdict
+     */
+    public void stalledOn(String component, GateVerdict verdict) {
+        stuck.stalled(mount().resolve(component), verdict.keys());
     }
 
     /**

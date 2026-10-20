@@ -482,6 +482,21 @@ component that is a path inside one is refused before Sheriff runs
 (`ToolContext.componentArgument`), and its description gives no example
 name, which models copy.
 
+**An error that stays through the work on it is left for the end, not
+skipped** (`StuckErrors`, a record per component in the user's temporary
+folder, shared by the answers and the hooks). An error is known by its file,
+rule and message, not its line. Each answer of `sheriff_fix` that it stays
+through after being listed is an attempt; at two it is listed apart, after
+the files still being worked on ("Left for the end"); when only such errors
+are left they get a last round of their own; at three the step is to tell the
+user each one and why it cannot be fixed (`NextStep.afterExhausted`). When the
+Stop hook's stops with nothing changed run out, the errors still there are
+left for the end at once. A component whose only errors are left for the end
+does not block an edit at the gate nor send a turn back: a checker's false
+positive (the Jackson ones in this repository's `pom.xml`) held up every new
+file and every turn. A verdict that stopped at the first error knows only one,
+so it never counts as only deferred.
+
 **A clean component is not finished while a method the change added has no
 test** (`UntestedMethods`): a non-private method with a body in `src/main`
 that the last commit does not have must be called from a test file that

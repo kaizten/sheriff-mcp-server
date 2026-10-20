@@ -687,6 +687,19 @@ may stay, named, with the reason.
         cinco veces seguidas, y si el asistente no consigue cambiar nada, una vez
         más y luego lo deja terminar. Los dos números son ajustes
         (\code{SHERIFF\_STOP\_MAX\_BLOCKS} y \code{\_MAX\_STALLS}).
+  \item \textbf{Un error que nada arregla se deja para el final.} El que sigue
+        ahí tras las ediciones hechas para él, como un falso positivo del
+        checker, se lista aparte mientras se arregla lo demás, tiene una
+        última ronda propia y después se te comunica con su motivo. Mientras,
+        ni bloquea el código nuevo ni devuelve el turno:
+\begin{command}[basicstyle=\ttfamily\footnotesize]{respuesta}
+What is left, 1 error(s), stayed through every repair and every edit made
+for them:
+  - app/A.java: stays  [R]
+Next step: none: the 1 error(s) above stayed through every repair and every
+edit made for them, so the work on them is over. Tell the user each one, in a
+line, and why it cannot be fixed; the rest of the component is done.
+\end{command}
   \item \textbf{Se apartan para el agente de reparación}, que ya hace sus propias
         comprobaciones.
 \end{itemize}

@@ -373,7 +373,14 @@ alone those still the same, so a question asked in a repository with earlier
 work in it is not sent back to fix code. A component the gate refused an edit
 to during the turn is checked too, though the turn changed nothing in it: a
 model whose only edit was refused ended the turn asking whether to fix the
-errors. That decision is the hooks', not the model's. A hook has already analyzed, so its message ends with the step an
+errors. That decision is the hooks', not the model's. An error that stays
+through the work done for it (two answers of `sheriff_fix` after it was
+listed, or the Stop hook's stops with nothing changed running out) is left for
+the end: the answers list it apart, after the files still being worked on,
+then give it a last round of its own, and after that tell the model to name it
+to the user with the reason it cannot be fixed. Meanwhile a component whose
+only errors are those blocks no edit and sends no turn back, so a false
+positive of the checker does not hold the rest of the work up. A hook has already analyzed, so its message ends with the step an
 analysis by the MCP ends with, worded the same: call the `sheriff_fix` tool
 with the component named, follow each answer's step until one ends "Next
 step: none, the component is done", and do not ask. Under it, the command

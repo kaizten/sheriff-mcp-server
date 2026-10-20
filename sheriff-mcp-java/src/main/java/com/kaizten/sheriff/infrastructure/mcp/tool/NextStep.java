@@ -67,6 +67,9 @@ final class NextStep {
     private static final String UNMEASURED = "%n%nHow well the tests test this change could not be measured: %s%n"
             + MARK + " none, the component is done: it meets the standards and its tests pass. Tell the user "
             + "that the coverage and mutation testing of the change could not run, and why.";
+    private static final String EXHAUSTED = "%n" + MARK + " none: the %d error(s) above stayed through every "
+            + "repair and every edit made for them, so the work on them is over. Tell the user each one, in a line, "
+            + "and why it cannot be fixed; the rest of the component is done.";
     private static final String UNTESTED_LINE = "  - ";
     private static final String NEWLINE = "\n";
     private static final String FILE_SEPARATOR = ", ";
@@ -114,6 +117,18 @@ final class NextStep {
             return String.format(THESE_FILES, String.join(FILE_SEPARATOR, files), fixCall);
         }
         return String.format(REPAIR, fixCall);
+    }
+
+    /**
+     * The step once the only errors left have stayed through every round of
+     * the work on them: to tell the user, as a checker's false positive is
+     * told, rather than another round that would change nothing.
+     *
+     * @param errors how many there are
+     * @return the step, as the answer's last line
+     */
+    static String afterExhausted(int errors) {
+        return String.format(EXHAUSTED, errors);
     }
 
     /**

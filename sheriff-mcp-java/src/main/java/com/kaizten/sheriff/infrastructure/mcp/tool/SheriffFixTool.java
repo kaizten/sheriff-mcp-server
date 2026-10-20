@@ -3,10 +3,12 @@ package com.kaizten.sheriff.infrastructure.mcp.tool;
 import com.kaizten.sheriff.domain.valueobject.SheriffFinding;
 import com.kaizten.sheriff.domain.valueobject.VerificationResult;
 import com.kaizten.sheriff.infrastructure.docker.FixerFailures;
+import com.kaizten.sheriff.infrastructure.hook.StuckErrors;
 import com.kaizten.sheriff.infrastructure.mcp.AcceptedCode;
 import com.kaizten.sheriff.infrastructure.mcp.FindingsRenderer;
 import com.kaizten.sheriff.infrastructure.mcp.FixRun;
 import com.kaizten.sheriff.infrastructure.mcp.task.Task;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -55,6 +57,13 @@ final class SheriffFixTool {
     private static final String OTHER_FILES = "%n%nLeft in the other files, for the calls after this one (%d): %s";
     private static final String COUNT = "%s %d";
     private static final String NO_FILE = "";
+    private static final String LEFT_FOR_THE_END = "%n%nLeft for the end, as they stayed through the edits made for "
+            + "them (%d): %s";
+    private static final String LAST_ROUND = "%nOnly errors that stayed through the edits made for them are left: "
+            + "this answer is their last round.";
+    private static final String EXHAUSTED = "%nWhat is left, %d error(s), stayed through every repair and every edit "
+            + "made for them:";
+    private static final String EXHAUSTED_LINE = "%n  - %s: %s  [%s]";
     private static final String TESTS_PASS_AFTER = "%nThe project's own tests still pass after the repair (%s).";
     private static final String TESTS_FAIL_AFTER =
             "%nThe project's own tests FAIL after the repair (%s). The repair is left in place for you "
@@ -159,21 +168,7 @@ final class SheriffFixTool {
             body.append(verification(component, tests, !run.before().trackedFiles().isEmpty() && changed.isEmpty()));
         }
         if (run.after().total() > NO_ERRORS) {
-            FindingsRenderer renderer = new FindingsRenderer(context.catalog().allRules());
-            Set<String> unrepaired = unrepaired(run, referenceCode);
-            List<SheriffFinding> left = run.after().errors();
-            Set<String> repairable = renderer.repairableRules(left, unrepaired);
-            if (context.answers().sameAsLastTime(component, left)) {
-                body.append(String.format(SAME_AS_LAST_TIME, left.size()));
-            }
-            List<String> files = firstFiles(left);
-            List<SheriffFinding> shown = left.stream().filter(error -> files.contains(error.file())).toList();
-            body.append(String.format(STILL_OUTSTANDING, left.size(), byFile(left).size(), shown.size(),
-                    files.size()));
-            body.append(renderer.render(shown, context.fixTool(), unrepaired));
-            body.append(AcceptedCode.forFindings(shown));
-            body.append(otherFiles(left, files));
-            body.append(NextStep.afterRepair(repairable, files, context.fixCall(component, asked)));
+            body.append(outstanding(component, asked, run, referenceCode));
         } else if (tests != null) {
             body.append(tests.ok() ? context.passingTestsStep(component, asked)
                     : NextStep.afterFailingTests(context.testCall(component, asked)));
@@ -181,6 +176,81 @@ final class SheriffFixTool {
             body.append(context.cleanStep(component, asked));
         }
         return body.toString();
+    }
+
+    /**
+     * What a repair left, and the step it calls for: the files whose errors
+     * can still be worked on first, those left for the end apart, as they
+     * stayed through the edits made for them ({@link StuckErrors}); then a last
+     * round for those alone; then, when they stay through that too, telling
+     * the user, as the checker's false positives are told.
+     *
+     * @param component the component that was repaired
+     * @param asked the profile the caller asked for, or empty
+     * @param run the repair
+     * @param referenceCode the codes asked for, comma-separated, or empty
+     * @return the list and its step, the step last
+     */
+    private String outstanding(String component, String asked, FixRun run, String referenceCode) {
+        List<SheriffFinding> left = run.after().errors();
+        Path directory = context.config().repository().resolve(component);
+        Set<String> present = StuckErrors.keys(left);
+        context.stuck().attempted(directory, context.answers().lastShown(component), present);
+        Set<String> deferred = context.stuck().deferred(directory);
+        List<SheriffFinding> workable = left.stream().filter(error -> !deferred.contains(StuckErrors.key(error)))
+                .toList();
+        StringBuilder body = new StringBuilder();
+        if (workable.isEmpty() && context.stuck().exhausted(directory).containsAll(present)) {
+            body.append(String.format(EXHAUSTED, left.size()));
+            left.forEach(error -> body.append(String.format(EXHAUSTED_LINE, error.file(),
+                    SheriffFinding.brief(error.description()), error.referenceCode())));
+            context.answers().shown(component, Set.of());
+            body.append(NextStep.afterExhausted(left.size()));
+            return body.toString();
+        }
+        List<SheriffFinding> listable = workable.isEmpty() ? left : workable;
+        FindingsRenderer renderer = new FindingsRenderer(context.catalog().allRules());
+        Set<String> unrepaired = unrepaired(run, referenceCode);
+        Set<String> repairable = renderer.repairableRules(listable, unrepaired);
+        if (context.answers().sameAsLastTime(component, listable)) {
+            body.append(String.format(SAME_AS_LAST_TIME, listable.size()));
+        }
+        if (workable.isEmpty()) {
+            body.append(String.format(LAST_ROUND));
+        }
+        List<String> files = firstFiles(listable);
+        List<SheriffFinding> shown = listable.stream().filter(error -> files.contains(error.file())).toList();
+        body.append(String.format(STILL_OUTSTANDING, left.size(), byFile(left).size(), shown.size(),
+                files.size()));
+        body.append(renderer.render(shown, context.fixTool(), unrepaired));
+        body.append(AcceptedCode.forFindings(shown));
+        body.append(otherFiles(listable, files));
+        if (!workable.isEmpty()) {
+            body.append(leftForTheEnd(left.stream().filter(error -> deferred.contains(StuckErrors.key(error)))
+                    .toList()));
+        }
+        context.answers().shown(component, StuckErrors.keys(shown));
+        body.append(NextStep.afterRepair(repairable, files, context.fixCall(component, asked)));
+        return body.toString();
+    }
+
+    /**
+     * How many errors left for the end each file holds.
+     *
+     * @param deferred the errors left for the end
+     * @return the counts, or nothing when there are none
+     */
+    static String leftForTheEnd(List<SheriffFinding> deferred) {
+        if (deferred.isEmpty()) {
+            return NO_FILE;
+        }
+        Map<String, Long> counts = byFile(deferred);
+        String prefix = FindingsRenderer.commonFolder(counts.keySet());
+        List<String> listed = counts.entrySet().stream()
+                .map(entry -> String.format(COUNT, FindingsRenderer.relative(entry.getKey(), prefix), entry.getValue()))
+                .toList();
+        String under = prefix.isEmpty() ? NO_FILE : String.format(UNDER, prefix);
+        return String.format(LEFT_FOR_THE_END, deferred.size(), String.join(FILE_SEPARATOR, listed)) + under;
     }
 
     /**

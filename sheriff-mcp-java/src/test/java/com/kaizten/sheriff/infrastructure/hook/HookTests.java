@@ -285,6 +285,17 @@ class HookTests {
         }
 
         @Test
+        @DisplayName("errors left for the end hold no new code up: an edit goes through when they are all there is")
+        void deferredErrorsDoNotBlock() {
+            ComponentGate gate = gate(ProcessOutcome.completed(0, SHERIFF_OUTPUT, ""))
+                    .withStuckErrors(new StuckErrors(repository.resolve("stuck")));
+            gate.stalledOn("app", gate.verdictFor("app"));
+            SheriffGateHook hook = new SheriffGateHook(gate);
+            assertEquals(HookExit.ALLOW, capturingStandardError(() -> hook.decide(editOf("app/src/C.java"))));
+            assertFalse(errors.contains("Blocked"), errors);
+        }
+
+        @Test
         @DisplayName("the hook already analyzed, so its step is the one an analysis gives: the repair, by name")
         void theGateEndsWithTheRepairStepAndACommandWithoutTheTools() {
             SheriffGateHook hook = new SheriffGateHook(gate(ProcessOutcome.completed(0, SHERIFF_OUTPUT, "")));
@@ -519,6 +530,11 @@ class HookTests {
             assertEquals(HookExit.BLOCK, capturingStandardError(() -> impatientFirst.decide(FRESH_STOP)));
             assertEquals(HookExit.ALLOW, capturingStandardError(() -> impatientSecond.decide(STOP_AGAIN)));
             assertTrue(errors.contains("Nothing changed in 1 stop(s) in a row"), errors);
+        }
+
+        @Test
+        @DisplayName("with more stops with nothing changed allowed, the model is held that much longer")
+        void moreStallsHoldTheModelLonger() throws IOException {
             StopBlocks patientBlocks = new StopBlocks(repository.resolve("patient-blocks"));
             List<SheriffStopHook> stops = new ArrayList<>();
             for (int stop = 0; stop < 4; stop++) {
@@ -696,6 +712,38 @@ class HookTests {
                     });
             assertEquals(HookExit.ALLOW, untested.decide("{\"stop_hook_active\":false}"));
             assertEquals(List.of(), measured, "the measure runs the tests, which are off");
+        }
+
+        @Test
+        @DisplayName("when the stops with nothing changed run out, the errors left are left for the end: the next turn "
+                + "is not sent back for them, and says so")
+        void errorsLeftOverAreLeftForTheEnd() throws IOException {
+            StuckErrors stuck = new StuckErrors(repository.resolve("stuck"));
+            StopBlocks blocks = new StopBlocks(repository.resolve("stop-blocks"));
+            List<SheriffStopHook> stops = new java.util.ArrayList<>();
+            for (int stop = 0; stop < 3; stop++) {
+                ComponentGate gate = gate(ProcessOutcome.completed(0, SHERIFF_OUTPUT, "")).withStuckErrors(stuck);
+                stops.add(new SheriffStopHook(gate, gitSeeingAppTouched(), null, blocks,
+                        new TurnStart(repository.resolve("turns")), 5));
+            }
+            assertEquals(HookExit.BLOCK, capturingStandardError(() -> stops.get(0).decide(FRESH_STOP)));
+            assertEquals(HookExit.BLOCK, capturingStandardError(() -> stops.get(1).decide(STOP_AGAIN)));
+            assertEquals(HookExit.ALLOW, capturingStandardError(() -> stops.get(2).decide(STOP_AGAIN)));
+            assertEquals(2, stuck.deferred(repository.resolve("app")).size());
+            SheriffStopHook nextTurn = new SheriffStopHook(gate(ProcessOutcome.completed(0, SHERIFF_OUTPUT, ""))
+                    .withStuckErrors(stuck), gitSeeingAppTouched(), null, blocks,
+                    new TurnStart(repository.resolve("turns")), 5);
+            assertEquals(HookExit.ALLOW, capturingStandardError(() -> nextTurn.decide(FRESH_STOP)));
+            assertTrue(errors.contains("app: its 2 error(s) are left for the end"), errors);
+        }
+
+        @Test
+        @DisplayName("a Stop hook that cannot run Sheriff lets the turn end, and holds nothing as left for the end")
+        void anUnavailableCheckHoldsNothing() throws IOException {
+            SheriffStopHook stop = new SheriffStopHook(gate(ProcessOutcome.unavailable("docker is not on the PATH"))
+                    .withStuckErrors(new StuckErrors(repository.resolve("stuck"))), gitSeeingAppTouched());
+            assertEquals(HookExit.ALLOW, capturingStandardError(() -> stop.decide(FRESH_STOP)));
+            assertFalse(errors.contains("left for the end"), errors);
         }
 
         @Test

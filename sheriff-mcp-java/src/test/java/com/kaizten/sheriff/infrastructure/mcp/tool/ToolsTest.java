@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.kaizten.sheriff.domain.enumerate.StopReason;
 import com.kaizten.sheriff.domain.valueobject.RunSummary;
+import com.kaizten.sheriff.domain.valueobject.SheriffFinding;
 import com.kaizten.sheriff.domain.valueobject.SheriffRule;
 import com.kaizten.sheriff.domain.valueobject.VerificationResult;
 import com.kaizten.sheriff.infrastructure.coverage.ChangeCoverage;
@@ -1121,6 +1122,76 @@ final class ToolsTest {
 
         String result = tools.call("sheriff_task", Map.of("id", id)).text();
         assertTrue(result.contains("via AI_BACKEND 'local'"), result);
+    }
+
+    private static String errors(String... descriptions) {
+        StringBuilder json = new StringBuilder("[");
+        for (int index = 0; index < descriptions.length; index++) {
+            String[] parts = descriptions[index].split(":", 2);
+            json.append(index == 0 ? "" : ",").append("{\"file\":\"/data/app/").append(parts[0])
+                    .append("\",\"description\":\"").append(parts[1])
+                    .append("\",\"howToSolve\":\"h\",\"referenceCode\":\"R\",\"type\":\"ERROR\"}");
+        }
+        return json.append("]").toString();
+    }
+
+    private static ProcessOutcome[] repairLeaving(String errors) {
+        return new ProcessOutcome[] {ProcessOutcome.completed(0, errors, ""), ProcessOutcome.completed(1, "fixed", ""),
+            ProcessOutcome.completed(1, "fixed", ""), ProcessOutcome.completed(0, errors, "")};
+    }
+
+    @Test
+    @DisplayName("the errors left for the end are counted per file, under the folder they share when they share one")
+    void errorsLeftForTheEndAreCounted() {
+        SheriffFinding a = new SheriffFinding("app/src/A.java", "d", "h", "R", "ERROR", Map.of());
+        SheriffFinding b = new SheriffFinding("app/src/B.java", "d", "h", "R", "ERROR", Map.of());
+        SheriffFinding pom = new SheriffFinding("pom.xml", "d", "h", "R", "ERROR", Map.of());
+        assertEquals("", SheriffFixTool.leftForTheEnd(List.of()));
+        assertEquals(String.format("%n%nLeft for the end, as they stayed through the edits made for them (3): A.java 2, "
+                + "B.java 1, under app/src/"), SheriffFixTool.leftForTheEnd(List.of(a, a, b)));
+        assertEquals(String.format("%n%nLeft for the end, as they stayed through the edits made for them (2): "
+                + "app/src/A.java 1, pom.xml 1"), SheriffFixTool.leftForTheEnd(List.of(a, pom)));
+    }
+
+    @Test
+    @DisplayName("an error that stays through the edits made for it is left for the end, gets a last round alone, and "
+            + "is then told to the user")
+    void aStuckErrorIsLeftForTheEnd() throws IOException {
+        mavenComponent("app");
+        List<ProcessOutcome> outcomes = new ArrayList<>();
+        for (String round : List.of(errors("A.java:stays", "B.java:one"), errors("A.java:stays", "B.java:one"),
+                errors("A.java:stays", "B.java:three"), errors("A.java:stays"), errors("A.java:stays"))) {
+            outcomes.addAll(List.of(repairLeaving(round)));
+        }
+        Tools tools = toolsWithTests(VerificationResult.passed(""), outcomes.toArray(ProcessOutcome[]::new));
+        Map<String, Object> call = Map.of("component", "app");
+
+        String first = tools.call("sheriff_fix", call).text();
+        String second = tools.call("sheriff_fix", call).text();
+        String third = tools.call("sheriff_fix", call).text();
+        String fourth = tools.call("sheriff_fix", call).text();
+        String fifth = tools.call("sheriff_fix", call).text();
+
+        assertTrue(first.contains("stays") && first.contains("one"), first);
+        assertFalse(first.contains("last round"), first);
+        assertFalse(second.contains("Left for the end"), second);
+        assertTrue(second.contains("These 2 errors are exactly the ones the last answer of this tool listed"), second);
+        assertFalse(third.contains("- stays"), "the stuck error is not listed among the work: " + third);
+        assertTrue(third.contains("Left for the end, as they stayed through the edits made for them (1): A.java 1"),
+                third);
+        assertTrue(third.contains("Then call the sheriff_fix tool with component 'app' again."), third);
+        assertTrue(fourth.contains(String.format("%nOnly errors that stayed through the edits made for them are left: "
+                + "this answer is their last round.")), fourth);
+        assertTrue(fourth.contains("Still outstanding: 1 error(s) in 1 file(s)."), fourth);
+        assertFalse(fourth.contains("Left for the end"), fourth);
+        assertTrue(fourth.contains("stays"), fourth);
+        assertTrue(fifth.contains("What is left, 1 error(s), stayed through every repair and every edit made for "
+                + "them:"), fifth);
+        assertTrue(fifth.contains("  - app/A.java: stays  [R]"), fifth);
+        assertTrue(fifth.endsWith("Next step: none: the 1 error(s) above stayed through every repair and every edit "
+                + "made for them, so the work on them is over. Tell the user each one, in a line, and why it cannot be "
+                + "fixed; the rest of the component is done."), fifth);
+        assertFalse(fifth.contains(" or "), "an alternative is a choice a model makes differently: " + fifth);
     }
 
     @Test

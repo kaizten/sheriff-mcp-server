@@ -6,6 +6,7 @@ import com.kaizten.sheriff.domain.valueobject.VerificationResult;
 import com.kaizten.sheriff.infrastructure.coverage.ChangeCoverage;
 import com.kaizten.sheriff.infrastructure.coverage.CoverageVerdict;
 import com.kaizten.sheriff.infrastructure.git.UntestedMethods;
+import com.kaizten.sheriff.infrastructure.hook.StuckErrors;
 import com.kaizten.sheriff.infrastructure.mcp.McpConfig;
 import com.kaizten.sheriff.infrastructure.mcp.SheriffRunner;
 import com.kaizten.sheriff.infrastructure.mcp.task.Task;
@@ -38,11 +39,12 @@ import java.util.function.Supplier;
  * @param answers the errors last listed in full, per component
  * @param untested what finds the new methods no changed test calls
  * @param coverage what measures how well the tests test a change
+ * @param stuck the errors left for the end, shared with the hooks
  * @param image which build of Sheriff's image is here, as a person reads it
  */
 record ToolContext(McpConfig config, SheriffRunner runner, RuleCatalog catalog, Supplier<Path> catalogPath,
         Function<String, VerificationResult> tests, TaskRegistry tasks, ToolCall toolCall, AnswerMemory answers,
-        UntestedMethods untested, ChangeCoverage coverage, Supplier<Optional<String>> image) {
+        UntestedMethods untested, ChangeCoverage coverage, StuckErrors stuck, Supplier<Optional<String>> image) {
 
     static final String COMPONENT_ARGUMENT = "component";
     static final String PROFILE_ARGUMENT = "profile";

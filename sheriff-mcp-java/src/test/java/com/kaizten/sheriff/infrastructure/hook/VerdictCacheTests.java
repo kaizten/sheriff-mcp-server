@@ -25,6 +25,7 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -254,5 +255,28 @@ class VerdictCacheTests {
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
         }
+    }
+
+    @Test
+    @DisplayName("a full verdict knows each error, kept and served; one that stopped at the first knows none")
+    void aFullVerdictKnowsItsErrors() {
+        String fingerprint = VerdictCache.fingerprintOf(app);
+        GateVerdict full = cache.remember(app, PROFILE, false, fingerprint, errorsIn("app/src/A.java"));
+        assertEquals(Set.of("app/src/A.java|JavaBraces|Braces are not used"), full.keys());
+        assertEquals(full.keys(), cache.recalled(app, PROFILE, false, fingerprint).orElseThrow().keys());
+        assertEquals(Set.of(), cache.remember(app, PROFILE, true, fingerprint, errorsIn("app/src/A.java")).keys());
+        assertTrue(full.onlyAmong(full.keys()));
+        assertFalse(full.onlyAmong(Set.of()));
+        assertFalse(new GateVerdict(0, "", Set.of(), Set.of("k")).onlyAmong(Set.of("k")), "a clean one has none");
+        assertFalse(new GateVerdict(1, "", Set.of(), Set.of()).onlyAmong(Set.of("k")), "one that knows none");
+    }
+
+    @Test
+    @DisplayName("a verdict built with nothing for its files and keys has none of either")
+    void nullsAreNone() {
+        GateVerdict verdict = new GateVerdict(1, null, null, null);
+        assertEquals(Set.of(), verdict.keys());
+        assertEquals(Set.of(), verdict.files());
+        assertEquals("", verdict.sample());
     }
 }

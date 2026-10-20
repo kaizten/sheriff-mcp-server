@@ -682,6 +682,19 @@ may stay, named, with the reason.
         five times in a row, and if the assistant cannot change anything, once
         more and then it lets the turn end. Both numbers are settings
         (\code{SHERIFF\_STOP\_MAX\_BLOCKS} and \code{\_MAX\_STALLS}).
+  \item \textbf{An error nothing clears is left for the end.} One that stays
+        through the edits made for it, such as a false positive of the
+        checker, is listed apart while the rest is fixed, gets a last round of
+        its own, and is then told to you with its reason. Meanwhile it neither
+        blocks new code nor sends the turn back:
+\begin{command}[basicstyle=\ttfamily\footnotesize]{answer}
+What is left, 1 error(s), stayed through every repair and every edit made
+for them:
+  - app/A.java: stays  [R]
+Next step: none: the 1 error(s) above stayed through every repair and every
+edit made for them, so the work on them is over. Tell the user each one, in a
+line, and why it cannot be fixed; the rest of the component is done.
+\end{command}
   \item \textbf{They stand aside for the repair agent}, which runs its own
         checks.
 \end{itemize}

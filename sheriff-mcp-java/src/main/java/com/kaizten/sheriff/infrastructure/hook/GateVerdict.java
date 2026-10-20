@@ -13,8 +13,11 @@ import java.util.Set;
  * @param sample a few of them, for the message
  * @param files the files that have them, relative to the mount and written
  *     with {@code /}, as Sheriff names them
+ * @param keys every error, as {@link StuckErrors#key} knows it; empty when
+ *     the analysis stopped at the first error, or the verdict was recorded
+ *     before it said
  */
-public record GateVerdict(int errors, String sample, Set<String> files) {
+public record GateVerdict(int errors, String sample, Set<String> files, Set<String> keys) {
 
     private static final int UNKNOWN = -1;
     private static final int NO_ERRORS = 0;
@@ -25,11 +28,23 @@ public record GateVerdict(int errors, String sample, Set<String> files) {
     public static final GateVerdict UNAVAILABLE = new GateVerdict(UNKNOWN, "");
 
     /**
-     * Normalizes a null sample and a null set of files.
+     * Normalizes a null sample, a null set of files and a null set of keys.
      */
     public GateVerdict {
         sample = sample == null ? "" : sample;
         files = files == null ? Set.of() : Set.copyOf(files);
+        keys = keys == null ? Set.of() : Set.copyOf(keys);
+    }
+
+    /**
+     * A verdict that does not say which errors it found.
+     *
+     * @param errors how many errors the component has, negative when unknown
+     * @param sample a few of them, for the message
+     * @param files the files that have them
+     */
+    public GateVerdict(int errors, String sample, Set<String> files) {
+        this(errors, sample, files, Set.of());
     }
 
     /**
@@ -60,6 +75,18 @@ public record GateVerdict(int errors, String sample, Set<String> files) {
      */
     public boolean known() {
         return errors >= NO_ERRORS;
+    }
+
+    /**
+     * Whether every error it found is one left for the end: what is left is
+     * nothing to hold new work up for.
+     *
+     * @param deferred the errors left for the end
+     * @return {@code true} when it has errors, knows each one, and each one is
+     *     left for the end
+     */
+    public boolean onlyAmong(Set<String> deferred) {
+        return errors > NO_ERRORS && !keys.isEmpty() && deferred.containsAll(keys);
     }
 
     /**

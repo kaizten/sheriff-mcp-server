@@ -5,6 +5,7 @@ import com.kaizten.sheriff.domain.valueobject.VerificationResult;
 import com.kaizten.sheriff.infrastructure.coverage.ChangeCoverage;
 import com.kaizten.sheriff.infrastructure.docker.ImageProvisioning;
 import com.kaizten.sheriff.infrastructure.git.UntestedMethods;
+import com.kaizten.sheriff.infrastructure.hook.StuckErrors;
 import com.kaizten.sheriff.infrastructure.mcp.McpConfig;
 import com.kaizten.sheriff.infrastructure.mcp.ServerVersion;
 import com.kaizten.sheriff.infrastructure.mcp.SheriffRunner;
@@ -177,7 +178,8 @@ public final class Tools implements AutoCloseable {
         this.image = image;
         this.tasks = new TaskRegistry(config.tasksDirectory(), () -> provenance(image));
         ToolContext context = new ToolContext(config, runner, catalog, catalogPath, tests, tasks, toolCall,
-                new AnswerMemory(), new UntestedMethods(new SystemProcessRunner()), coverage, image::description);
+                new AnswerMemory(), new UntestedMethods(new SystemProcessRunner()), coverage, new StuckErrors(),
+                image::description);
         Map<String, Tool> definitions = new LinkedHashMap<>();
         for (Tool tool : List.of(new SheriffTestTool(context).definition(), new SheriffFixTool(context).definition(),
                 new SheriffGuidelinesTool(context).definition(), new SheriffAutofixTool(context).definition(),
