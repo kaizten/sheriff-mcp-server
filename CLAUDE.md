@@ -416,7 +416,9 @@ their environment through it, so every setting read as a variable is a
 setting. The user's file is found only through the environment given, as the
 cache is, so a test built from a bare map reads no one's file; the server
 writes it at its defaults, every line commented out, when it starts and finds
-none. Settings a cloned project must not choose for whoever opens it
+none, and when it finds one adds at its end, the same way, the settings it
+does not name, so one a newer version brings is listed too; nothing in it is
+touched. Settings a cloned project must not choose for whoever opens it
 (`AI_BACKEND`) are read from the user's file only. Variables were the only way
 before, and Codex passes a server and its hooks almost none. `sheriff_config`
 (and `--config`) lists them with their source and changes one, checking the

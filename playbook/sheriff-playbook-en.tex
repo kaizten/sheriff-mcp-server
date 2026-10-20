@@ -871,7 +871,9 @@ Every number and choice the tools use has a default, and you can change it. The
 first time the server starts it writes your settings file,
 \code{\textasciitilde/.config/sheriff-mcp/sheriff.properties}
 (\code{\%APPDATA\%\textbackslash sheriff-mcp} on Windows), with every setting at
-its default and commented out. There are three ways to change one:
+its default and commented out. A setting a newer version brings is added at its
+end when the server next starts, the same way; what you changed stays as it is.
+There are three ways to change one:
 
 \begin{itemize}
   \item \textbf{Ask the assistant}, which calls \code{sheriff\_config}:

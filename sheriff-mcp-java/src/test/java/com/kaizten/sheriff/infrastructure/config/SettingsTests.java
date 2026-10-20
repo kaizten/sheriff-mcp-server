@@ -97,9 +97,36 @@ class SettingsTests {
         }
         assertTrue(Settings.layered(environment, project).keySet().stream().noneMatch(name -> name.startsWith(
                 "SHERIFF_STOP")), "a file at its defaults sets nothing");
+    }
+
+    @Test
+    @DisplayName("a file of the user's that lacks settings gets them at its end, at their defaults, and what it had "
+            + "stays as it was; a second start adds nothing")
+    void aUsersFileGetsTheSettingsItLacks() throws IOException {
+        user("# mine\nSHERIFF_STOP_MAX_BLOCKS=2\n# SHERIFF_IMAGE=kaizten/sheriff:latest");
+        Settings.ensureUserFile(environment);
+        String written = Files.readString(userFile());
+        assertTrue(written.startsWith("# mine\nSHERIFF_STOP_MAX_BLOCKS=2\n# SHERIFF_IMAGE=kaizten/sheriff:latest\n\n# "),
+                written);
+        assertTrue(written.contains("\n# SHERIFF_REPAIR_ROUNDS=\n"), written);
+        assertEquals(1, written.split("SHERIFF_STOP_MAX_BLOCKS=", -1).length - 1, "a line it has is not added again");
+        assertEquals(1, written.split("SHERIFF_IMAGE=", -1).length - 1, "nor one it has commented out");
+        assertEquals("2", Settings.layered(environment, project).get("SHERIFF_STOP_MAX_BLOCKS"));
+        Settings.ensureUserFile(environment);
+        assertEquals(written, Files.readString(userFile()));
+    }
+
+    @Test
+    @DisplayName("a file that ends its last line gets the settings it lacks after it, with no line left empty twice; "
+            + "one that cannot be read is left alone")
+    void theSettingsALineEndedFileLacksFollowIt() throws IOException {
         user("SHERIFF_STOP_MAX_BLOCKS=2\n");
         Settings.ensureUserFile(environment);
-        assertEquals("SHERIFF_STOP_MAX_BLOCKS=2\n", Files.readString(userFile()));
+        assertTrue(Files.readString(userFile()).startsWith("SHERIFF_STOP_MAX_BLOCKS=2\n\n# "));
+        Files.delete(userFile());
+        Files.createDirectories(userFile());
+        Settings.ensureUserFile(environment);
+        assertTrue(Files.isDirectory(userFile()));
     }
 
     @Test

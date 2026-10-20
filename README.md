@@ -573,7 +573,9 @@ one's profile and the test command from the project it is started in.
 assistant.** The first time the server starts it writes
 `~/.config/sheriff-mcp/sheriff.properties` (`$XDG_CONFIG_HOME/sheriff-mcp/`,
 or `%APPDATA%\sheriff-mcp\` on Windows), every setting in it at its default
-and commented out: take the `#` off a line and change its value. A project's
+and commented out: take the `#` off a line and change its value. A setting a
+newer version brings is added at the end of the file when the server next
+starts, commented out the same way; nothing already in it is touched. A project's
 `.sheriff.properties` can set the same names for everyone who opens it (all
 but `AI_BACKEND` and `SHERIFF_AGENT_CLAUDE_TIMEOUT`, which a cloned project
 must not choose), and an environment variable of the same name wins over both

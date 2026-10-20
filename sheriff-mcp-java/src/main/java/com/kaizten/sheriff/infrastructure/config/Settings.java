@@ -270,19 +270,29 @@ public final class Settings {
 
     /**
      * Writes the user's file at its defaults, every setting commented out,
-     * when there is none yet. Best effort: a file that cannot be written
-     * leaves every setting at its default.
+     * when there is none yet; when there is one, adds at its end, the same
+     * way, every setting it does not name, so a setting a newer version
+     * brings is listed too. Nothing already there is touched. Best effort: a
+     * file that cannot be written leaves every setting at its default.
      *
      * @param environment the environment to find the file through
      */
     public static void ensureUserFile(Map<String, String> environment) {
         Optional<Path> file = userFile(environment);
-        if (file.isEmpty() || Files.exists(file.get())) {
+        if (file.isEmpty()) {
             return;
         }
         try {
-            Files.createDirectories(file.get().getParent());
-            Files.writeString(file.get(), template());
+            if (!Files.exists(file.get())) {
+                Files.createDirectories(file.get().getParent());
+                Files.writeString(file.get(), template());
+                return;
+            }
+            String text = Files.readString(file.get());
+            List<Setting> missing = ALL.stream().filter(setting -> !lineOf(setting).matcher(text).find()).toList();
+            if (!missing.isEmpty()) {
+                Files.writeString(file.get(), text + (text.endsWith(NEWLINE) ? NOTHING : NEWLINE) + entries(missing));
+            }
         } catch (IOException exception) {
             return;
         }
@@ -295,13 +305,34 @@ public final class Settings {
      * @return that text
      */
     static String template() {
-        StringBuilder text = new StringBuilder(TEMPLATE_HEADER);
-        for (Setting setting : ALL) {
+        return TEMPLATE_HEADER + entries(ALL);
+    }
+
+    /**
+     * Settings as the user's file lists them: each one's help, then its line
+     * at its default, commented out, a blank line before each.
+     *
+     * @param settings the settings
+     * @return those lines
+     */
+    private static String entries(List<Setting> settings) {
+        StringBuilder text = new StringBuilder();
+        for (Setting setting : settings) {
             text.append(NEWLINE).append(COMMENT).append(setting.help()).append(NEWLINE)
                     .append(COMMENT).append(setting.name()).append(ASSIGNMENT).append(setting.defaultValue())
                     .append(NEWLINE);
         }
         return text.toString();
+    }
+
+    /**
+     * What finds a setting's line in a file, commented out or not.
+     *
+     * @param setting the setting
+     * @return that pattern
+     */
+    private static Pattern lineOf(Setting setting) {
+        return Pattern.compile(LINE_START + setting.name() + LINE_END);
     }
 
     /**
@@ -318,7 +349,7 @@ public final class Settings {
         String text = Files.isRegularFile(file) ? Files.readString(file) : NOTHING;
         String line = value.isEmpty() ? COMMENT + setting.name() + ASSIGNMENT + setting.defaultValue()
                 : setting.name() + ASSIGNMENT + value;
-        Pattern existing = Pattern.compile(LINE_START + setting.name() + LINE_END);
+        Pattern existing = lineOf(setting);
         String written;
         if (existing.matcher(text).find()) {
             written = existing.matcher(text).replaceFirst(Matcher.quoteReplacement(line));
