@@ -448,7 +448,7 @@ how many different items it holds}.
         that test, edge cases included (an empty list, a \code{null}).
   \item In Java with Maven, it measures how well the tests test the lines the
         change wrote: which of them they run, which ways their conditions go
-        (each side of every \code{\&\&} and \code{||}), with JaCoCo, and which
+        (each side of every \code{&&} and \code{||}), with JaCoCo, and which
         changes PIT makes to them they notice (mutation testing: each
         condition forced true and false, a limit moved, a value returned
         replaced). Below what the project asks, the answer lists the lines,
@@ -681,7 +681,7 @@ may stay, named, with the reason.
   \item \textbf{They do not loop.} The Stop hook sends the turn back at most
         five times in a row, and if the assistant cannot change anything, once
         more and then it lets the turn end. Both numbers are settings
-        (\code{SHERIFF\_STOP\_MAX\_BLOCKS} and \code{\_MAX\_STALLS}).
+        (\code{SHERIFF_STOP_MAX_BLOCKS} and \code{_MAX_STALLS}).
   \item \textbf{An error nothing clears is left for the end.} One that stays
         through the edits made for it, such as a false positive of the
         checker, is listed apart while the rest is fixed, gets a last round of
@@ -758,7 +758,7 @@ was nothing to analyze. If the project builds with Maven, Gradle or an npm
 \code{test} script, its tests are run; if not, it is analyzed all the same and
 the tools say that no tests were run.
 
-\subsection{Declare the architecture}
+\subsection{Declare the architecture}\label{sec:profile}
 
 With nothing declared, a Java project is checked under \code{JAVA}: style and
 documentation. If it follows a hexagonal or DDD architecture, declare it once
@@ -782,7 +782,7 @@ The architecture's rules \textbf{are added} to the language's, never put in
 their place. Several can be listed, separated by commas
 (\code{JAVA_HEXAGONAL,JAVA_DDD}); each one adds one more analysis.
 
-\subsection{Declare how well the tests must test a change}
+\subsection{Declare how well the tests must test a change}\label{sec:coverage}
 
 In Java with Maven, the tests of a change must run every line it wrote, take
 every branch of its conditions and kill 80\% of PIT's mutants of those lines.
@@ -869,17 +869,17 @@ servers in different scopes.
 
 Every number and choice the tools use has a default, and you can change it. The
 first time the server starts it writes your settings file,
-\code{\textasciitilde/.config/sheriff-mcp/sheriff.properties}
-(\code{\%APPDATA\%\textbackslash sheriff-mcp} on Windows), with every setting at
+\code{~/.config/sheriff-mcp/}\allowbreak\code{sheriff.properties}
+(\texttt{\%APPDATA\%\textbackslash sheriff-mcp} on Windows), with every setting at
 its default and commented out. A setting a newer version brings is added at its
 end when the server next starts, the same way; what you changed stays as it is.
 There are three ways to change one:
 
 \begin{itemize}
-  \item \textbf{Ask the assistant}, which calls \code{sheriff\_config}:
+  \item \textbf{Ask the assistant}, which calls \code{sheriff_config}:
         \ask{pin Sheriff's image to the build I have now}, \ask{let a stop with
         nothing changed through}. It checks the value before writing it.
-  \item \textbf{Edit the file}: take the \code{\#} off a line and change its value.
+  \item \textbf{Edit the file}: take the \texttt{\#} off a line and change its value.
   \item \textbf{For the whole team}, put the same line in the project's
         \code{.sheriff.properties}; it wins over yours for that project.
 \end{itemize}
@@ -899,34 +899,157 @@ SHERIFF_STOP_MAX_STALLS is 0 in /home/you/.config/sheriff-mcp/sheriff.properties
 The tools take it when the next session starts; the hooks, from their next run.
 \end{command}
 
-\begin{center}
-\rowcolors{2}{pbcode}{white}
-\begin{tabularx}{\linewidth}{@{\hspace{6pt}}>{\ttfamily\small}p{50mm}L}
-\headrow \thead{Setting} & \thead{What for} \\
-SHERIFF\_IMAGE & Pin the image by its digest
-  (\code{kaizten/sheriff@sha256:...}), so that the rules do not change until
-  you decide. \\
-SHERIFF\_PULL & \code{always} (default) pulls a newer image at startup;
-  \code{check} only reports it; \code{never} does not ask Docker Hub. \\
-SHERIFF\_STOP\_MAX\_BLOCKS & Times in a row the Stop hook sends the turn back
-  while errors remain; 5. \\
-SHERIFF\_STOP\_MAX\_STALLS & Stops in a row with nothing changed it still sends
-  back; 1. Set 0 while a false positive of the checker is left. \\
-SHERIFF\_STOP\_RUNS\_TESTS & 1: the Stop hook requires green tests too. \\
-SHERIFF\_TIMEOUT & Seconds per analysis; 300, 900 with WSL's Docker. \\
-SHERIFF\_REPAIR\_ROUNDS & Rounds of Sheriff's own fixers in a repair; no
-  limit: they go on until one repairs nothing. \\
-SHERIFF\_COVERAGE, \_BRANCHES, \_MUTATION & What the tests of a change must
-  reach: 100, 100 and 80. \\
-SHERIFF\_TEST\_TIMEOUT, \_COVERAGE\_TIMEOUT, \_MUTATION\_TIMEOUT & Seconds for
-  the tests, JaCoCo and PIT: 600, 600 and 1800. \\
-AI\_BACKEND & Who answers in the terminal's repair loop (yours only). \\
-\end{tabularx}
-\end{center}
+A value that does not work is refused, saying what the setting takes, and
+nothing is written. A setting left empty is the same as one not set: its
+default applies. All of them are below, grouped by what they control; seconds
+and counts are whole numbers.
 
-\code{sheriff\_config} with no arguments lists all of them. Only your
-environment can set \code{SHERIFF\_DOCKER} (\code{-{}-docker-wsl} does) and
-\code{VERIFICATION\_TEST\_CMD}.
+\subsubsection*{Sheriff's image} Which build of Sheriff analyzes your code, and
+when it is updated.
+
+\setting{SHERIFF_IMAGE}{\code{kaizten/sheriff:latest}}{a Docker image, with no
+  spaces}{The image the analysis runs with. Kaizten publishes Sheriff only as
+  \code{latest}, with no versions, so every new build can bring new rules. To
+  keep the rules from changing (during a delivery, say), pin the one you have
+  by its digest, \code{kaizten/sheriff@sha256:...}: any task's \code{task.json}
+  records it, or ask the assistant. While it is pinned it is never updated.}
+
+\setting{SHERIFF_PULL}{\code{always}}{\code{always}, \code{check} or
+  \code{never}}{What happens at start when Docker Hub has a newer build of the
+  image (told by its digest, not its tag). \code{always} downloads it in the
+  background, and until it is here the one on your machine is used, which the
+  answers say. \code{check} only says a newer one is published, once a session,
+  and downloads nothing: for you to choose when. \code{never} does not even ask
+  Docker Hub: for working with no network.}
+
+\subsubsection*{The analysis} With which rules, and for how long.
+
+\setting{SHERIFF_PROFILE}{empty: the one the project declares or, with none,
+  the one its sources call for}{a Sheriff profile: \code{JAVA},
+  \code{JAVA_HEXAGONAL}, \code{JAVA_DDD}, \code{TYPESCRIPT},
+  \code{TYPESCRIPT_HEXAGONAL}, \code{VUEJS}}{The rule profile to analyze with,
+  over the project's declaration. Usually leave it alone and declare the
+  profile in the project (section~\ref{sec:profile}), which every tool reads
+  the same way. An architecture profile always runs beside its language's base
+  profile, never instead of it.}
+
+\setting{SHERIFF_TIMEOUT}{\code{300} (\code{900} through WSL's Docker)}{seconds,
+  1 or more}{How long one run of Sheriff may take before it is stopped. Raise
+  it when a large component does not finish, above all through WSL's Docker
+  with the project on \code{C:}, which is far slower.}
+
+\setting{SHERIFF_FAIL_FAST}{\code{0}}{\code{0} or \code{1}}{With \code{1} the
+  hooks stop Sheriff at the first error: they check sooner, but know only that
+  error, so they never take it as ``left for the end''. The tools and the
+  repairs always analyze everything.}
+
+\subsubsection*{Sheriff's repairs} Its own fixers, the ones that spend no
+tokens.
+
+\setting{SHERIFF_REPAIR_ROUNDS}{empty: no limit}{a number of rounds, 1 or
+  more}{How many rounds of fixers \code{sheriff_fix} runs, each measured by a
+  new analysis. With no limit they go on while the errors drop and stop at the
+  first round that repairs nothing, which they always reach. Set a limit only
+  if a repair takes too long: what is left, the assistant fixes.}
+
+\subsubsection*{The hooks} When they block, and how often they send a turn
+back.
+
+\setting{SHERIFF_GATE_TTL}{\code{900}}{seconds, 1 or more}{How long the hooks
+  reuse an analysis already made (by a tool or another hook) of the same files
+  instead of running Sheriff again. A file that changes is analyzed again
+  anyway. Raise it if the hooks feel slow; lower it for them to look again
+  sooner.}
+
+\setting{SHERIFF_STOP_MAX_BLOCKS}{\code{5}}{times, 1 or more}{How many times in
+  a row the Stop hook may send a turn back because errors remain. At that
+  number it lets the turn end, so as not to loop.}
+
+\setting{SHERIFF_STOP_MAX_STALLS}{\code{1}}{times, 0 or more}{How many stops in
+  a row with nothing changed it still sends back. When they run out, the errors
+  left are left for the end and block no more. With \code{0} that happens at the
+  first stop with nothing changed: useful when you hit a false positive of the
+  checker that nobody can fix.}
+
+\setting{SHERIFF_STOP_RUNS_TESTS}{\code{0}}{\code{0} or \code{1}}{With
+  \code{1} the turn does not end until the project's tests pass and, in Java
+  with Maven, until they test well what the turn changed (the coverage
+  thresholds below). Safer, and every end of turn takes as long as the tests.}
+
+\subsubsection*{The project's tests} How long they get.
+
+\setting{SHERIFF_TEST_TIMEOUT}{\code{600}}{seconds, 1 or more}{How long the
+  tests may take when the tools run them (\code{sheriff_fix} with
+  \code{verify}).}
+
+\setting{VERIFICATION_TIMEOUT}{\code{300}}{seconds, 1 or more}{The same in the
+  hooks and the repair loop. Raise it if your tests take more than five
+  minutes.}
+
+\subsubsection*{Coverage and mutants} What the tests of a change must reach,
+in Java with Maven (section~\ref{sec:coverage}). Only what the change wrote is
+measured, not the whole project. For one project, the \code{pom.xml} property
+(\code{sheriff.coverage}, \code{sheriff.branches}, \code{sheriff.mutation},
+\code{sheriff.mutators}) or the \code{.sheriff.properties} key
+(\code{coverage}, \code{branches}, \code{mutation}, \code{mutators}) wins over
+these settings.
+
+\setting{SHERIFF_COVERAGE}{\code{100}}{a share, 0 to 100}{How much of the lines
+  the change wrote its tests must run.}
+
+\setting{SHERIFF_BRANCHES}{\code{100}}{a share, 0 to 100}{How much of the
+  branches of those lines' conditions they must take (each side of every
+  \code{if}, \code{&&} and \code{||}). A line run says nothing of the way its
+  condition did not go.}
+
+\setting{SHERIFF_MUTATION}{\code{80}}{a share, 0 to 100}{How much of the
+  mutants of those lines the tests must catch. PIT changes the code (inverts a
+  condition, removes a call, changes a returned value) and checks whether a
+  test fails: when none does, the tests run that line but do not check what it
+  does. Below 100 because some mutants do not change the behaviour, and no test
+  can catch them.}
+
+\setting{SHERIFF_MUTATORS}{\code{STRONGER,REMOVE_CONDITIONALS,}
+  \code{EXPERIMENTAL_ARGUMENT_PROPAGATION}}{PIT mutators or groups
+  (\code{DEFAULTS}, \code{STRONGER}, \code{ALL}), in capitals, separated by
+  commas}{Which kinds of mutants are made. The default adds to PIT's usual ones
+  removing a whole condition and replacing a call by one of its arguments.
+  \code{ALL} makes many more, nearly all of them on constants no test catches
+  (on PetClinic, 497 against 204), and fails well-tested changes.}
+
+\setting{SHERIFF_COVERAGE_TIMEOUT}{\code{600}}{seconds, 1 or more}{How long the
+  tests may take with JaCoCo measuring.}
+
+\setting{SHERIFF_MUTATION_TIMEOUT}{\code{1800}}{seconds, 1 or more}{How long PIT
+  may take; it runs the tests once per mutant. Raise it if a large change does
+  not finish.}
+
+\subsubsection*{The repair loop} Only for \tool{sheriff_autofix} and
+\code{--agent}, which fix a whole component on a branch of their own.
+
+\setting{SHERIFF_MAX_ITERATIONS}{empty: worked out}{passes, 1 or more}{How many
+  passes the loop makes. With none it is sized from the errors and grows while
+  they drop, up to three times that. Set it to bound what the loop spends.}
+
+\setting{SHERIFF_MAX_FILES_PER_BATCH}{\code{5}}{files, 1 or more}{How many
+  files the model is given at once. Fewer files, more focused answers and more
+  passes.}
+
+\setting{AI_BACKEND}{\code{claude_cli}}{\code{claude_cli}, \code{codex_cli},
+  \code{antigravity_cli}, \code{anthropic_api}, \code{openai_api} or
+  \code{local}}{Who fixes the code in the loop: Claude Code, Codex or
+  Antigravity, logged in, or an API with its key (\code{ANTHROPIC_API_KEY},
+  \code{OPENAI_API_KEY}; \code{local} for Ollama or another OpenAI-compatible
+  server). Read from your file only, never a project's: a cloned repository
+  cannot choose for you.}
+
+\setting{SHERIFF_AGENT_CLAUDE_TIMEOUT}{\code{600}}{seconds, 1 or more}{How long
+  one pass of \code{claude} may take in the loop. Also from your file only.}
+
+\subsubsection*{Environment variables only} Two things go in no file:
+\code{SHERIFF_DOCKER}, which on Windows uses WSL's Docker (\code{--docker-wsl}
+sets it), and \code{VERIFICATION_TEST_CMD}, the test command, when the one
+worked out from your build tool is not the right one.
 
 % ---------------------------------------------------------------------------
 \section{Codex}
@@ -1089,8 +1212,8 @@ Docker; the server pulls the image when it starts. On Linux, if Docker is in
 fact running, most likely your user cannot use it without \code{sudo}: add
 yourself to the group with \code{sudo usermod -aG docker $USER}, log out of the
 system and back in. On Windows, if your Docker is the one installed inside
-WSL, with no Docker Desktop, run the line again with \code{-{}-docker-wsl} (\code{-DockerWsl}).}
-\problem{\code{'wsl docker info' failed}}{With \code{-{}-docker-wsl}, WSL's Docker
+WSL, with no Docker Desktop, run the line again with \code{--docker-wsl} (\code{-DockerWsl}).}
+\problem{\code{'wsl docker info' failed}}{With \code{--docker-wsl}, WSL's Docker
 engine is not running. Start it (for example,
 \code{wsl sudo service docker start}) and run the line again.}
 \problem{\code{Sheriff's image could not be pulled now}}{There is no network
@@ -1149,7 +1272,7 @@ and Docker could not pull them (the reason is in the message). Run
 \code{docker pull kaizten/sheriff:latest}, or restart the session.}
 \problem{\code{could not be measured: JaCoCo wrote no report}}{The tests ran
 without JaCoCo's agent. If the \code{pom.xml} sets surefire's \code{argLine},
-it must keep JaCoCo's: \code{<argLine>@\{argLine\} ...</argLine>}. The work is
+it must keep JaCoCo's: \code{<argLine>@{argLine} ...</argLine>}. The work is
 not held up meanwhile.}
 
 \subsection{With Codex}
@@ -1205,8 +1328,8 @@ takes a few seconds.}
 \faq{Do new rules arrive by themselves?}{Yes. Kaizten publishes Sheriff only
 as \code{latest}, with no versions, so each time it starts the server compares
 the digest Docker Hub publishes with that of your image, and pulls it when they
-differ. To be told instead, set \code{SHERIFF\_PULL=check}; to keep one image,
-pin it with \code{SHERIFF\_IMAGE}.}
+differ. To be told instead, set \code{SHERIFF_PULL=check}; to keep one image,
+pin it with \code{SHERIFF_IMAGE}.}
 
 \faq{What if Docker is not running?}{There is no analysis. The tools say so,
 the assistant goes on with the work and runs the tests, and the hooks let you

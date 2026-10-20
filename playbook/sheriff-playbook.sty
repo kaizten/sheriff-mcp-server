@@ -101,6 +101,8 @@
   \newcommand\pb@done{Terminado cuando}
   \newcommand\pb@open{«}
   \newcommand\pb@close{»}
+  \newcommand\pb@default{Por defecto}
+  \newcommand\pb@takes{Admite}
 \else
   \newcommand\pb@title{Sheriff}
   \newcommand\pb@date{Date}
@@ -119,6 +121,8 @@
   \newcommand\pb@done{Done when}
   \newcommand\pb@open{``}
   \newcommand\pb@close{''}
+  \newcommand\pb@default{Default}
+  \newcommand\pb@takes{Takes}
 \fi
 
 \hypersetup{
@@ -284,6 +288,12 @@
 \setlength{\aboverulesep}{0pt}
 \setlength{\belowrulesep}{0pt}
 \arrayrulecolor{pbrule}
+
+% One setting of the reference: its name, its default, the values it takes,
+% then what it is for and when to change it.
+\newcommand\setting[4]{\par\addvspace{0.7\baselineskip}\noindent{\ttfamily\bfseries\color{pbbrand}\detokenize{#1}}\par\nopagebreak
+  \noindent{\small\color{pbmuted}\pb@default: #2\quad\textbar\quad\pb@takes: #3}\par\nopagebreak
+  \vspace{0.2\baselineskip}\noindent #4\par}
 
 % A heading inside the quick reference card.
 \newcommand\cardhead[1]{\par\addvspace{0.7\baselineskip}{\sffamily\bfseries\color{pbbrand}#1}\par\nopagebreak}
