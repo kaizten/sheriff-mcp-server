@@ -54,6 +54,17 @@ public final class DeterministicFixer implements AutomaticRepair {
     }
 
     /**
+     * The same pass, with a limit on the rounds of every fixer.
+     *
+     * @param limit the most rounds, {@link SheriffRepair#NO_LIMIT} for none
+     * @return this pass
+     */
+    public DeterministicFixer withRounds(int limit) {
+        repair.withRounds(limit);
+        return this;
+    }
+
+    /**
      * Applies every fixer Sheriff has for what is currently wrong, as the fix
      * loop's first step.
      *

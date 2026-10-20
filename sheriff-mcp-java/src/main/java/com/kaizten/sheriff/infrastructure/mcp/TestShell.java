@@ -4,19 +4,21 @@ package com.kaizten.sheriff.infrastructure.mcp;
  * A shell a component's test command is written for. Shells differ in how one
  * command follows another and in how a wrapper in the current folder is named,
  * and on Windows the server, the hooks and a model each run a different one.
- * Each command is a format taking the quoted directory, then Maven's options.
+ * Each command is a format taking the quoted directory, then Maven's options;
+ * Maven's test command is its command with goals, given {@code test}.
  */
 final class TestShell {
 
-    private static final String MAVEN_WRAPPER_RUN = "cd %1$s && ./mvnw%2$s test";
-    private static final String MAVEN_RUN = "cd %1$s && mvn%2$s test";
+    private static final String TEST_GOAL = " test";
+    private static final String MAVEN_WRAPPER_RUN = "cd %1$s && ./mvnw%2$s";
+    private static final String MAVEN_RUN = "cd %1$s && mvn%2$s";
     private static final String GRADLE_WRAPPER_RUN = "cd %1$s && ./gradlew test";
     private static final String GRADLE_RUN = "cd %1$s && gradle test";
     private static final String NPM_RUN = "cd %1$s && npm test";
-    private static final String MAVEN_WRAPPER_RUN_CMD = "cd %1$s && .\\mvnw.cmd%2$s test";
+    private static final String MAVEN_WRAPPER_RUN_CMD = "cd %1$s && .\\mvnw.cmd%2$s";
     private static final String GRADLE_WRAPPER_RUN_CMD = "cd %1$s && .\\gradlew.bat test";
-    private static final String MAVEN_WRAPPER_RUN_WINDOWS = "cd %1$s; ./mvnw.cmd%2$s test";
-    private static final String MAVEN_RUN_WINDOWS = "mvn -f %1$s%2$s test";
+    private static final String MAVEN_WRAPPER_RUN_WINDOWS = "cd %1$s; ./mvnw.cmd%2$s";
+    private static final String MAVEN_RUN_WINDOWS = "mvn -f %1$s%2$s";
     private static final String GRADLE_WRAPPER_RUN_WINDOWS = "cd %1$s; ./gradlew.bat test";
     private static final String GRADLE_RUN_WINDOWS = "gradle -p %1$s test";
     private static final String NPM_RUN_WINDOWS = "npm --prefix %1$s test";
@@ -76,20 +78,38 @@ final class TestShell {
     }
 
     /**
-     * The command for Maven's wrapper.
+     * The test command for Maven's wrapper.
      *
      * @return a format taking the directory and Maven's options
      */
     String mavenWrapper() {
-        return mavenWrapper;
+        return mavenWrapper + TEST_GOAL;
     }
 
     /**
-     * The command for Maven on the PATH.
+     * The test command for Maven on the PATH.
      *
      * @return a format taking the directory and Maven's options
      */
     String maven() {
+        return maven + TEST_GOAL;
+    }
+
+    /**
+     * Maven's wrapper with goals of the caller's.
+     *
+     * @return a format taking the directory, then the options and goals
+     */
+    String mavenWrapperGoals() {
+        return mavenWrapper;
+    }
+
+    /**
+     * Maven on the PATH with goals of the caller's.
+     *
+     * @return a format taking the directory, then the options and goals
+     */
+    String mavenGoals() {
         return maven;
     }
 

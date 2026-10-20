@@ -6,6 +6,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.kaizten.sheriff.infrastructure.config.Composition;
 import com.kaizten.sheriff.infrastructure.config.Configuration;
+import com.kaizten.sheriff.infrastructure.coverage.CoverageThresholds;
+import com.kaizten.sheriff.infrastructure.coverage.CoverageVerdict;
+import com.kaizten.sheriff.infrastructure.coverage.Tally;
 import com.kaizten.sheriff.infrastructure.process.FakeProcessRunner;
 import com.kaizten.sheriff.infrastructure.process.ProcessOutcome;
 import java.io.ByteArrayOutputStream;
@@ -15,6 +18,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -281,6 +285,17 @@ class HookTests {
         }
 
         @Test
+        @DisplayName("errors left for the end hold no new code up: an edit goes through when they are all there is")
+        void deferredErrorsDoNotBlock() {
+            ComponentGate gate = gate(ProcessOutcome.completed(0, SHERIFF_OUTPUT, ""))
+                    .withStuckErrors(new StuckErrors(repository.resolve("stuck")));
+            gate.stalledOn("app", gate.verdictFor("app"));
+            SheriffGateHook hook = new SheriffGateHook(gate);
+            assertEquals(HookExit.ALLOW, capturingStandardError(() -> hook.decide(editOf("app/src/C.java"))));
+            assertFalse(errors.contains("Blocked"), errors);
+        }
+
+        @Test
         @DisplayName("the hook already analyzed, so its step is the one an analysis gives: the repair, by name")
         void theGateEndsWithTheRepairStepAndACommandWithoutTheTools() {
             SheriffGateHook hook = new SheriffGateHook(gate(ProcessOutcome.completed(0, SHERIFF_OUTPUT, "")));
@@ -501,8 +516,35 @@ class HookTests {
             assertEquals(HookExit.BLOCK, capturingStandardError(() -> second.decide(STOP_AGAIN)));
             assertTrue(errors.contains("Nothing changed since the last time") && errors.contains("Fix them now"), errors);
             assertEquals(HookExit.ALLOW, capturingStandardError(() -> third.decide(STOP_AGAIN)));
-            assertTrue(errors.contains("Nothing changed twice in a row"), errors);
+            assertTrue(errors.contains("Nothing changed in 2 stop(s) in a row"), errors);
             assertFalse(errors.contains("Not done:"), errors);
+        }
+
+        @Test
+        @DisplayName("how many stops with nothing changed are sent back is a setting: 0 lets the first through, as a "
+                + "false positive of the checker needs, and more hold the model longer")
+        void theStallsSentBackAreASetting() throws IOException {
+            StopBlocks blocks = new StopBlocks(repository.resolve("stop-blocks"));
+            SheriffStopHook impatientFirst = patient(blocks).withMaxStalls(0);
+            SheriffStopHook impatientSecond = patient(blocks).withMaxStalls(0);
+            assertEquals(HookExit.BLOCK, capturingStandardError(() -> impatientFirst.decide(FRESH_STOP)));
+            assertEquals(HookExit.ALLOW, capturingStandardError(() -> impatientSecond.decide(STOP_AGAIN)));
+            assertTrue(errors.contains("Nothing changed in 1 stop(s) in a row"), errors);
+        }
+
+        @Test
+        @DisplayName("with more stops with nothing changed allowed, the model is held that much longer")
+        void moreStallsHoldTheModelLonger() throws IOException {
+            StopBlocks patientBlocks = new StopBlocks(repository.resolve("patient-blocks"));
+            List<SheriffStopHook> stops = new ArrayList<>();
+            for (int stop = 0; stop < 4; stop++) {
+                stops.add(patient(patientBlocks).withMaxStalls(2));
+            }
+            assertEquals(HookExit.BLOCK, capturingStandardError(() -> stops.get(0).decide(FRESH_STOP)));
+            assertEquals(HookExit.BLOCK, capturingStandardError(() -> stops.get(1).decide(STOP_AGAIN)));
+            assertEquals(HookExit.BLOCK, capturingStandardError(() -> stops.get(2).decide(STOP_AGAIN)));
+            assertEquals(2, patientBlocks.stalls("s"));
+            assertEquals(HookExit.ALLOW, capturingStandardError(() -> stops.get(3).decide(STOP_AGAIN)));
         }
 
         @Test
@@ -632,6 +674,109 @@ class HookTests {
         void withTestsOnAGreenTurnEnds() throws IOException {
             SheriffStopHook stop = withTests(com.kaizten.sheriff.domain.valueobject.VerificationResult.passed("ok"));
             assertEquals(HookExit.ALLOW, stop.decide("{\"stop_hook_active\":false}"));
+        }
+
+        @Test
+        @DisplayName("with tests on and green, tests that do not test what the turn wrote enough cannot end it")
+        void weakTestsCannotEndATurn() throws IOException {
+            CoverageVerdict weak = new CoverageVerdict(true, "", new Tally(2, 1), new Tally(4, 3), new Tally(2, 1),
+                    Map.of("src/main/java/demo/Calc.java", List.of(10)),
+                    List.of("src/main/java/demo/Calc.java:13 takes 3 of its 4 branches"),
+                    List.of("src/main/java/demo/Calc.java:13 changed conditional boundary"),
+                    CoverageThresholds.defaults());
+            SheriffStopHook stop = withTests(com.kaizten.sheriff.domain.valueobject.VerificationResult.passed("ok"))
+                    .withChangeCoverage(component -> weak);
+            assertEquals(HookExit.BLOCK, capturingStandardError(() -> stop.decide("{\"stop_hook_active\":false}")));
+            assertTrue(errors.contains("they do not test enough of what this turn wrote"), errors);
+            assertTrue(errors.contains("src/main/java/demo/Calc.java: 10"), errors);
+            assertTrue(errors.contains("Calc.java:13 changed conditional boundary"), errors);
+            assertTrue(errors.contains("Calc.java:13 takes 3 of its 4 branches"), errors);
+            assertTrue(errors.contains("call the sheriff_fix tool with component 'app' and verify true"), errors);
+            assertTrue(errors.contains("--call sheriff_fix component='app' verify=true"), errors);
+            assertTrue(gate(ProcessOutcome.completed(0, "", "")).coverageStep("api")
+                    .startsWith("Next step: add tests under the component's src/test"));
+        }
+
+        @Test
+        @DisplayName("a measure that cannot run lets the turn end, and says why; with tests off nothing is measured")
+        void anUnmeasuredTurnEnds() throws IOException {
+            SheriffStopHook stop = withTests(com.kaizten.sheriff.domain.valueobject.VerificationResult.passed("ok"))
+                    .withChangeCoverage(component -> CoverageVerdict.unmeasured("no network"));
+            assertEquals(HookExit.ALLOW, capturingStandardError(() -> stop.decide("{\"stop_hook_active\":false}")));
+            assertTrue(errors.contains("could not be measured (no network)"), errors);
+            List<String> measured = new ArrayList<>();
+            SheriffStopHook untested = new SheriffStopHook(gate(ProcessOutcome.completed(0, "", "")),
+                    gitSeeingAppTouched()).withChangeCoverage(component -> {
+                        measured.add(component);
+                        return CoverageVerdict.nothingToMeasure();
+                    });
+            assertEquals(HookExit.ALLOW, untested.decide("{\"stop_hook_active\":false}"));
+            assertEquals(List.of(), measured, "the measure runs the tests, which are off");
+        }
+
+        @Test
+        @DisplayName("when the stops with nothing changed run out, the errors left are left for the end: the next turn "
+                + "is not sent back for them, and says so")
+        void errorsLeftOverAreLeftForTheEnd() throws IOException {
+            StuckErrors stuck = new StuckErrors(repository.resolve("stuck"));
+            StopBlocks blocks = new StopBlocks(repository.resolve("stop-blocks"));
+            List<SheriffStopHook> stops = new java.util.ArrayList<>();
+            for (int stop = 0; stop < 3; stop++) {
+                ComponentGate gate = gate(ProcessOutcome.completed(0, SHERIFF_OUTPUT, "")).withStuckErrors(stuck);
+                stops.add(new SheriffStopHook(gate, gitSeeingAppTouched(), null, blocks,
+                        new TurnStart(repository.resolve("turns")), 5));
+            }
+            assertEquals(HookExit.BLOCK, capturingStandardError(() -> stops.get(0).decide(FRESH_STOP)));
+            assertEquals(HookExit.BLOCK, capturingStandardError(() -> stops.get(1).decide(STOP_AGAIN)));
+            assertEquals(HookExit.ALLOW, capturingStandardError(() -> stops.get(2).decide(STOP_AGAIN)));
+            assertEquals(2, stuck.deferred(repository.resolve("app")).size());
+            SheriffStopHook nextTurn = new SheriffStopHook(gate(ProcessOutcome.completed(0, SHERIFF_OUTPUT, ""))
+                    .withStuckErrors(stuck), gitSeeingAppTouched(), null, blocks,
+                    new TurnStart(repository.resolve("turns")), 5);
+            assertEquals(HookExit.ALLOW, capturingStandardError(() -> nextTurn.decide(FRESH_STOP)));
+            assertTrue(errors.contains("app: its 2 error(s) are left for the end"), errors);
+        }
+
+        @Test
+        @DisplayName("a Stop hook that cannot run Sheriff lets the turn end, and holds nothing as left for the end")
+        void anUnavailableCheckHoldsNothing() throws IOException {
+            SheriffStopHook stop = new SheriffStopHook(gate(ProcessOutcome.unavailable("docker is not on the PATH"))
+                    .withStuckErrors(new StuckErrors(repository.resolve("stuck"))), gitSeeingAppTouched());
+            assertEquals(HookExit.ALLOW, capturingStandardError(() -> stop.decide(FRESH_STOP)));
+            assertFalse(errors.contains("left for the end"), errors);
+        }
+
+        @Test
+        @DisplayName("with two components whose tests are weak, the step names the first")
+        void theStepNamesTheFirstWeakComponent() throws IOException {
+            Files.createDirectories(repository.resolve("other/src"));
+            Files.writeString(repository.resolve("other/src/B.java"), "class B {}");
+            FakeProcessRunner gitRunner = new FakeProcessRunner(List.of(
+                    ProcessOutcome.completed(0, repository.toRealPath() + "\n", ""),
+                    ProcessOutcome.completed(0, " M app/src/A.java\0 M other/src/B.java\0", "")));
+            CoverageVerdict weak = new CoverageVerdict(true, "", new Tally(2, 1), Tally.none(), Tally.none(), Map.of(),
+                    List.of(), List.of(), CoverageThresholds.defaults());
+            SheriffStopHook stop = new SheriffStopHook(gate(ProcessOutcome.completed(0, "", "")),
+                    new com.kaizten.sheriff.infrastructure.git.GitVersionControl(gitRunner, repository, repository, ""),
+                    component -> com.kaizten.sheriff.domain.valueobject.VerificationResult.passed("ok"))
+                    .withChangeCoverage(component -> weak);
+            assertEquals(HookExit.BLOCK, capturingStandardError(() -> stop.decide("{\"stop_hook_active\":false}")));
+            assertTrue(errors.contains("app: The tests run") && errors.contains("other: The tests run"), errors);
+            assertTrue(errors.contains("call the sheriff_fix tool with component 'app' and verify true"), errors);
+        }
+
+        @Test
+        @DisplayName("with tests on, nothing to measure says nothing, and tests that test the turn well let it end")
+        void aGoodOrAbsentMeasureLetsTheTurnEnd() throws IOException {
+            CoverageVerdict good = new CoverageVerdict(true, "", new Tally(2, 2), new Tally(2, 2), new Tally(2, 2),
+                    Map.of(), List.of(), List.of(), CoverageThresholds.defaults());
+            SheriffStopHook nothing = withTests(com.kaizten.sheriff.domain.valueobject.VerificationResult.passed("ok"))
+                    .withChangeCoverage(component -> CoverageVerdict.nothingToMeasure());
+            assertEquals(HookExit.ALLOW, capturingStandardError(() -> nothing.decide("{\"stop_hook_active\":false}")));
+            assertFalse(errors.contains("could not be measured"), errors);
+            SheriffStopHook measured = withTests(com.kaizten.sheriff.domain.valueobject.VerificationResult.passed("ok"))
+                    .withChangeCoverage(component -> good);
+            assertEquals(HookExit.ALLOW, capturingStandardError(() -> measured.decide("{\"stop_hook_active\":false}")));
         }
 
         @Test

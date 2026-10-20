@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.kaizten.sheriff.infrastructure.coverage.CoverageThresholds;
 import com.kaizten.sheriff.infrastructure.process.Platform;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -149,6 +150,41 @@ final class ProjectLayoutTest {
         ProjectLayout layout = ProjectLayout.detect(workspace);
         assertTrue(layout.holdsSourcesFor("api", "JAVA_HEXAGONAL"));
         assertFalse(layout.holdsSourcesFor("api", "TYPESCRIPT"));
+    }
+
+    @Test
+    @DisplayName("Maven with goals of the caller's, each argument quoted for the shell, a $ and a * included")
+    void mavenRunsTheCallersGoals() throws IOException {
+        file("maven/pom.xml", "<project/>");
+        file("wrapped/pom.xml", "<project/>");
+        file("wrapped/mvnw", "#!/bin/sh");
+        file("gradle/build.gradle", "");
+        ProjectLayout layout = ProjectLayout.detect(workspace);
+        List<String> goals = List.of("-B", "-DtargetClasses=demo.Calc,demo.Calc$*");
+        assertEquals(Optional.of("cd 'maven' && mvn '-B' '-DtargetClasses=demo.Calc,demo.Calc$*'"),
+                layout.mavenCommand("maven", goals, false));
+        assertEquals(Optional.of("cd 'wrapped' && ./mvnw '-B' '-DtargetClasses=demo.Calc,demo.Calc$*'"),
+                layout.mavenCommand("wrapped", goals, false));
+        assertEquals(Optional.of("cd \"wrapped\" && .\\mvnw.cmd \"-B\" \"-DtargetClasses=demo.Calc,demo.Calc$*\""),
+                layout.mavenCommand("wrapped", goals, true));
+        assertEquals(Optional.empty(), layout.mavenCommand("gradle", goals, false));
+        assertEquals(layout.mavenCommand("maven", goals, Platform.windows()), layout.mavenCommand("maven", goals),
+                "the server writes it for the system it runs on");
+    }
+
+    @Test
+    @DisplayName("a setting is declared where the profile is; the project's root is the module of a project "
+            + "that is one")
+    void settingsAreDeclaredWhereTheProfileIs() throws IOException {
+        file("app/src/main/java/A.java", "class A {}");
+        file("app/pom.xml", "<project><properties><sheriff.coverage>90</sheriff.coverage></properties></project>");
+        file("other/src/main/java/B.java", "class B {}");
+        ProjectLayout layout = ProjectLayout.detect(workspace);
+        assertEquals(Optional.of("90"), layout.declaredSetting("app", "sheriff.coverage", "coverage"));
+        assertEquals(Optional.empty(), layout.declaredSetting("app", "sheriff.mutation", "mutation"));
+        assertEquals(workspace.toAbsolutePath().normalize(), layout.projectRoot());
+        assertEquals(workspace.resolve("app").toAbsolutePath().normalize(),
+                ProjectLayout.detect(workspace.resolve("app")).projectRoot().toAbsolutePath().normalize());
     }
 
     @Test

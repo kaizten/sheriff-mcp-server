@@ -6,6 +6,7 @@ import com.kaizten.sheriff.infrastructure.process.Platform;
 import com.kaizten.sheriff.infrastructure.process.ProcessOutcome;
 import com.kaizten.sheriff.infrastructure.process.ProcessRunner;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -13,6 +14,12 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 /**
  * The loop's safety net, on top of the {@code git} command line.
@@ -46,6 +53,19 @@ public final class GitVersionControl implements VersionControl {
     private static final String GIT = "git";
     private static final String SHOW = "show";
     private static final String HEAD_REVISION = "HEAD:";
+    private static final String HEAD = "HEAD";
+    private static final String DIFF = "diff";
+    private static final String NO_COLOR = "--no-color";
+    private static final String NO_EXTERNAL_DIFF = "--no-ext-diff";
+    private static final String NO_CONTEXT = "--unified=0";
+    private static final String PATHS = "--";
+    private static final String FROM_TOP = ":(top)";
+    private static final String HUNK_HEADER = "(?m)^@@ -\\S+ \\+(\\d+)(?:,(\\d+))? @@";
+    private static final Pattern HUNK = Pattern.compile(HUNK_HEADER);
+    private static final int HUNK_START = 1;
+    private static final int HUNK_LENGTH = 2;
+    private static final int ONE_LINE = 1;
+    private static final int FIRST_LINE = 1;
     private static final String NO_CONTENT = "";
     private static final String STATUS = "status";
     private static final String CHECKOUT = "checkout";
@@ -304,6 +324,33 @@ public final class GitVersionControl implements VersionControl {
         Path relative = realPathOf(root).relativize(realPathOf(file));
         ProcessOutcome outcome = git(List.of(GIT, SHOW, HEAD_REVISION + Platform.slashes(relative)));
         return outcome.succeeded() ? outcome.standardOutput() : NO_CONTENT;
+    }
+
+    /**
+     * The lines of a file that are not as the last commit has them: added or
+     * changed, never removed, which leave no line behind.
+     *
+     * @param file the file, inside the repository
+     * @return their numbers in the file as it is now, every line of a file the
+     *     last commit does not hold
+     * @throws IOException when a new file cannot be read
+     */
+    public Set<Integer> changedLines(Path file) throws IOException {
+        if (committedContent(file).isEmpty()) {
+            long lines = Files.readString(file).lines().count();
+            return IntStream.rangeClosed(FIRST_LINE, (int) lines).boxed().collect(Collectors.toCollection(TreeSet::new));
+        }
+        Path relative = realPathOf(repositoryRoot()).relativize(realPathOf(file));
+        String diff = required(List.of(GIT, DIFF, NO_COLOR, NO_EXTERNAL_DIFF, NO_CONTEXT, HEAD, PATHS,
+                FROM_TOP + Platform.slashes(relative)), DIFF).standardOutput();
+        Set<Integer> lines = new TreeSet<>();
+        Matcher hunk = HUNK.matcher(diff);
+        while (hunk.find()) {
+            int start = Integer.parseInt(hunk.group(HUNK_START));
+            int length = hunk.group(HUNK_LENGTH) == null ? ONE_LINE : Integer.parseInt(hunk.group(HUNK_LENGTH));
+            IntStream.range(start, start + length).forEach(lines::add);
+        }
+        return lines;
     }
 
     /**

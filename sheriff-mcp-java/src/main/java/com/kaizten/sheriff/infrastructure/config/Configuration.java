@@ -4,6 +4,7 @@ import com.kaizten.sheriff.domain.Rules;
 import com.kaizten.sheriff.domain.valueobject.LoopSettings;
 import com.kaizten.sheriff.infrastructure.catalog.CatalogProvisioning;
 import com.kaizten.sheriff.infrastructure.docker.ImageProvisioning;
+import com.kaizten.sheriff.infrastructure.docker.SheriffRepair;
 import com.kaizten.sheriff.infrastructure.process.Platform;
 import java.net.URISyntaxException;
 import java.nio.file.Path;
@@ -79,6 +80,13 @@ public final class Configuration {
     private static final String STOP_RUNS_TESTS = "SHERIFF_STOP_RUNS_TESTS";
     private static final String STOP_MAX_BLOCKS = "SHERIFF_STOP_MAX_BLOCKS";
     private static final int DEFAULT_STOP_MAX_BLOCKS = 5;
+    private static final String STOP_MAX_STALLS = "SHERIFF_STOP_MAX_STALLS";
+    private static final int DEFAULT_STOP_MAX_STALLS = 1;
+    private static final String GATE_TTL = "SHERIFF_GATE_TTL";
+    private static final String REPAIR_ROUNDS = "SHERIFF_REPAIR_ROUNDS";
+    private static final int DEFAULT_GATE_TTL = 900;
+    private static final int NO_STALLS = 0;
+    private static final String NEGATIVE = "%s must be 0 or more, but it is '%s'.";
     private static final String AGENT_DIRECTORY = "SHERIFF_AGENT_DIR";
     private static final String CURRENT_DIRECTORY = ".";
     private static final String BUILD_DIRECTORY = "target";
@@ -116,14 +124,17 @@ public final class Configuration {
     private final Path agentDirectory;
 
     /**
-     * Reads configuration from a set of environment variables.
+     * Reads configuration from a set of environment variables, with every
+     * setting they leave unset taken from the project's
+     * {@code .sheriff.properties}, then from the user's own file
+     * ({@link Settings}).
      *
      * @param environment the variables to read, typically {@code System.getenv()}
      * @param agentDirectory where this tool's own files live
      */
     public Configuration(Map<String, String> environment, Path agentDirectory) {
-        this.environment = environment;
         this.agentDirectory = agentDirectory.toAbsolutePath().normalize();
+        this.environment = Settings.layered(environment, projectDirectoryIn(environment, this.agentDirectory));
     }
 
     /**
@@ -228,9 +239,34 @@ public final class Configuration {
      * @return its root, the agent's parent directory unless overridden
      */
     public Path targetRepository() {
+        return targetRepositoryIn(environment, agentDirectory);
+    }
+
+    /**
+     * The repository an environment names, before any settings file is read.
+     *
+     * @param environment the variables
+     * @param agentDirectory where this tool's own files live
+     * @return {@code TARGET_REPO}, else the folder above the tool's own
+     */
+    private static Path targetRepositoryIn(Map<String, String> environment, Path agentDirectory) {
         String configured = environment.get(TARGET_REPOSITORY);
         Path root = configured == null ? agentDirectory.getParent() : Path.of(configured);
         return root.toAbsolutePath().normalize();
+    }
+
+    /**
+     * The project an environment names, whose settings file is read.
+     *
+     * @param environment the variables
+     * @param agentDirectory where this tool's own files live
+     * @return {@code CLAUDE_PROJECT_DIR}, else the repository
+     */
+    private static Path projectDirectoryIn(Map<String, String> environment, Path agentDirectory) {
+        String configured = environment.get(PROJECT_DIRECTORY);
+        return configured == null || configured.isBlank()
+                ? targetRepositoryIn(environment, agentDirectory)
+                : Path.of(configured).toAbsolutePath().normalize();
     }
 
     /**
@@ -244,10 +280,7 @@ public final class Configuration {
      *     the target repository
      */
     public Path projectDirectory() {
-        String configured = environment.get(PROJECT_DIRECTORY);
-        return configured == null || configured.isBlank()
-                ? targetRepository()
-                : Path.of(configured).toAbsolutePath().normalize();
+        return projectDirectoryIn(environment, agentDirectory);
     }
 
     /**
@@ -649,6 +682,43 @@ public final class Configuration {
      */
     public int stopMaxBlocks() {
         return positive(STOP_MAX_BLOCKS, DEFAULT_STOP_MAX_BLOCKS);
+    }
+
+    /**
+     * How many stops in a row with nothing changed the Stop hook still sends
+     * back. A checker's false positive is a stop with nothing to change, so
+     * a project that has one may want 0.
+     *
+     * @return that number, 0 or more
+     * @throws IllegalArgumentException when it is set below 0
+     */
+    public int stopMaxStalls() {
+        int configured = number(STOP_MAX_STALLS, DEFAULT_STOP_MAX_STALLS);
+        if (configured < NO_STALLS) {
+            throw new IllegalArgumentException(String.format(NEGATIVE, STOP_MAX_STALLS, configured));
+        }
+        return configured;
+    }
+
+    /**
+     * How many rounds of Sheriff's own fixers a repair runs.
+     *
+     * @return {@code SHERIFF_REPAIR_ROUNDS}, or no limit: until a round
+     *     repairs nothing
+     * @throws IllegalArgumentException when it is set to anything but a
+     *     whole number from one
+     */
+    public int repairRounds() {
+        return positive(REPAIR_ROUNDS, SheriffRepair.NO_LIMIT);
+    }
+
+    /**
+     * How long the hooks reuse a verdict before running Sheriff again.
+     *
+     * @return {@code SHERIFF_GATE_TTL}, 15 minutes by default
+     */
+    public Duration gateTtl() {
+        return Duration.ofSeconds(positive(GATE_TTL, DEFAULT_GATE_TTL));
     }
 
     /**

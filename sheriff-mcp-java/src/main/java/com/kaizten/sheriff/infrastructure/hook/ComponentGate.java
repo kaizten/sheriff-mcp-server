@@ -75,6 +75,10 @@ public final class ComponentGate {
             + "each method above that calls it and checks what it returns, edge cases included (nothing to "
             + "return, a null among the inputs). Then run %s, and call the sheriff_test tool with component '%s' "
             + "once more. Do not ask the user whether to.";
+    private static final String COVERAGE_STEP = "Next step: add tests under the component's src/test that run "
+            + "each line listed, take every branch of each condition listed (each side of every && and ||) and "
+            + "fail on each change listed, by checking what the code returns, edge cases included. Then call the sheriff_fix tool with component '%s' and verify true, and do the step each "
+            + "answer ends with. Do not ask the user whether to.%nWithout the sheriff tools, %s instead.";
     private static final String TESTS_STEP = "Next step: run %s and fix what fails until it passes, then call "
             + "the sheriff_test tool with component '%s' once more, as a fix can break a rule. If the tests "
             + "already failed before this turn, say so instead of leaving them.";
@@ -82,6 +86,7 @@ public final class ComponentGate {
     private final Configuration configuration;
     private final Composition composition;
     private final VerdictCache verdicts;
+    private StuckErrors stuck = new StuckErrors();
 
     /**
      * Wires the gate to the user's own record of verdicts, the one the MCP's
@@ -91,7 +96,7 @@ public final class ComponentGate {
      * @param composition what builds the analyzer
      */
     public ComponentGate(Configuration configuration, Composition composition) {
-        this(configuration, composition, new VerdictCache());
+        this(configuration, composition, VerdictCache.lasting(configuration.gateTtl()));
     }
 
     /**
@@ -163,6 +168,20 @@ public final class ComponentGate {
     }
 
     /**
+     * The step a hook ends with when a component's tests pass but do not test
+     * what the turn wrote as well as the project asks: more tests, then the
+     * repair with {@code verify}, which measures them again.
+     *
+     * @param component the component
+     * @return the step
+     */
+    public String coverageStep(String component) {
+        String command = ToolCall.throughCommandLine(configuration.projectDirectory(), runningJar())
+                .phraseVerifying(FIX_TOOL, component, NO_PROFILE);
+        return String.format(COVERAGE_STEP, component, command);
+    }
+
+    /**
      * The step a hook ends with when a component's new methods have no test.
      *
      * @param component the component
@@ -180,6 +199,40 @@ public final class ComponentGate {
      */
     public Path mount() {
         return configuration.targetRepository();
+    }
+
+    /**
+     * The same gate, with a chosen record of the errors left for the end.
+     *
+     * @param record that record
+     * @return this gate
+     */
+    public ComponentGate withStuckErrors(StuckErrors record) {
+        this.stuck = record;
+        return this;
+    }
+
+    /**
+     * Whether all a verdict found is errors left for the end: nothing to hold
+     * new work up for.
+     *
+     * @param component the component the verdict is of
+     * @param verdict the verdict
+     * @return {@code true} when every error it knows is left for the end
+     */
+    public boolean onlyDeferred(String component, GateVerdict verdict) {
+        return verdict.onlyAmong(stuck.deferred(mount().resolve(component)));
+    }
+
+    /**
+     * Leaves for the end every error a verdict found: a stop with nothing
+     * changed since the last one said the work on them is over.
+     *
+     * @param component the component the verdict is of
+     * @param verdict the verdict
+     */
+    public void stalledOn(String component, GateVerdict verdict) {
+        stuck.stalled(mount().resolve(component), verdict.keys());
     }
 
     /**

@@ -41,6 +41,20 @@ class DeclaredProfileTests {
     }
 
     @Test
+    @DisplayName("any other setting is read as the profile is: its pom.xml property first, then its file key")
+    void readsOtherSettingsTheSameWay() throws IOException {
+        Path module = Files.createDirectories(project.resolve("module"));
+        Files.writeString(module.resolve(".sheriff.properties"), "coverage=90\n");
+        assertEquals(Optional.of("90"), DeclaredProfile.setting(List.of(module, project), "sheriff.coverage",
+                "coverage"));
+        Files.writeString(module.resolve("pom.xml"), pom("<sheriff.coverage>95</sheriff.coverage>"));
+        assertEquals(Optional.of("95"), DeclaredProfile.setting(List.of(module, project), "sheriff.coverage",
+                "coverage"));
+        assertEquals(Optional.empty(), DeclaredProfile.setting(List.of(module, project), "sheriff.mutation",
+                "mutation"));
+    }
+
+    @Test
     @DisplayName("a property inside a Maven build profile is not the project's: it applies only when that is active")
     void ignoresBuildProfiles() throws IOException {
         Files.writeString(project.resolve("pom.xml"), "<project><profiles><profile><properties>"

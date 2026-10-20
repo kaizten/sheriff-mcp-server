@@ -135,15 +135,33 @@ public final class SheriffRunner {
      *     trusted, or a repair did not run
      */
     public FixRun fix(String component, String profile, String referenceCode) {
+        return fix(component, profile, referenceCode, SheriffRepair.NO_LIMIT);
+    }
+
+    /**
+     * Repairs what Sheriff can repair by itself, with a limit on the rounds
+     * of every fixer.
+     *
+     * @param component the folder to repair
+     * @param profile the {@code --test} profile
+     * @param referenceCode the rules to repair, separated by commas, or empty
+     *     for every one Sheriff can repair
+     * @param rounds the most rounds of fixers, {@link SheriffRepair#NO_LIMIT}
+     *     for none
+     * @return the findings before and after, and the rounds that ran
+     * @throws SheriffUnavailableException when an analysis could not be
+     *     trusted, or a repair did not run
+     */
+    public FixRun fix(String component, String profile, String referenceCode, int rounds) {
         SheriffDockerAnalyzer stateKeeping =
                 new SheriffDockerAnalyzer(processes, image, profile, component, repository, timeout, false);
         SheriffDockerAnalyzer analyzer = exportDirectory.map(stateKeeping::exportingTo).orElse(stateKeeping);
-        SheriffRepair repair = new SheriffRepair(container, analyzer, component);
+        SheriffRepair repair = new SheriffRepair(container, analyzer, component).withRounds(rounds);
         RepairOutcome outcome = referenceCode.isEmpty() ? repair.everyFixer(List.of()) : repair.onlyRules(referenceCode);
         if (outcome.failure().isPresent()) {
             throw new SheriffUnavailableException(outcome.failure().get());
         }
         verdicts.rememberAnalyzed(repository, component, profile, outcome.after());
-        return new FixRun(outcome.before(), outcome.after(), outcome.fixerFailures());
+        return new FixRun(outcome.before(), outcome.after(), outcome.fixerFailures(), outcome.rounds());
     }
 }

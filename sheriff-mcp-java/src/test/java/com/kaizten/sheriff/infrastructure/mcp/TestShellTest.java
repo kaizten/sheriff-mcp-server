@@ -15,6 +15,15 @@ final class TestShellTest {
     }
 
     @Test
+    @DisplayName("Maven with the caller's goals is its test command without the test goal")
+    void mavenTakesTheCallersGoals() {
+        assertEquals("cd 'a' && ./mvnw -B verify", String.format(TestShell.POSIX.mavenWrapperGoals(), "'a'",
+                " -B verify"));
+        assertEquals("cd \"a\" && mvn -B verify", String.format(TestShell.CMD.mavenGoals(), "\"a\"", " -B verify"));
+        assertEquals(TestShell.POSIX.mavenGoals() + " test", TestShell.POSIX.maven());
+    }
+
+    @Test
     @DisplayName("sh joins with &&, in the folder; ./mvnw and ./gradlew are the wrappers")
     void posixRunsEveryToolInItsFolder() {
         assertEquals(List.of("cd 'a' && ./mvnw -q test", "cd 'a' && mvn -q test", "cd 'a' && ./gradlew test",

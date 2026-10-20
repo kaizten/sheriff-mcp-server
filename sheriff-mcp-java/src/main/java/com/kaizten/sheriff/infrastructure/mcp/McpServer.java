@@ -2,6 +2,7 @@ package com.kaizten.sheriff.infrastructure.mcp;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kaizten.sheriff.infrastructure.cli.Agent;
+import com.kaizten.sheriff.infrastructure.config.Settings;
 import com.kaizten.sheriff.infrastructure.docker.ImageProvisioning;
 import com.kaizten.sheriff.infrastructure.docker.SheriffImage;
 import com.kaizten.sheriff.infrastructure.mcp.protocol.JsonRpcServer;
@@ -53,6 +54,9 @@ public final class McpServer {
     private static final String HOOK_STOP_FLAG = "--hook-stop";
     private static final String HOOK_TURN_FLAG = "--hook-turn";
     private static final String CALL_FLAG = "--call";
+    private static final String CONFIG_FLAG = "--config";
+    private static final String CHANGE_SETTINGS = "%n%nTo change one, edit that file, or run java -jar sheriff-mcp.jar "
+            + "--call sheriff_config setting=NAME value=VALUE (project=true for this project only).%n";
     private static final String ARGUMENT_SEPARATOR = "=";
     private static final String CALL_USAGE = "--call takes a tool's name, then its arguments as name=value.";
     private static final int CALL_FAILED = 2;
@@ -76,7 +80,7 @@ public final class McpServer {
     private static final String UNKNOWN_OPTION = "Unknown option '%s': java -jar sheriff-mcp.jar --help lists them.%n";
     private static final int UNKNOWN_OPTION_EXIT = 2;
     private static final List<String> OWN_OPTIONS = List.of(TOOLS_FLAG, CHECK_FLAG, HELP_FLAG, SHORT_HELP_FLAG,
-            VERSION_FLAG, HOOK_GATE_FLAG, HOOK_STOP_FLAG, HOOK_TURN_FLAG, CALL_FLAG, INSTRUCTIONS_FLAG,
+            VERSION_FLAG, HOOK_GATE_FLAG, HOOK_STOP_FLAG, HOOK_TURN_FLAG, CALL_FLAG, CONFIG_FLAG, INSTRUCTIONS_FLAG,
             INSTALL_HOOKS_FLAG, UNINSTALL_HOOKS_FLAG, USER_SCOPE_FLAG, INSTALL_CODEX_FLAG, UNINSTALL_CODEX_FLAG,
             INSTALL_ANTIGRAVITY_FLAG, UNINSTALL_ANTIGRAVITY_FLAG, FAIL_FAST_FLAG, NO_HOOKS_FLAG, PULL_ALWAYS_FLAG);
     private static final String JAVA_VARIABLE = "SHERIFF_JAVA";
@@ -98,6 +102,9 @@ public final class McpServer {
                   [--component C] [--profile P]    1 with errors, 2 when nothing could be analyzed
               java -jar sheriff-mcp.jar --tools    print the tool definitions
               java -jar sheriff-mcp.jar --version  print which version this jar is
+              java -jar sheriff-mcp.jar --config   every setting, its value and where it comes from: an
+                                                   environment variable, the project's .sheriff.properties,
+                                                   your ~/.config/sheriff-mcp/sheriff.properties, the default
               java -jar sheriff-mcp.jar --install-hooks [--user]
                                                    guard this project with the two Claude Code
                                                    hooks, in .claude/settings.json, or with --user
@@ -108,8 +115,8 @@ public final class McpServer {
                                                    time and approval it needs, the order of work in
                                                    ~/.codex/AGENTS.md and its hooks in hooks.json
                                                    (--uninstall-codex takes them out; --no-hooks leaves
-                                                   hooks.json alone; --pull-always has the server pull
-                                                   a newer Sheriff image each time it starts). With --fail-fast,
+                                                   hooks.json alone; --pull-always is accepted, as the
+                                                   server pulls a newer Sheriff image on start anyway). With --fail-fast,
                                                    here or with --install-hooks, the hooks stop Sheriff
                                                    at the first error
               java -jar sheriff-mcp.jar --install-antigravity
@@ -209,6 +216,9 @@ public final class McpServer {
             System.exit(options.contains(INSTALL_ANTIGRAVITY_FLAG) ? installer.install() : installer.uninstall());
         }
         McpConfig config = McpConfig.fromEnvironment();
+        if (answeredSettings(config, options, protocol)) {
+            return;
+        }
         SystemProcessRunner processes = new SystemProcessRunner();
         SheriffRunner runner = new SheriffRunner(processes, config.image(), config.repository(), config.timeout());
         if (options.contains(CHECK_FLAG)) {
@@ -396,16 +406,35 @@ public final class McpServer {
     }
 
     /**
+     * Writes the user's settings file at its defaults when there is none, and
+     * answers {@code --config} with every setting and where it comes from.
+     *
+     * @param config the configuration, with the environment it was given
+     * @param options the command line
+     * @param protocol where the answer goes
+     * @return {@code true} when it answered {@code --config}, and nothing else
+     *     is to run
+     */
+    static boolean answeredSettings(McpConfig config, List<String> options, PrintStream protocol) {
+        Settings.ensureUserFile(config.givenEnvironment());
+        if (!options.contains(CONFIG_FLAG)) {
+            return false;
+        }
+        protocol.print(Settings.report(config.givenEnvironment(), config.settingsProject()));
+        protocol.printf(CHANGE_SETTINGS);
+        return true;
+    }
+
+    /**
      * What makes sure of Sheriff's image for this server or check: pulled
-     * when missing, reported when out of date, as {@code SHERIFF_PULL} says.
+     * when missing or out of date, as {@code SHERIFF_PULL} says.
      *
      * @param config which image
      * @param processes how to run docker
      * @return that provisioning, not yet started
      */
-    private static ImageProvisioning imageFor(McpConfig config, ProcessRunner processes) {
-        return new ImageProvisioning(new SheriffImage(processes, config.image()),
-                ImageProvisioning.policyIn(System.getenv()), System.err);
+    static ImageProvisioning imageFor(McpConfig config, ProcessRunner processes) {
+        return new ImageProvisioning(new SheriffImage(processes, config.image()), config.pullPolicy(), System.err);
     }
 
     /**

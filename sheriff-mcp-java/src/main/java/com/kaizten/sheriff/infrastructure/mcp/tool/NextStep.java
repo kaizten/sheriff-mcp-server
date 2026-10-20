@@ -54,6 +54,22 @@ final class NextStep {
             + "nothing checks they work:%n%s%n" + MARK + " add a test under the component's src/test for each "
             + "one, that calls it and checks what it returns, edge cases included (nothing to return, a null "
             + "among the inputs). Then run %s, and %s again.";
+    private static final String MEASURE = "%n" + MARK + " %s. It runs the project's tests and then measures "
+            + "how well they test the lines this change wrote: the lines they run and the branches of each "
+            + "condition they take (JaCoCo), and the changes to those lines they notice (PIT's mutation testing).";
+    private static final String MEASURED_PASSING = "%n%s" + PASSING;
+    private static final String WEAK_TESTS = "%n%nThe tests pass, but they do not test enough of what this change "
+            + "wrote. %s%s%n" + MARK + " add tests under the component's src/test that run each line listed, take "
+            + "every branch of each condition listed (each side of every && and ||, with the parameters that "
+            + "make it go each way) and fail on each change listed, by checking what the code returns, edge "
+            + "cases included (nothing to return, a null among the inputs, each limit of a comparison). Then %s "
+            + "again.";
+    private static final String UNMEASURED = "%n%nHow well the tests test this change could not be measured: %s%n"
+            + MARK + " none, the component is done: it meets the standards and its tests pass. Tell the user "
+            + "that the coverage and mutation testing of the change could not run, and why.";
+    private static final String EXHAUSTED = "%n" + MARK + " none: the %d error(s) above stayed through every "
+            + "repair and every edit made for them, so the work on them is over. Tell the user each one, in a line, "
+            + "and why it cannot be fixed; the rest of the component is done.";
     private static final String UNTESTED_LINE = "  - ";
     private static final String NEWLINE = "\n";
     private static final String FILE_SEPARATOR = ", ";
@@ -104,6 +120,18 @@ final class NextStep {
     }
 
     /**
+     * The step once the only errors left have stayed through every round of
+     * the work on them: to tell the user, as a checker's false positive is
+     * told, rather than another round that would change nothing.
+     *
+     * @param errors how many there are
+     * @return the step, as the answer's last line
+     */
+    static String afterExhausted(int errors) {
+        return String.format(EXHAUSTED, errors);
+    }
+
+    /**
      * The step once a component has no errors.
      *
      * @param testCommand the command that runs the component's tests, or the
@@ -137,6 +165,56 @@ final class NextStep {
      */
     static String afterPassingTests() {
         return String.format(PASSING);
+    }
+
+    /**
+     * The step once a component has no errors and a change to its Java whose
+     * tests are to be measured: the repair with {@code verify}, which runs
+     * the tests and measures them, rather than the tests alone, which say
+     * nothing of what they leave untested.
+     *
+     * @param verifyingCall the repair's call with {@code verify}, written to
+     *     be made as it stands
+     * @return the step, as the answer's last line
+     */
+    static String afterCleanToMeasure(String verifyingCall) {
+        return String.format(MEASURE, verifyingCall);
+    }
+
+    /**
+     * The step once a component has no errors, its tests pass and they test
+     * the change as well as the project asks.
+     *
+     * @param summary how well they test it, in a sentence
+     * @return the summary and the step, the step last
+     */
+    static String afterMeasuredTests(String summary) {
+        return String.format(MEASURED_PASSING, summary);
+    }
+
+    /**
+     * The step once a component has no errors and its tests pass, but they
+     * do not test the change as well as the project asks.
+     *
+     * @param summary how well they test it, in a sentence
+     * @param shortfall the lines no test runs and the mutants that survived
+     * @param verifyingCall the repair's call with {@code verify}, written to
+     *     be made as it stands
+     * @return the lists and the step, the step last
+     */
+    static String afterWeakTests(String summary, String shortfall, String verifyingCall) {
+        return String.format(WEAK_TESTS, summary, shortfall, verifyingCall);
+    }
+
+    /**
+     * The step once a component has no errors and its tests pass, but how
+     * well they test the change could not be measured.
+     *
+     * @param problem why, in the tools' own words
+     * @return the reason and the step, the step last
+     */
+    static String afterUnmeasuredTests(String problem) {
+        return String.format(UNMEASURED, problem);
     }
 
     /**

@@ -268,7 +268,7 @@ fi
 echo
 printf '%s\n' "${results[@]}"
 echo
-echo "Only GitHub reaches: Windows PowerShell 5.1, cmd, Git Bash, winget and macOS."
+echo "Only GitHub reaches: macOS. Nothing reaches Windows PowerShell 5.1, cmd, Git Bash or winget now: Windows is out of the workflows."
 if (( failures > 0 )); then
   echo "$failures failed: fix them before pushing."
   exit 1

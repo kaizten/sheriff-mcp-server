@@ -78,7 +78,7 @@ or after the script from a clone:
 
 | Option (PowerShell) | What it does |
 |---|---|
-| `--pull-always` (`-PullAlways`) | The MCP server pulls a newer Sheriff image each time it starts. Without it a newer image is only reported, once per session, so that new rules do not arrive in the middle of someone's work unasked. It is written into the server's registration (`SHERIFF_PULL=always`), for Claude Code and for Codex, which passes a server none of your shell's variables. Give it on every run: a run without it puts the default back |
+| `--pull-always` (`-PullAlways`) | Writes `SHERIFF_PULL=always` into the server's registration. That is the default now (the server pulls a newer Sheriff image each time it starts), so the option changes nothing; it is kept so that older install lines still work |
 | `--install-docker` (`-InstallDocker`) | Installs Docker when it is missing, from Docker itself: `get.docker.com` on Linux (`pacman` on Arch, which Docker does not package for), Docker Desktop's installer from docker.com on macOS and on Windows (there per user, with no administrator and WSL 2, as Docker recommends); and starts it when it is stopped. Docker Desktop asks you to accept its terms the first time it starts, and the installer does not accept them for you: they require a paid subscription in a company of more than 250 people or $10 million a year |
 | `--docker-wsl` (`-DockerWsl`) | Windows only (Git Bash or PowerShell): uses the Docker engine installed inside WSL, with no Docker Desktop. It checks `wsl docker info`, pulls the image through WSL and sets `SHERIFF_DOCKER=wsl` for the user, which the server and the hooks read to run every `docker` as `wsl.exe -e docker`, with the mounted folder written as WSL sees it (`C:\x` as `/mnt/c/x`). `SHERIFF_DOCKER=wsl:<distro>` names a distribution other than the default. It is also written into each assistant's registration (`claude mcp add -e`, the `env` of Codex's and Antigravity's entries, and Codex's hook lines), as Codex passes a server and its hooks none of the user's variables. Restart Claude Code and terminals afterwards |
 | `--no-pull` (`-NoPull`) | Leaves the image alone; the MCP server pulls it when it starts and finds none |
@@ -222,7 +222,8 @@ fails on errors. For a CI runner, install the plugin there too
 | "Sheriff's image ... is being downloaded" | The first use on this machine: wait a few minutes |
 | "... could not be downloaded" | Docker is not running, or there is no network |
 | "... no matching manifest for windows" | Docker Desktop is set to Windows containers: switch it to Linux containers (its default) |
-| "a newer kaizten/sheriff:latest has been published" | Run the install line again, which pulls it; or install with `--pull-always`, and the server pulls it each time it starts |
+| "a newer kaizten/sheriff:latest has been published ... could not be downloaded" | The server tried to update the image on start and Docker could not pull it (the reason is in the note); the one on this machine is used meanwhile. Run `docker pull kaizten/sheriff:latest`, or restart the session |
+| "a newer kaizten/sheriff:latest ... is being downloaded" | The server found a newer image on start and is pulling it; until it is here, answers come from the one on this machine. Nothing to do |
 | "The analyzer could not run" | Docker stopped after the image was pulled |
 | "The Sheriff server cannot load its own code" | An update on Windows replaced the jar under the running server: restart the session |
 | "A Sheriff server was running from the jar this replaced", while installing on Windows | Windows lets no one delete or rename a jar a running server holds, so the installer overwrites it, and that server fails at its next call: restart the open sessions |
@@ -252,10 +253,63 @@ in the answer.
 | Tool | What it does | Spends tokens |
 |---|---|---|
 | `sheriff_test` | Analyzes a component: how many errors each file and each rule has, and the next step | no |
-| `sheriff_fix` | With no arguments, every repair Sheriff has for what it finds, round after round while the count drops; reports errors before and after, and with `verify` runs the tests | no |
+| `sheriff_fix` | With no arguments, every repair Sheriff has for what it finds, round after round while the count drops; reports errors before and after, and with `verify` runs the tests and measures how well they test the change (below) | no |
 | `sheriff_guidelines` | The rules, before anything is broken, with the code Sheriff accepts | no |
 | `sheriff_autofix` | The agent's whole repair loop, on its own branch. Answers at once with a task id and runs in the background | yes |
 | `sheriff_task` | A task's command, state and result; without an id, the server's version, the build of Sheriff's image on this machine (the day it was built and its digest, as `latest` names whichever was pulled last), and the session's tasks | no |
+| `sheriff_config` | Without arguments, every setting below with its value and where it comes from; with `setting` and `value`, changes one in your settings file (or the project's, with `project` true), checking the value first | no |
+
+**A change is not finished until its tests test it.** In a Java component
+built with Maven, once it is clean, the step is `sheriff_fix` with `verify`:
+it runs the tests and then measures the lines the change wrote (those of
+`src/main/java` the last commit does not have), never the whole project.
+Three measures, through the project's own Maven, with nothing added to its
+`pom.xml`: which of those lines the tests run, and which branches of their
+conditions they take, each side of every `&&` and `||` (JaCoCo); and PIT's
+mutation testing, which changes those lines (each condition forced true and
+false, a limit moved, a value returned replaced, a call's argument put in
+place of its result) and the tests must fail on each change. A line run is not
+a condition tested: `if (member && units > 2)` runs whichever way it goes, and
+is four branches. The answer gives the three shares and, below what the
+project asks, lists the lines no test runs, the conditions taken only some
+ways and the changes no test noticed, and sends the model back to write
+tests:
+
+```
+The tests run 4 of the 8 lines of code this change wrote (50%, 100% required), take 3 of the 8 branches of their conditions (37%, 100% required) and kill 10 of the 27 mutants PIT made of them (37%, 80% required).
+Lines of code this change wrote that no test runs:
+  - src/main/java/demo/Calc.java: 10, 13, 14, 16
+Conditions this change wrote that the tests take only some ways, each side of every && and || counted:
+  - src/main/java/demo/Calc.java:20 takes 3 of its 4 branches
+Changes PIT made to those lines that every test still passed with:
+  - src/main/java/demo/Calc.java:20 changed conditional boundary
+```
+
+By default every changed line must run, every branch be taken and 80% of the
+mutants be killed (not all: some mutants change nothing a test could see).
+The mutants are made with `STRONGER,REMOVE_CONDITIONALS,EXPERIMENTAL_ARGUMENT_PROPAGATION`,
+not PIT's `ALL`, which on PetClinic's `owner` package made 497 mutants to
+these 204, most of them constants such as `setDisallowedFields("id")`'s, which
+no sensible test kills. A project declares its own:
+
+```xml
+<properties>
+  <sheriff.coverage>90</sheriff.coverage>
+  <sheriff.branches>90</sheriff.branches>
+  <sheriff.mutation>70</sheriff.mutation>
+  <sheriff.mutators>ALL</sheriff.mutators>
+</properties>
+```
+
+or `coverage`, `branches`, `mutation` and `mutators` in `.sheriff.properties`. JaCoCo and PIT
+are downloaded by Maven the first time (with JUnit 5, PIT's JUnit 5 plugin
+too). A measure that cannot run (no network, a surefire `argLine` that drops
+JaCoCo's agent: it must keep `@{argLine}`) does not hold the work: the answer
+says why and the component is done; so does PIT refusing a suite with a test
+that fails in its own runner. PIT does not read surefire's configuration, so
+the measure passes it surefire's `systemPropertyVariables`, all but those
+whose value holds a space, which PIT cannot take. Gradle and npm projects are not measured
+yet.
 
 **Every answer of `sheriff_test` and `sheriff_fix` ends with one `Next step:`**,
 its last line, worked out from the state alone. After an analysis with errors
@@ -311,14 +365,22 @@ errors, and says how to clear them; the edits after it go through. An edit to
 a file that has errors is never blocked, as it is the fix. The Stop
 hook does not let a turn end with errors left in a component the turn
 changed, the ones already there included (and, with
-`SHERIFF_STOP_RUNS_TESTS=1`, with failing tests). Which components the turn
+`SHERIFF_STOP_RUNS_TESTS=1`, with failing tests, or with passing tests that do
+not reach the line, branch and mutation thresholds for what the turn wrote). Which components the turn
 changed is the third hook's job: when a prompt arrives it records what the
 components git already reports as changed look like, and the Stop hook leaves
 alone those still the same, so a question asked in a repository with earlier
 work in it is not sent back to fix code. A component the gate refused an edit
 to during the turn is checked too, though the turn changed nothing in it: a
 model whose only edit was refused ended the turn asking whether to fix the
-errors. That decision is the hooks', not the model's. A hook has already analyzed, so its message ends with the step an
+errors. That decision is the hooks', not the model's. An error that stays
+through the work done for it (two answers of `sheriff_fix` after it was
+listed, or the Stop hook's stops with nothing changed running out) is left for
+the end: the answers list it apart, after the files still being worked on,
+then give it a last round of its own, and after that tell the model to name it
+to the user with the reason it cannot be fixed. Meanwhile a component whose
+only errors are those blocks no edit and sends no turn back, so a false
+positive of the checker does not hold the rest of the work up. A hook has already analyzed, so its message ends with the step an
 analysis by the MCP ends with, worded the same: call the `sheriff_fix` tool
 with the component named, follow each answer's step until one ends "Next
 step: none, the component is done", and do not ask. Under it, the command
@@ -507,6 +569,22 @@ and the work is left in the tree for review.
 Nothing is required: the server works out the mount, the components, each
 one's profile and the test command from the project it is started in.
 
+**Every setting has a default, and you change it in a file, not in each
+assistant.** The first time the server starts it writes
+`~/.config/sheriff-mcp/sheriff.properties` (`$XDG_CONFIG_HOME/sheriff-mcp/`,
+or `%APPDATA%\sheriff-mcp\` on Windows), every setting in it at its default
+and commented out: take the `#` off a line and change its value. A setting a
+newer version brings is added at the end of the file when the server next
+starts, commented out the same way; nothing already in it is touched. A project's
+`.sheriff.properties` can set the same names for everyone who opens it (all
+but `AI_BACKEND` and `SHERIFF_AGENT_CLAUDE_TIMEOUT`, which a cloned project
+must not choose), and an environment variable of the same name wins over both
+files. Or ask the assistant: `sheriff_config` lists them and changes one,
+refusing a value the tools could not use. `java -jar sheriff-mcp.jar --config`
+prints the same list. The tools read the settings when a session starts, the
+hooks on every run. The names are those of the table below, which also holds
+the variables no file sets (`SHERIFF_REPO`, `SHERIFF_DOCKER`, the API keys).
+
 **A project built on an architecture says so once**, and every tool (the MCP
 server, the hooks, `--check` and the Maven plugin) reads it:
 
@@ -564,11 +642,21 @@ which no tool reports.
 | `SHERIFF_COMPONENT` | the project, or its only component (the agent's CLI with `TARGET_REPO` set: `sheriff-mcp-java`) | Component when a call names none |
 | `SHERIFF_PROFILE` / `SHERIFF_TEST_TYPE` | declared, else from the sources / `JAVA` | Rule profile (server / agent), overriding the project's declaration |
 | `SHERIFF_IMAGE` | `kaizten/sheriff:latest` | A digest (`kaizten/sheriff@sha256:...`, as `task.json` records it) keeps the rules from changing until you change it |
-| `SHERIFF_PULL` | reports a newer image | `always` pulls a newer image on start (the installer's `--pull-always` writes it into the server's registration); `never` does not even ask Docker Hub |
+| `SHERIFF_PULL` | `always` | `always` pulls a newer image when the server, `--check`, the agent or a Maven goal starts: newer means the digest Docker Hub publishes for the tag differs from the one the image here was pulled by, as Sheriff is only published as `latest`, with no versions. `check` only reports it, once per session; `never` does not even ask Docker Hub |
 | `SHERIFF_TIMEOUT` | `300` (`900` through WSL's Docker) | Seconds per run; the container is removed after. Through WSL (`SHERIFF_DOCKER=wsl`) the default is 900, and Codex is given 1800 s a call instead of 600: a `sheriff_fix` of PetClinic took 511 s there |
 | `SHERIFF_DOCKER` | unset | Windows only: `wsl` (or `wsl:<distro>`) runs every `docker` as `wsl.exe -e docker`, for the engine inside WSL with no Docker Desktop. `--docker-wsl` (`-DockerWsl`) sets it for the user and in each assistant's registration |
 | `SHERIFF_RULES_CATALOG` | found or extracted | A catalog used as is |
 | `SHERIFF_EXPORT_DIR` | unset | Where the agent copies Sheriff's JSON |
+| `sheriff.coverage` / `coverage` | `100` | In the `pom.xml` / `.sheriff.properties`: the share of the lines a change wrote its tests must run |
+| `sheriff.branches` / `branches` | `100` | Likewise: the share of the branches of those lines' conditions its tests must take |
+| `sheriff.mutation` / `mutation` | `80` | Likewise: the share of PIT's mutants of those lines its tests must kill |
+| `sheriff.mutators` / `mutators` | `STRONGER,REMOVE_CONDITIONALS,EXPERIMENTAL_ARGUMENT_PROPAGATION` | Likewise: PIT's mutators, or groups (`DEFAULTS`, `STRONGER`, `ALL`), the mutants are made with |
+| `SHERIFF_REPAIR_ROUNDS` | no limit | Rounds of Sheriff's own fixers in a repair, each measured by a new analysis. With none set they go on until a round repairs nothing, which they always reach: a round runs only when the one before lowered the count |
+| `SHERIFF_GATE_TTL` | `900` | Seconds the hooks reuse a verdict a tool or a hook recorded before running Sheriff again |
+| `SHERIFF_STOP_MAX_STALLS` | `1` | How many stops in a row with nothing changed since the last block the Stop hook still sends back; the next goes through. `0` lets the first through, which a checker's false positive that nothing can fix calls for |
+| `SHERIFF_TEST_TIMEOUT` | `600` | Seconds the project's tests get when the tools run them (`VERIFICATION_TIMEOUT`, 300, in the hooks and the loop) |
+| `SHERIFF_COVERAGE`, `SHERIFF_BRANCHES`, `SHERIFF_MUTATION`, `SHERIFF_MUTATORS` | `100`, `100`, `80`, the set above | What the tests of a change must reach, for every project; a project's `sheriff.coverage` and the rest win |
+| `SHERIFF_COVERAGE_TIMEOUT`, `SHERIFF_MUTATION_TIMEOUT` | `600`, `1800` | Seconds the tests get under JaCoCo, and PIT gets |
 | `SHERIFF_STOP_MAX_BLOCKS` | `5` | How many times in a row the Stop hook sends a session back while errors remain, before it lets the turn end so as not to loop. A stop with nothing changed since the last block is sent back once more, saying so; a second such stop in a row goes through, as a model whose edits are denied cannot change anything. The installers give the hook 900 s, as with `SHERIFF_STOP_RUNS_TESTS=1` it runs the tests |
 | `SHERIFF_JAVA` | unset | The Java the jar's installers write into the user's configuration (Codex's and Antigravity's server, and the hooks of every project) instead of `java` found on the PATH. Both installers set it to the Java they found, and register Claude Code's server with that Java too, so that an editor started from the desktop, with another PATH, and the hooks under Git Bash on Windows, still start it. Ignored when it names nothing that can be run; a project's own hooks always run `java` |
 | `SHERIFF_FAIL_FAST` | unset | `1` makes the hooks run Sheriff with `--fail-fast`: it stops at the first error, so the check is quicker and reports one finding. Never used by the loop or `sheriff_fix`, which need all of them. The installers write it as an option of the hook command instead (`install.sh --fail-fast`) |
@@ -650,7 +738,8 @@ PowerShells) against what it published. A tag with a suffix (`v0.1.1-rc.1`)
 is a prerelease, which the install line never picks: it is how a release is
 tried before its real tag.
 
-On Windows the release's CI has no Docker and no assistant, so a change that
+No workflow runs on Windows now (it is out of the matrices while the product
+is not meant for it; `windows-latest` brings it back), so a change that
 touches Windows (the installers, the hooks, how commands or Docker are run)
 is tried on the prerelease by hand, on a Windows machine, before the real
 tag: install it, open a Codex session and a Claude Code session on a project

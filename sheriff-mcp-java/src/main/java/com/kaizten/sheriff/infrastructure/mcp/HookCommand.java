@@ -4,6 +4,7 @@ import com.kaizten.sheriff.infrastructure.cli.Agent;
 import com.kaizten.sheriff.infrastructure.config.Composition;
 import com.kaizten.sheriff.infrastructure.config.Configuration;
 import com.kaizten.sheriff.infrastructure.hook.HookExit;
+import com.kaizten.sheriff.infrastructure.mcp.tool.Tools;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
@@ -57,8 +58,10 @@ public final class HookCommand {
             }
             Map<String, String> agentEnvironment = agentEnvironment(environment, config, project);
             Configuration configuration = new Configuration(agentEnvironment, config.cachedCatalog().getParent());
-            return new Agent(configuration, Composition.real(configuration, config::profileFor,
-                    config.layout()::verificationCommand, config.layout()::testCommandForModel)).run(List.of(hook));
+            Composition composition = Composition.real(configuration, config::profileFor,
+                    config.layout()::verificationCommand, config.layout()::testCommandForModel)
+                    .withChangeCoverage(Tools.changeCoverage(config)::measure);
+            return new Agent(configuration, composition).run(List.of(hook));
         } catch (RuntimeException exception) {
             System.err.printf(COULD_NOT_START, exception.getMessage());
             return HookExit.ALLOW;

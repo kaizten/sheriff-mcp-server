@@ -6,8 +6,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.kaizten.sheriff.domain.enumerate.StopReason;
 import com.kaizten.sheriff.domain.valueobject.RunSummary;
+import com.kaizten.sheriff.domain.valueobject.SheriffFinding;
 import com.kaizten.sheriff.domain.valueobject.SheriffRule;
 import com.kaizten.sheriff.domain.valueobject.VerificationResult;
+import com.kaizten.sheriff.infrastructure.coverage.ChangeCoverage;
+import com.kaizten.sheriff.infrastructure.coverage.CoverageThresholds;
 import com.kaizten.sheriff.infrastructure.docker.ImageProvisioning;
 import com.kaizten.sheriff.infrastructure.docker.SheriffImage;
 import com.kaizten.sheriff.infrastructure.mcp.McpConfig;
@@ -17,6 +20,7 @@ import com.kaizten.sheriff.infrastructure.mcp.protocol.ToolOutcome;
 import com.kaizten.sheriff.infrastructure.process.Platform;
 import com.kaizten.sheriff.infrastructure.process.ProcessOutcome;
 import com.kaizten.sheriff.infrastructure.process.ProcessRunner;
+import com.kaizten.sheriff.infrastructure.process.SystemProcessRunner;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.PrintStream;
@@ -65,12 +69,12 @@ final class ToolsTest {
     }
 
     @Test
-    void listsTheFiveToolsUnderTheDefaultPrefix() {
+    void listsTheSixToolsUnderTheDefaultPrefix() {
         List<Map<String, Object>> definitions = tools(List.of()).definitions();
 
         List<Object> names = definitions.stream().map(definition -> definition.get("name")).toList();
-        assertEquals(List.of("sheriff_test", "sheriff_fix", "sheriff_guidelines", "sheriff_autofix", "sheriff_task"),
-                names);
+        assertEquals(List.of("sheriff_test", "sheriff_fix", "sheriff_guidelines", "sheriff_autofix", "sheriff_task",
+                "sheriff_config"), names);
     }
 
     @Test
@@ -822,6 +826,459 @@ final class ToolsTest {
 
         assertTrue(text.contains("src/main/java/demo/Calc.java: minus"), text);
         assertFalse(text.contains("the component is done"), text);
+    }
+
+    /**
+     * A Maven component with a repository, whose Calc gained a method since
+     * its first commit, and a changed test that calls it.
+     */
+    private Path measurableChange() throws IOException, InterruptedException {
+        mavenComponent("app");
+        Path app = repository.resolve("app");
+        Path source = Files.createDirectories(app.resolve("src/main/java/demo")).resolve("Calc.java");
+        Files.writeString(source, "package demo;\n\npublic class Calc {\n}\n");
+        for (List<String> step : List.of(List.of("init", "-q"), List.of("add", "-A"), List.of("commit", "-q", "-m", "seed"))) {
+            List<String> command = new ArrayList<>(List.of("git", "-c", "user.email=t@example.com", "-c", "user.name=t"));
+            command.addAll(step);
+            Process git = new ProcessBuilder(command).directory(app.toFile()).redirectErrorStream(true).start();
+            git.getInputStream().readAllBytes();
+            assertEquals(0, git.waitFor(), String.join(" ", command));
+        }
+        Files.writeString(source, "package demo;\n\npublic class Calc {\n\n    public int abs(int a) {\n"
+                + "        return a < 0 ? -a : a;\n    }\n}\n");
+        Files.writeString(Files.createDirectories(app.resolve("src/test/java/demo")).resolve("CalcTest.java"),
+                "class CalcTest {\n    void abs() {\n        new Calc().abs(1);\n    }\n}\n");
+        return app;
+    }
+
+    /**
+     * What measures the change: git as it is, and a Maven that writes the
+     * reports given, none when null.
+     */
+    private ChangeCoverage coverageWriting(Path app, String jacoco, String pit) {
+        ProcessRunner real = new SystemProcessRunner();
+        ProcessRunner maven = (command, directory, environment, timeout) -> {
+            if (command.get(0).equals("git")) {
+                return real.run(command, directory, environment, timeout);
+            }
+            String line = command.get(command.size() - 1);
+            try {
+                if (line.contains("prepare-agent") && jacoco != null) {
+                    Files.createDirectories(app.resolve("target/site/jacoco"));
+                    Files.writeString(app.resolve("target/site/jacoco/jacoco.xml"), jacoco);
+                }
+                if (line.contains("mutationCoverage") && pit != null) {
+                    Files.createDirectories(app.resolve("target/pit-reports"));
+                    Files.writeString(app.resolve("target/pit-reports/mutations.xml"), pit);
+                }
+            } catch (IOException exception) {
+                throw new IllegalStateException(exception);
+            }
+            return ProcessOutcome.completed(1, "", "[ERROR] Could not resolve org.jacoco");
+        };
+        return new ChangeCoverage(maven, repository, (component, arguments) -> Optional.of("mvn " + String.join(" ", arguments)),
+                component -> CoverageThresholds.defaults(), Duration.ofMinutes(1), Duration.ofMinutes(1));
+    }
+
+    private static final String COVERED = "<report><package name=\"demo\"><sourcefile name=\"Calc.java\">"
+            + "<line nr=\"6\" mi=\"0\" ci=\"5\" mb=\"0\" cb=\"2\"/></sourcefile></package></report>";
+
+    private static String mutants(String... statuses) {
+        StringBuilder xml = new StringBuilder("<mutations>");
+        for (String status : statuses) {
+            xml.append("<mutation detected='").append(status.equals("KILLED")).append("' status='").append(status)
+                    .append("'><sourceFile>Calc.java</sourceFile><mutatedClass>demo.Calc</mutatedClass><lineNumber>6"
+                    + "</lineNumber><description>removed negation</description></mutation>");
+        }
+        return xml.append("</mutations>").toString();
+    }
+
+    private Tools toolsMeasuring(ChangeCoverage coverage, ProcessOutcome... outcomes) {
+        McpConfig config = new McpConfig(Map.of("SHERIFF_REPO", repository.toString(), "XDG_STATE_HOME", state.toString()));
+        SheriffRunner runner = new SheriffRunner(new QueuedProcessRunner(outcomes), config.image(), repository,
+                Duration.ofSeconds(30));
+        return new Tools(config, runner, List::of, config::rulesCatalog,
+                component -> VerificationResult.passed("Tests run: 1, Failures: 0"), ImageProvisioning.alreadyReady(),
+                ToolCall.throughMcp(), coverage);
+    }
+
+    private static final String ONE_ERROR = "[{\"file\":\"/data/app/A.java\",\"description\":\"d\","
+            + "\"howToSolve\":\"h\",\"referenceCode\":\"R\",\"type\":\"ERROR\"}]";
+
+    private ProcessOutcome[] repairedToClean() {
+        return new ProcessOutcome[] {ProcessOutcome.completed(0, ONE_ERROR, ""), ProcessOutcome.completed(1, "fixed", ""),
+            ProcessOutcome.completed(1, "fixed", ""), ProcessOutcome.completed(0, "", "")};
+    }
+
+    @Test
+    @DisplayName("sheriff_config lists every setting with its source, changes one in the user's file, and refuses "
+            + "a value the tools could not use")
+    void sheriffConfigListsAndChangesSettings() throws IOException {
+        mavenComponent("app");
+        Map<String, String> environment = Map.of("SHERIFF_REPO", repository.toString(), "XDG_STATE_HOME",
+                state.toString(), "XDG_CONFIG_HOME", state.toString(), "APPDATA", state.toString());
+        Tools tools = new Tools(new McpConfig(environment), null, List::of);
+
+        String listing = tools.call("sheriff_config", Map.of()).text();
+        ToolOutcome changed = tools.call("sheriff_config", Map.of("setting", "SHERIFF_STOP_MAX_STALLS", "value", "0"));
+        ToolOutcome refused = tools.call("sheriff_config", Map.of("setting", "SHERIFF_PULL", "value", "sometimes"));
+
+        assertTrue(listing.contains("SHERIFF_STOP_MAX_STALLS = 1 (default)"), listing);
+        assertTrue(listing.endsWith("an empty value puts the default back."), listing);
+        assertFalse(changed.isError(), changed.text());
+        assertTrue(Files.readString(state.resolve("sheriff-mcp/sheriff.properties"))
+                .contains("\nSHERIFF_STOP_MAX_STALLS=0\n"));
+        assertTrue(refused.isError());
+        assertEquals("SHERIFF_PULL takes one of always, check, never, not 'sometimes'.", refused.text(),
+                "a value refused is no check that could not run");
+        assertTrue(tools.answersAtOnce("sheriff_config"), "it runs neither Sheriff nor the tests");
+    }
+
+    /**
+     * A component of Java with no build tool, in a repository, whose source
+     * changed since its first commit.
+     */
+    private void changedComponentWithNoBuild() throws IOException, InterruptedException {
+        Path lib = Files.createDirectories(repository.resolve("lib/src/main/java/demo"));
+        Files.writeString(lib.resolve("A.java"), "package demo;\n\nclass A {\n}\n");
+        commitAll(repository.resolve("lib"));
+        Files.writeString(lib.resolve("A.java"), "package demo;\n\nclass A {\n    int a;\n}\n");
+    }
+
+    private static void commitAll(Path directory) throws IOException, InterruptedException {
+        for (List<String> step : List.of(List.of("init", "-q"), List.of("add", "-A"), List.of("commit", "-q", "-m", "seed"))) {
+            List<String> command = new ArrayList<>(List.of("git", "-c", "user.email=t@example.com", "-c", "user.name=t"));
+            command.addAll(step);
+            Process git = new ProcessBuilder(command).directory(directory.toFile()).redirectErrorStream(true).start();
+            git.getInputStream().readAllBytes();
+            assertEquals(0, git.waitFor(), String.join(" ", command));
+        }
+    }
+
+    @Test
+    @DisplayName("a clean component with a new method no test calls is sent to write that test first")
+    void aCleanComponentWithAnUntestedMethodNeedsItsTest() throws IOException, InterruptedException {
+        Path app = measurableChange();
+        Files.delete(app.resolve("src/test/java/demo/CalcTest.java"));
+
+        String text = toolsMeasuring(coverageWriting(app, COVERED, mutants("KILLED")),
+                ProcessOutcome.completed(0, "", "")).call("sheriff_test", Map.of("component", "app")).text();
+
+        assertTrue(text.contains("src/main/java/demo/Calc.java: abs"), text);
+        assertFalse(text.contains("verify true"), text);
+        org.junit.jupiter.api.Assumptions.assumeFalse(Platform.windows(), "the command is cmd's there");
+        assertTrue(text.endsWith("Then run cd '" + app.toAbsolutePath().normalize() + "' && mvn test, and call the "
+                + "sheriff_test tool with component 'app' again."), text);
+    }
+
+    @Test
+    @DisplayName("a clean component with a change and no build tool is done: there are no tests to measure")
+    void aChangeWithNoBuildIsDone() throws IOException, InterruptedException {
+        changedComponentWithNoBuild();
+
+        String text = toolsMeasuring(coverageWriting(repository.resolve("lib"), COVERED, mutants("KILLED")),
+                ProcessOutcome.completed(0, "", "")).call("sheriff_test", Map.of("component", "lib")).text();
+
+        assertTrue(text.endsWith("Next step: none, the component is done: it meets the standards and has no tests to "
+                + "run."), text);
+    }
+
+    @Test
+    @DisplayName("a clean component with nothing to measure is sent to its tests, by the command and the next call")
+    void aCleanComponentWithNothingToMeasureRunsItsTests() throws IOException {
+        mavenComponent("app");
+        String command = "cd '" + repository.resolve("app").toAbsolutePath().normalize() + "' && mvn test";
+
+        String text = toolsMeasuring(coverageWriting(repository.resolve("app"), COVERED, mutants("KILLED")),
+                ProcessOutcome.completed(0, "", "")).call("sheriff_test", Map.of("component", "app")).text();
+
+        org.junit.jupiter.api.Assumptions.assumeFalse(Platform.windows(), "the command is cmd's there");
+        assertTrue(text.endsWith("Next step: run the project's tests (" + command + "). If they pass, the component is "
+                + "done. If you change any file to make them pass, call the sheriff_test tool with component 'app' "
+                + "again."), text);
+    }
+
+    @Test
+    @DisplayName("passing tests with nothing to measure are done, with no measure in the answer")
+    void passingTestsWithNothingToMeasureAreDone() throws IOException {
+        mavenComponent("app");
+
+        String text = toolsMeasuring(coverageWriting(repository.resolve("app"), COVERED, mutants("KILLED")),
+                repairedToClean()).call("sheriff_fix", Map.of("component", "app", "verify", true)).text();
+
+        assertTrue(text.endsWith("Next step: none, the component is done: it meets the standards and its tests "
+                + "pass."), text);
+        assertFalse(text.contains("The tests run"), text);
+    }
+
+    @Test
+    @DisplayName("sheriff_config asks for a value rather than putting the default back unasked, changes a project's "
+            + "file when told, and lists how to change one")
+    void sheriffConfigNeedsAValueAndTakesTheProject() throws IOException {
+        Map<String, String> environment = Map.of("SHERIFF_REPO", repository.toString(), "XDG_STATE_HOME",
+                state.toString(), "XDG_CONFIG_HOME", state.toString(), "APPDATA", state.toString());
+        Tools tools = new Tools(new McpConfig(environment), null, List::of);
+
+        ToolOutcome noValue = tools.call("sheriff_config", Map.of("setting", "SHERIFF_GATE_TTL"));
+        String changed = tools.call("sheriff_config", Map.of("setting", "SHERIFF_GATE_TTL", "value", "60",
+                "project", true)).text();
+
+        assertEquals("Give the value to set SHERIFF_GATE_TTL to, or an empty one to put its default back.",
+                noValue.text());
+        assertTrue(changed.startsWith("SHERIFF_GATE_TTL is 60 in " + repository.resolve(".sheriff.properties")),
+                changed);
+        assertEquals("SHERIFF_GATE_TTL=60\n", Files.readString(repository.resolve(".sheriff.properties")));
+        assertTrue(tools.call("sheriff_config", Map.of()).text().contains(String.format("%n%nTo change one, call "
+                + "sheriff_config with setting and value, and project true for this project only")));
+    }
+
+    @Test
+    @DisplayName("a server whose settings stop Sheriff still answers sheriff_config, where they are changed")
+    void aMisconfiguredServerStillAnswersSheriffConfig() {
+        McpConfig config = new McpConfig(Map.of("SHERIFF_REPO", repository.toString(), "XDG_STATE_HOME",
+                state.toString(), "SHERIFF_TIMEOUT", "soon"));
+        Tools tools = new Tools(config, null, List::of);
+
+        assertTrue(tools.call("sheriff_test", Map.of("component", "app")).isError());
+        ToolOutcome listing = tools.call("sheriff_config", Map.of());
+        assertFalse(listing.isError(), listing.text());
+        assertTrue(listing.text().contains("SHERIFF_TIMEOUT = soon (the environment)"), listing.text());
+    }
+
+    @Test
+    @DisplayName("a tool other than sheriff_config that fails still ends with what to do next")
+    void otherFailuresKeepTheirStep() throws IOException {
+        mavenComponent("app");
+        Tools tools = new Tools(new McpConfig(Map.of("SHERIFF_REPO", repository.toString(), "XDG_STATE_HOME",
+                state.toString())), null, List::of);
+
+        ToolOutcome failed = tools.call("sheriff_test", Map.of("component", "app"));
+
+        assertTrue(failed.isError());
+        assertTrue(failed.text().contains("Next step: tell the user the code standards check could not run"),
+                failed.text());
+    }
+
+    @Test
+    @DisplayName("a tool that throws outside a task still ends with what to do next")
+    void aFailureOutsideATaskKeepsItsStep() {
+        McpConfig config = new McpConfig(Map.of("SHERIFF_REPO", repository.toString(), "XDG_STATE_HOME",
+                state.toString()));
+        Tools tools = new Tools(config, null, () -> {
+            throw new IllegalStateException("the catalog broke");
+        });
+        ToolOutcome failed = tools.call("sheriff_guidelines", Map.of("query", "braces"));
+        assertTrue(failed.isError());
+        assertTrue(failed.text().contains("Next step:"), failed.text());
+    }
+
+    @Test
+    @DisplayName("the tools that run neither Sheriff nor the tests answer at once, and only they")
+    void whichToolsAnswerAtOnce() {
+        Tools tools = tools(List.of());
+        assertEquals(List.of(true, true, true, false, false, false), List.of(tools.answersAtOnce("sheriff_task"),
+                tools.answersAtOnce("sheriff_guidelines"), tools.answersAtOnce("sheriff_config"),
+                tools.answersAtOnce("sheriff_test"), tools.answersAtOnce("sheriff_fix"),
+                tools.answersAtOnce("sheriff_autofix")));
+    }
+
+    @Test
+    @DisplayName("sheriff_config changes settings and nothing else: not read-only, the same call twice as once")
+    void sheriffConfigIsAnnotated() {
+        Map<?, ?> annotations = (Map<?, ?>) tools(List.of()).definitions().stream()
+                .filter(definition -> "sheriff_config".equals(definition.get("name"))).findFirst().orElseThrow()
+                .get("annotations");
+        assertEquals(false, annotations.get("readOnlyHint"), annotations.toString());
+        assertEquals(true, annotations.get("idempotentHint"), annotations.toString());
+        assertEquals(false, annotations.get("destructiveHint"), annotations.toString());
+    }
+
+    @Test
+    @DisplayName("the project's tests run by its build tool, and a component with none runs nothing")
+    void theProjectsTestsNeedABuildTool() throws IOException {
+        Files.createDirectories(repository.resolve("plain/src"));
+        Files.writeString(repository.resolve("plain/src/A.java"), "class A {}");
+        McpConfig config = new McpConfig(Map.of("SHERIFF_REPO", repository.toString()));
+        assertFalse(Tools.projectTests(config).apply("plain").ran());
+    }
+
+    @Test
+    @DisplayName("sheriff_autofix runs the loop with the user's own settings: the backend from the user's file")
+    void autofixTakesTheUsersSettings() throws IOException, InterruptedException {
+        Files.createDirectories(repository.resolve("app/src"));
+        Files.writeString(repository.resolve("app/src/A.java"), "class A {}");
+        Files.createDirectories(state.resolve("sheriff-mcp"));
+        Files.writeString(state.resolve("sheriff-mcp/sheriff.properties"), "AI_BACKEND=local\n");
+        Map<String, String> environment = new LinkedHashMap<>(Map.of("SHERIFF_REPO", repository.toString(),
+                "XDG_STATE_HOME", state.toString(), "XDG_CONFIG_HOME", state.toString(), "APPDATA",
+                state.toString(), "SHERIFF_MOCK", "1", "SHERIFF_AGENT_GIT_SAFETY", "0"));
+        environment.put("VERIFICATION_TEST_CMD", "true");
+        McpConfig config = new McpConfig(environment);
+        Tools tools = new Tools(config, null, List::of, config::rulesCatalog, component -> VerificationResult.passed(""));
+
+        String accepted = tools.call("sheriff_autofix", Map.of("component", "app")).text();
+        String id = accepted.substring("Task ".length(), accepted.indexOf(' ', "Task ".length()));
+        tools.close();
+
+        String result = tools.call("sheriff_task", Map.of("id", id)).text();
+        assertTrue(result.contains("via AI_BACKEND 'local'"), result);
+    }
+
+    private static String errors(String... descriptions) {
+        StringBuilder json = new StringBuilder("[");
+        for (int index = 0; index < descriptions.length; index++) {
+            String[] parts = descriptions[index].split(":", 2);
+            json.append(index == 0 ? "" : ",").append("{\"file\":\"/data/app/").append(parts[0])
+                    .append("\",\"description\":\"").append(parts[1])
+                    .append("\",\"howToSolve\":\"h\",\"referenceCode\":\"R\",\"type\":\"ERROR\"}");
+        }
+        return json.append("]").toString();
+    }
+
+    private static ProcessOutcome[] repairLeaving(String errors) {
+        return new ProcessOutcome[] {ProcessOutcome.completed(0, errors, ""), ProcessOutcome.completed(1, "fixed", ""),
+            ProcessOutcome.completed(1, "fixed", ""), ProcessOutcome.completed(0, errors, "")};
+    }
+
+    @Test
+    @DisplayName("a repair that took several rounds says how many; one that took one says nothing of rounds")
+    void aRepairSaysHowManyRoundsItTook() throws IOException {
+        mavenComponent("app");
+        String two = errors("A.java:one", "A.java:two");
+        String one = errors("A.java:two");
+        Tools tools = toolsWithTests(VerificationResult.passed(""), ProcessOutcome.completed(0, two, ""),
+                ProcessOutcome.completed(1, "fixed", ""), ProcessOutcome.completed(1, "fixed", ""),
+                ProcessOutcome.completed(0, one, ""), ProcessOutcome.completed(1, "fixed", ""),
+                ProcessOutcome.completed(1, "fixed", ""), ProcessOutcome.completed(0, one, ""));
+
+        String text = tools.call("sheriff_fix", Map.of("component", "app")).text();
+
+        assertTrue(text.contains("2 error(s) before, 1 after (1 repaired). The fixers ran 2 rounds, each measured by "
+                + "a new analysis."), text);
+        String single = tools(List.of(), repairLeaving(one)).call("sheriff_fix", Map.of("component", "app")).text();
+        assertFalse(single.contains("rounds"), single);
+    }
+
+    @Test
+    @DisplayName("the errors left for the end are counted per file, under the folder they share when they share one")
+    void errorsLeftForTheEndAreCounted() {
+        SheriffFinding a = new SheriffFinding("app/src/A.java", "d", "h", "R", "ERROR", Map.of());
+        SheriffFinding b = new SheriffFinding("app/src/B.java", "d", "h", "R", "ERROR", Map.of());
+        SheriffFinding pom = new SheriffFinding("pom.xml", "d", "h", "R", "ERROR", Map.of());
+        assertEquals("", SheriffFixTool.leftForTheEnd(List.of()));
+        assertEquals(String.format("%n%nLeft for the end, as they stayed through the edits made for them (3): A.java 2, "
+                + "B.java 1, under app/src/"), SheriffFixTool.leftForTheEnd(List.of(a, a, b)));
+        assertEquals(String.format("%n%nLeft for the end, as they stayed through the edits made for them (2): "
+                + "app/src/A.java 1, pom.xml 1"), SheriffFixTool.leftForTheEnd(List.of(a, pom)));
+    }
+
+    @Test
+    @DisplayName("an error that stays through the edits made for it is left for the end, gets a last round alone, and "
+            + "is then told to the user")
+    void aStuckErrorIsLeftForTheEnd() throws IOException {
+        mavenComponent("app");
+        List<ProcessOutcome> outcomes = new ArrayList<>();
+        for (String round : List.of(errors("A.java:stays", "B.java:one"), errors("A.java:stays", "B.java:one"),
+                errors("A.java:stays", "B.java:three"), errors("A.java:stays"), errors("A.java:stays"))) {
+            outcomes.addAll(List.of(repairLeaving(round)));
+        }
+        Tools tools = toolsWithTests(VerificationResult.passed(""), outcomes.toArray(ProcessOutcome[]::new));
+        Map<String, Object> call = Map.of("component", "app");
+
+        String first = tools.call("sheriff_fix", call).text();
+        String second = tools.call("sheriff_fix", call).text();
+        String third = tools.call("sheriff_fix", call).text();
+        String fourth = tools.call("sheriff_fix", call).text();
+        String fifth = tools.call("sheriff_fix", call).text();
+
+        assertTrue(first.contains("stays") && first.contains("one"), first);
+        assertFalse(first.contains("last round"), first);
+        assertFalse(second.contains("Left for the end"), second);
+        assertTrue(second.contains("These 2 errors are exactly the ones the last answer of this tool listed"), second);
+        assertFalse(third.contains("- stays"), "the stuck error is not listed among the work: " + third);
+        assertTrue(third.contains("Left for the end, as they stayed through the edits made for them (1): A.java 1"),
+                third);
+        assertTrue(third.contains("Then call the sheriff_fix tool with component 'app' again."), third);
+        assertTrue(fourth.contains(String.format("%nOnly errors that stayed through the edits made for them are left: "
+                + "this answer is their last round.")), fourth);
+        assertTrue(fourth.contains("Still outstanding: 1 error(s) in 1 file(s)."), fourth);
+        assertFalse(fourth.contains("Left for the end"), fourth);
+        assertTrue(fourth.contains("stays"), fourth);
+        assertTrue(fifth.contains("What is left, 1 error(s), stayed through every repair and every edit made for "
+                + "them:"), fifth);
+        assertTrue(fifth.contains("  - app/A.java: stays  [R]"), fifth);
+        assertTrue(fifth.endsWith("Next step: none: the 1 error(s) above stayed through every repair and every edit "
+                + "made for them, so the work on them is over. Tell the user each one, in a line, and why it cannot be "
+                + "fixed; the rest of the component is done."), fifth);
+        assertFalse(fifth.contains(" or "), "an alternative is a choice a model makes differently: " + fifth);
+    }
+
+    @Test
+    @DisplayName("the real measure goes by the project: a folder outside any repository has nothing to measure")
+    void theRealMeasureNeedsAChange() throws IOException {
+        mavenComponent("app");
+        McpConfig config = new McpConfig(Map.of("SHERIFF_REPO", repository.toString()));
+        assertFalse(Tools.changeCoverage(config).applies("app"));
+    }
+
+    @Test
+    @DisplayName("a clean component with a Java change sends the model to sheriff_fix with verify, which measures "
+            + "the tests, not to the tests alone")
+    void aCleanChangeIsMeasuredThroughTheRepair() throws IOException, InterruptedException {
+        Path app = measurableChange();
+
+        String text = toolsMeasuring(coverageWriting(app, COVERED, mutants("KILLED")),
+                ProcessOutcome.completed(0, "", "")).call("sheriff_test", Map.of("component", "app")).text();
+
+        assertTrue(text.endsWith("Next step: call the sheriff_fix tool with component 'app' and verify true. It runs "
+                + "the project's tests and then measures how well they test the lines this change wrote: the lines "
+                + "they run and the branches of each condition they take (JaCoCo), and the changes to those lines "
+                + "they notice (PIT's mutation testing)."), text);
+    }
+
+    @Test
+    @DisplayName("tests that pass but let a mutant of the change survive are not done: the answer lists it and "
+            + "sends the model back with verify")
+    void weakTestsAreNotDone() throws IOException, InterruptedException {
+        Path app = measurableChange();
+
+        String text = toolsMeasuring(coverageWriting(app, COVERED, mutants("KILLED", "SURVIVED")), repairedToClean())
+                .call("sheriff_fix", Map.of("component", "app", "verify", true)).text();
+
+        assertTrue(text.contains("they do not test enough of what this change wrote"), text);
+        assertTrue(text.contains("kill 1 of the 2 mutants PIT made of them (50%, 80% required)"), text);
+        assertTrue(text.contains("src/main/java/demo/Calc.java:6 removed negation"), text);
+        assertTrue(text.endsWith("Then call the sheriff_fix tool with component 'app' and verify true again."), text);
+        assertFalse(text.contains("the component is done"), text);
+        assertFalse(text.contains(" or "), "an alternative is a choice a model makes differently: " + text);
+    }
+
+    @Test
+    @DisplayName("tests that run every changed line and kill enough mutants are done, and the answer says how well")
+    void strongTestsAreDone() throws IOException, InterruptedException {
+        Path app = measurableChange();
+
+        String text = toolsMeasuring(coverageWriting(app, COVERED, mutants("KILLED", "KILLED")), repairedToClean())
+                .call("sheriff_fix", Map.of("component", "app", "verify", true)).text();
+
+        assertTrue(text.contains("The tests run 1 of the 1 lines of code this change wrote (100%, 100% required), "
+                + "take 2 of the 2 branches of their conditions (100%, 100% required) and kill 2 of the 2 mutants"),
+                text);
+        assertTrue(text.endsWith("Next step: none, the component is done: it meets the standards and its tests "
+                + "pass."), text);
+    }
+
+    @Test
+    @DisplayName("a measure that cannot run does not hold the work: the component is done, and the user is told why")
+    void anUnmeasuredChangeIsToldNotBlocked() throws IOException, InterruptedException {
+        Path app = measurableChange();
+
+        String text = toolsMeasuring(coverageWriting(app, null, null), repairedToClean())
+                .call("sheriff_fix", Map.of("component", "app", "verify", true)).text();
+
+        assertTrue(text.contains("could not be measured: JaCoCo wrote no report"), text);
+        assertTrue(text.contains("Could not resolve org.jacoco"), text);
+        assertTrue(text.contains("the component is done"), text);
     }
 
     @Test

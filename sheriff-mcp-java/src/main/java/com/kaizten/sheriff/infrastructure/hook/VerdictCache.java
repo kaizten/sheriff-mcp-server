@@ -68,6 +68,7 @@ public final class VerdictCache {
     private static final String SAMPLE_FIELD = "sample";
     private static final String FINGERPRINT_FIELD = "fingerprint";
     private static final String FILES_FIELD = "files";
+    private static final String KEYS_FIELD = "keys";
     private static final String KEY_SEPARATOR = "\n";
     private static final String SEPARATOR = ":";
     private static final String ENTRY_SEPARATOR = "|";
@@ -92,6 +93,17 @@ public final class VerdictCache {
      */
     public VerdictCache() {
         this(TemporaryFolders.forUser(DIRECTORY), Duration.ofSeconds(ttlSeconds()));
+    }
+
+    /**
+     * The user's own cache, with a chosen lifetime: the hooks', which read it
+     * from the settings rather than the process's environment.
+     *
+     * @param lifetime how long an entry is served
+     * @return that cache
+     */
+    public static VerdictCache lasting(Duration lifetime) {
+        return new VerdictCache(TemporaryFolders.forUser(DIRECTORY), lifetime);
     }
 
     /**
@@ -152,8 +164,10 @@ public final class VerdictCache {
         }
         Set<String> files = new TreeSet<>();
         entry.path(FILES_FIELD).forEach(file -> files.add(file.asText()));
+        Set<String> keys = new TreeSet<>();
+        entry.path(KEYS_FIELD).forEach(key -> keys.add(key.asText()));
         return Optional.of(new GateVerdict(entry.path(ERRORS_FIELD).asInt(), entry.path(SAMPLE_FIELD).asText(),
-                files));
+                files, keys));
     }
 
     /**
@@ -171,7 +185,8 @@ public final class VerdictCache {
      */
     public GateVerdict remember(Path component, String profile, boolean failFast, String fingerprint,
             AnalysisResult result) {
-        GateVerdict verdict = new GateVerdict(result.total(), sampleOf(result), filesOf(result));
+        GateVerdict verdict = new GateVerdict(result.total(), sampleOf(result), filesOf(result),
+                failFast ? Set.of() : StuckErrors.keys(result.errors()));
         if (fingerprint.isEmpty() || result.error()) {
             return verdict;
         }
@@ -184,6 +199,7 @@ public final class VerdictCache {
         entry.put(ERRORS_FIELD, verdict.errors());
         entry.put(SAMPLE_FIELD, verdict.sample());
         verdict.files().stream().sorted().forEach(entry.putArray(FILES_FIELD)::add);
+        verdict.keys().stream().sorted().forEach(entry.putArray(KEYS_FIELD)::add);
         write(entryFor(component, profile, failFast), entry.toString());
         return verdict;
     }

@@ -19,7 +19,9 @@ import java.util.Set;
  * was refused; it called sheriff_fix again before editing anything, which
  * repaired nothing (a second call helps after edits, or after a fixer that
  * makes room for another, not before), and made the same edit once more. An
- * edit that puts new code into a file with errors goes through too; the Stop
+ * edit that puts new code into a file with errors goes through too, and so
+ * does any edit when the component's only errors are ones left for the end
+ * ({@link StuckErrors}), which would otherwise hold every change up. The Stop
  * hook is what refuses a turn that ends with errors left, and a refusal here
  * is recorded for it ({@link TurnStart#refused}), so that a turn whose only
  * edit was refused is checked too.
@@ -118,7 +120,7 @@ public final class SheriffGateHook {
             return HookExit.ALLOW;
         }
         String file = gate.sheriffName(editedPath(call));
-        if (verdict.clean() || verdict.hasErrorsIn(file)) {
+        if (verdict.clean() || verdict.hasErrorsIn(file) || gate.onlyDeferred(component, verdict)) {
             return HookExit.ALLOW;
         }
         memory.remember(session, component);

@@ -202,8 +202,8 @@ class ImageProvisioningTests {
         }
 
         @Test
-        @DisplayName("an outdated image is reported, not replaced: new rules should not arrive unasked")
-        void anOutdatedImageIsReported() {
+        @DisplayName("with SHERIFF_PULL=check an outdated image is reported, not replaced")
+        void checkReportsAnOutdatedImage() {
             FakeDocker docker = docker(here(), PULLED);
             ImageProvisioning image = new ImageProvisioning(
                     new SheriffImage(docker, IMAGE, name -> Optional.of("sha256:bbb")), "check", log);
@@ -213,23 +213,59 @@ class ImageProvisioningTests {
         }
 
         @Test
-        @DisplayName("the way to have it updated on start is the installer's option, which reaches Codex too")
-        void anOutdatedImageNamesTheInstallersOption() {
-            ImageProvisioning image = new ImageProvisioning(
-                    new SheriffImage(docker(here(), PULLED), IMAGE, name -> Optional.of("sha256:bbb")), "check", log);
-            image.now();
-            assertTrue(image.notice().orElse("").contains("install with --pull-always"), image.notice().toString());
-        }
-
-        @Test
-        @DisplayName("with SHERIFF_PULL=always an outdated image is replaced instead")
-        void alwaysReplacesAnOutdatedImage() {
+        @DisplayName("by default an image whose digest is not the one published is replaced: Sheriff has no versions")
+        void anOutdatedImageIsReplacedByDefault() {
             FakeDocker docker = docker(here(), PULLED);
-            ImageProvisioning image = new ImageProvisioning(
-                    new SheriffImage(docker, IMAGE, name -> Optional.of("sha256:bbb")), "always", log);
+            ImageProvisioning image = new ImageProvisioning(new SheriffImage(docker, IMAGE,
+                    name -> Optional.of("sha256:bbb")), ImageProvisioning.policyIn(Map.of()), log);
             assertTrue(image.now());
             assertTrue(docker.pulled());
             assertEquals(Optional.empty(), image.notice());
+            assertTrue(log().contains("its digest differs"), log());
+        }
+
+        @Test
+        @DisplayName("an image whose digest is the one published is left alone")
+        void aCurrentImageIsNotPulled() {
+            FakeDocker docker = docker(here(), PULLED);
+            ImageProvisioning image = new ImageProvisioning(
+                    new SheriffImage(docker, IMAGE, name -> Optional.of("sha256:aaa")), "always", log);
+            assertTrue(image.now());
+            assertFalse(docker.pulled());
+            assertEquals(Optional.empty(), image.notice());
+        }
+
+        @Test
+        @DisplayName("while the newer image downloads, the one here is used and the tools say a newer one is coming")
+        void whileUpdatingTheOldImageIsUsed() throws Exception {
+            CountDownLatch release = new CountDownLatch(1);
+            FakeDocker docker = new FakeDocker(List.of(here()), PULLED, release);
+            ImageProvisioning image = new ImageProvisioning(
+                    new SheriffImage(docker, IMAGE, name -> Optional.of("sha256:bbb")), "always", log).inBackground();
+            for (int wait = 0; wait < 50 && image.notice().isEmpty(); wait++) {
+                Thread.sleep(20);
+            }
+            assertEquals(Optional.empty(), image.blocker());
+            assertEquals(Optional.of("Note: a newer kaizten/sheriff:latest has been published, and it is being "
+                    + "downloaded. Until it is here, Sheriff runs the one on this machine, whose rules may differ."),
+                    image.notice());
+            assertTrue(image.description().orElse("").endsWith("a newer build of it is being downloaded"),
+                    image.description().toString());
+            release.countDown();
+            image.ready().get(5, TimeUnit.SECONDS);
+            assertEquals(Optional.empty(), image.notice());
+        }
+
+        @Test
+        @DisplayName("a newer image that cannot be downloaded leaves the one here in use, and says why")
+        void aFailedUpdateKeepsTheImageHere() {
+            ImageProvisioning image = new ImageProvisioning(new SheriffImage(
+                    docker(here(), ProcessOutcome.completed(1, "", "net/http: TLS handshake timeout")), IMAGE,
+                    name -> Optional.of("sha256:bbb")), "always", log);
+            assertTrue(image.now());
+            assertEquals(Optional.empty(), image.blocker());
+            assertTrue(image.notice().orElse("").contains("could not be downloaded (net/http: TLS handshake timeout)"),
+                    image.notice().toString());
         }
 
         @Test
@@ -247,8 +283,8 @@ class ImageProvisioningTests {
 
         @Test
         void thePolicyComesFromTheEnvironment() {
-            assertEquals("check", ImageProvisioning.policyIn(Map.of()));
-            assertEquals("always", ImageProvisioning.policyIn(Map.of("SHERIFF_PULL", " ALWAYS ")));
+            assertEquals("always", ImageProvisioning.policyIn(Map.of()));
+            assertEquals("check", ImageProvisioning.policyIn(Map.of("SHERIFF_PULL", " CHECK ")));
         }
     }
 }

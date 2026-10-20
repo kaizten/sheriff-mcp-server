@@ -11,6 +11,7 @@ import com.kaizten.sheriff.infrastructure.process.ProcessOutcome;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
@@ -66,6 +67,7 @@ class SheriffRepairTests {
                 "fix JavaDocCommentsInMethod", "test"), steps(runner));
         assertEquals(2, outcome.before().total());
         assertEquals(1, outcome.after().total());
+        assertEquals(2, outcome.rounds(), "two rounds of fixers, the second measured by the last analysis");
         assertEquals(Optional.empty(), outcome.failure());
         assertFalse(Files.exists(repository.resolve("sheriff_errors.json")), "the state was left behind");
     }
@@ -118,5 +120,45 @@ class SheriffRepairTests {
         assertEquals(List.of(), outcome.codes());
         assertEquals(List.of(), outcome.fixerFailures());
         assertEquals(Optional.empty(), outcome.failure());
+    }
+
+    private static String errors(int count) {
+        StringBuilder json = new StringBuilder("[");
+        for (int index = 0; index < count; index++) {
+            json.append(index == 0 ? "" : ",").append("{\"file\":\"/data/app/A.java\",\"description\":\"e")
+                    .append(index).append("\",\"howToSolve\":\"h\",\"referenceCode\":\"Rule")
+                    .append(index).append("\",\"type\":\"ERROR\"}");
+        }
+        return json.append("]").toString();
+    }
+
+    @Test
+    @DisplayName("with no limit the rounds go on while the count drops, past the three there used to be")
+    void roundsGoOnWhileTheCountDrops() {
+        List<ProcessOutcome> outcomes = new ArrayList<>();
+        for (int count = 5; count >= 1; count--) {
+            outcomes.addAll(List.of(ProcessOutcome.completed(0, errors(count), ""), FIXED, FIXED));
+        }
+        outcomes.add(ProcessOutcome.completed(0, errors(1), ""));
+        FakeProcessRunner runner = new FakeProcessRunner(outcomes);
+
+        RepairOutcome outcome = repair(runner).everyFixer(List.of());
+
+        assertEquals(5, outcome.rounds());
+        assertEquals(5, outcome.before().total());
+        assertEquals(1, outcome.after().total());
+    }
+
+    @Test
+    @DisplayName("a limit stops the rounds there, the last analysis still measuring the last repair")
+    void aLimitStopsTheRounds() {
+        FakeProcessRunner runner = new FakeProcessRunner(List.of(ProcessOutcome.completed(0, TWO, ""), FIXED, FIXED,
+                ProcessOutcome.completed(0, ONE, "")));
+
+        RepairOutcome outcome = repair(runner).withRounds(1).everyFixer(List.of());
+
+        assertEquals(List.of("test", "fix", "fix SortedImport,JavaDocCommentsInMethod", "test"), steps(runner));
+        assertEquals(1, outcome.rounds());
+        assertEquals(0, new RepairOutcome(outcome.before(), outcome.after(), null, null, null).rounds());
     }
 }

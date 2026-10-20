@@ -17,6 +17,9 @@ public final class ToolCall {
     private static final String TOOL_CALL = "call the %s tool with component '%s'";
     private static final String TOOL_CALL_ALONE = "call the %s tool";
     private static final String WITH_PROFILE = " and profile '%s'";
+    private static final String VERIFYING_CALL = " and verify true";
+    private static final String VERIFYING_CALL_ALONE = " with verify true";
+    private static final String VERIFY_ARGUMENT = " verify=true";
     private static final String COMMAND = "run `cd %s && java -jar %s --call %s%s`";
     private static final String WINDOWS_COMMAND = "run `cd %s; java -jar %s --call %s%s`";
     private static final String COMPONENT_ARGUMENT = " component=%s";
@@ -89,15 +92,42 @@ public final class ToolCall {
      * @return the call, as an instruction
      */
     public String phrase(String tool, String component, String profile) {
+        return phrase(tool, component, profile, false);
+    }
+
+    /**
+     * One call with {@code verify} set, written so it can be made as it
+     * stands: the repair that also runs the tests and measures them.
+     *
+     * @param tool the tool's name
+     * @param component the component, or empty when there is none to name
+     * @param profile the profile asked for, or empty for the one worked out
+     * @return the call, as an instruction
+     */
+    public String phraseVerifying(String tool, String component, String profile) {
+        return phrase(tool, component, profile, true);
+    }
+
+    /**
+     * One call, with {@code verify} set or not.
+     *
+     * @param tool the tool's name
+     * @param component the component, or empty when there is none to name
+     * @param profile the profile asked for, or empty for the one worked out
+     * @param verify whether the call sets {@code verify}
+     * @return the call, as an instruction
+     */
+    private String phrase(String tool, String component, String profile, boolean verify) {
         if (directory == null) {
             if (component.isEmpty()) {
-                return String.format(TOOL_CALL_ALONE, tool);
+                return String.format(TOOL_CALL_ALONE, tool) + (verify ? VERIFYING_CALL_ALONE : NOTHING);
             }
             String withProfile = profile.isEmpty() ? NOTHING : String.format(WITH_PROFILE, profile);
-            return String.format(TOOL_CALL, tool, component) + withProfile;
+            return String.format(TOOL_CALL, tool, component) + withProfile + (verify ? VERIFYING_CALL : NOTHING);
         }
         String arguments = (component.isEmpty() ? NOTHING : String.format(COMPONENT_ARGUMENT, quoted(component)))
-                + (profile.isEmpty() ? NOTHING : String.format(PROFILE_ARGUMENT, quoted(profile)));
+                + (profile.isEmpty() ? NOTHING : String.format(PROFILE_ARGUMENT, quoted(profile)))
+                + (verify ? VERIFY_ARGUMENT : NOTHING);
         return String.format(windows ? WINDOWS_COMMAND : COMMAND, quoted(directory.toString()),
                 quoted(jar.toString()), tool, arguments);
     }

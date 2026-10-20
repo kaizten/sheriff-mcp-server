@@ -3,6 +3,7 @@ package com.kaizten.sheriff.infrastructure.hook;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kaizten.sheriff.domain.valueobject.VerificationResult;
+import com.kaizten.sheriff.infrastructure.coverage.CoverageVerdict;
 import com.kaizten.sheriff.infrastructure.git.GitVersionControl;
 import com.kaizten.sheriff.infrastructure.git.UntestedMethods;
 import java.io.IOException;
@@ -39,10 +40,18 @@ import java.util.stream.Collectors;
  * files. A stop with nothing changed since the last block is sent back once
  * more, saying so: Sonnet at low effort ended a turn that way, refusing to go
  * on with 177 errors it could fix, where a single stop with no changes used to
- * be taken as "what is left cannot be fixed". A second such stop in a row goes
- * through, since a model whose edits are being denied cannot change anything,
- * and sending it back would only loop. A session the payload does not name is
+ * be taken as "what is left cannot be fixed". After {@code SHERIFF_STOP_MAX_STALLS}
+ * such stops (1 by default) the next goes through, since a model whose edits
+ * are being denied, or that is held by a false positive of the checker, cannot
+ * change anything, and sending it back would only loop. A session the payload does not name is
  * still blocked once, since there is nothing to count it by.
+ *
+ * <p>Errors left for the end ({@link StuckErrors}) do not hold a turn: when the
+ * stops with nothing changed run out, the errors still there are left for the
+ * end, and from then on a component whose only errors are those is let
+ * through, here and at the gate, so a false positive of the checker no longer
+ * sends every later turn back. The MCP's answers still put them before the
+ * user at the end.
  *
  * <p>Only what the turn changed is checked. The turn hook ({@link #startTurn})
  * records the fingerprint of every component git already reported when the
@@ -62,12 +71,13 @@ public final class SheriffStopHook {
     private static final String STOP_HOOK_ACTIVE = "stop_hook_active";
     private static final String SESSION_ID = "session_id";
     private static final int BLOCK_ONCE = 1;
+    private static final int DEFAULT_MAX_STALLS = 1;
     private static final String CAP_REACHED =
             "The code standards Stop hook sent this turn back %d times in a row with errors left -- "
             + "letting it end so that it does not loop.%n";
     private static final String NO_PROGRESS =
-            "Nothing changed twice in a row since the code standards Stop hook sent this turn back -- "
-            + "letting it end.%n";
+            "Nothing changed in %d stop(s) in a row after the code standards Stop hook sent this turn back -- "
+            + "letting it end. SHERIFF_STOP_MAX_STALLS (sheriff_config) sets how many it sends back.%n";
     private static final String STALLED = """
             Nothing changed since the last time this turn was sent back, and the errors below
             are still there. Fix them now. Stop again without changing anything only if none of
@@ -93,6 +103,8 @@ public final class SheriffStopHook {
             %s
             """;
     private static final String COMPONENT_REPORT = "%s: %s error(s)%n%s";
+    private static final String DEFERRED = "%s: its %s error(s) are left for the end, as they stayed through the "
+            + "work done for them -- not holding the turn for them.%n";
     private static final String UNTESTED_BLOCKED = """
             Not done: methods this turn added have no test that calls them, so nothing checks they work.
 
@@ -107,6 +119,15 @@ public final class SheriffStopHook {
             %s
             """;
     private static final String TESTS_REPORT = "%s:%n%s%n";
+    private static final String COVERAGE_BLOCKED = """
+            Not done: the tests pass, but they do not test enough of what this turn wrote.
+
+            %s
+            %s
+            """;
+    private static final String COVERAGE_REPORT = "%s: %s%s%n";
+    private static final String NOT_MEASURED =
+            "How well the tests test what this turn wrote in %s could not be measured (%s) -- not checked.%n";
     private static final String NO_GIT =
             "The code standards hook could not ask git what changed (%s) -- nothing is checked this turn.%n";
     private static final int TEST_OUTPUT_LIMIT = 1500;
@@ -122,6 +143,9 @@ public final class SheriffStopHook {
     private String sources = "";
     private UnaryOperator<String> testCommands = component -> PROJECT_TESTS;
     private UntestedMethods untested;
+    private Function<String, CoverageVerdict> coverage;
+    private int maxStalls = DEFAULT_MAX_STALLS;
+    private final Map<String, GateVerdict> dirtyVerdicts = new LinkedHashMap<>();
     private String reason = "";
     private final ObjectMapper json = new ObjectMapper();
 
@@ -201,6 +225,31 @@ public final class SheriffStopHook {
     }
 
     /**
+     * The same hook, sending a stop with nothing changed since the last block
+     * back this many times in a row before it lets the turn end.
+     *
+     * @param stalls that number, 0 or more
+     * @return this hook
+     */
+    public SheriffStopHook withMaxStalls(int stalls) {
+        this.maxStalls = stalls;
+        return this;
+    }
+
+    /**
+     * The same hook, also refusing to let a turn end while the tests, which
+     * pass, do not test what it wrote as well as the project asks. It needs
+     * the tests on, as the measure runs them again.
+     *
+     * @param measure what measures how well a component's tests test a change
+     * @return this hook
+     */
+    public SheriffStopHook withChangeCoverage(Function<String, CoverageVerdict> measure) {
+        this.coverage = measure;
+        return this;
+    }
+
+    /**
      * The turn hook: records what every component git reports as changed
      * looks like before the turn does anything. It never blocks and prints
      * nothing, since what a prompt hook prints is added to the conversation.
@@ -249,8 +298,9 @@ public final class SheriffStopHook {
         }
         int exit = check(session);
         boolean stalledNow = exit == HookExit.BLOCK && again && sources.equals(blocks.lastSources(session));
-        if (stalledNow && blocks.stalled(session)) {
-            System.err.printf(NO_PROGRESS);
+        if (stalledNow && blocks.stalls(session) >= maxStalls) {
+            dirtyVerdicts.forEach(gate::stalledOn);
+            System.err.printf(NO_PROGRESS, blocks.stalls(session) + BLOCK_ONCE);
             exit = HookExit.ALLOW;
         }
         if (exit == HookExit.BLOCK) {
@@ -286,7 +336,13 @@ public final class SheriffStopHook {
         String first = NO_COMPONENT;
         for (String component : touched) {
             GateVerdict verdict = gate.verdictFor(component);
-            if (verdict.known() && !verdict.clean()) {
+            if (!verdict.known() || verdict.clean()) {
+                continue;
+            }
+            if (gate.onlyDeferred(component, verdict)) {
+                System.err.printf(DEFERRED, component, gate.countOf(verdict));
+            } else {
+                dirtyVerdicts.put(component, verdict);
                 dirty.add(String.format(COMPONENT_REPORT, component, gate.countOf(verdict), verdict.sample()));
                 first = first.isEmpty() ? component : first;
             }
@@ -299,7 +355,10 @@ public final class SheriffStopHook {
         if (untestedDecide(touched) == HookExit.BLOCK) {
             return HookExit.BLOCK;
         }
-        return testsDecide(touched);
+        if (testsDecide(touched) == HookExit.BLOCK) {
+            return HookExit.BLOCK;
+        }
+        return coverageDecide(touched);
     }
 
     /**
@@ -370,6 +429,36 @@ public final class SheriffStopHook {
         }
         reason = String.format(TESTS_BLOCKED, String.join(System.lineSeparator(), failing),
                 gate.testsStep(first, testCommands.apply(first)));
+        return HookExit.BLOCK;
+    }
+
+    /**
+     * The last half, with the tests on and passing: they test what the turn
+     * wrote as well as the project asks. A measure that cannot run checks
+     * nothing, and says so, as the hooks do when Sheriff cannot run.
+     *
+     * @param touched the components the turn touched
+     * @return the exit code
+     */
+    private int coverageDecide(Set<String> touched) {
+        if (tests == null || coverage == null) {
+            return HookExit.ALLOW;
+        }
+        List<String> weak = new ArrayList<>();
+        String first = NO_COMPONENT;
+        for (String component : touched) {
+            CoverageVerdict verdict = coverage.apply(component);
+            if (verdict.applies() && !verdict.measured()) {
+                System.err.printf(NOT_MEASURED, component, verdict.problem());
+            } else if (!verdict.passes()) {
+                first = first.isEmpty() ? component : first;
+                weak.add(String.format(COVERAGE_REPORT, component, verdict.summary(), verdict.shortfall()));
+            }
+        }
+        if (weak.isEmpty()) {
+            return HookExit.ALLOW;
+        }
+        reason = String.format(COVERAGE_BLOCKED, String.join(System.lineSeparator(), weak), gate.coverageStep(first));
         return HookExit.BLOCK;
     }
 

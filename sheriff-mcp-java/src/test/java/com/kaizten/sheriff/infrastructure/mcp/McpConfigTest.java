@@ -39,6 +39,68 @@ final class McpConfigTest {
     }
 
     @Test
+    @DisplayName("a threshold comes from the environment, then the project's declaration, then the settings "
+            + "files, then the default")
+    void thresholdsAreLayered() throws IOException {
+        Path module = javaModule("app");
+        Path home = Files.createDirectories(workspace.resolve("home"));
+        Files.createDirectories(home.resolve(".config/sheriff-mcp"));
+        Files.writeString(home.resolve(".config/sheriff-mcp/sheriff.properties"),
+                "SHERIFF_COVERAGE=70\nSHERIFF_BRANCHES=60\nSHERIFF_MUTATION=50\n");
+        Files.writeString(module.resolve(".sheriff.properties"), "SHERIFF_BRANCHES=65\n");
+        Files.writeString(module.resolve("pom.xml"), "<project><properties><sheriff.coverage>90</sheriff.coverage>"
+                + "<sheriff.mutation>70</sheriff.mutation></properties></project>");
+        McpConfig config = new McpConfig(Map.of("HOME", home.toString(), "SHERIFF_MUTATION", "40"), module);
+
+        assertEquals(90, config.coverageThresholds("app").lines(), "the pom's declaration over the user's file");
+        assertEquals(65, config.coverageThresholds("app").branches(), "the project's file over the user's");
+        assertEquals(40, config.coverageThresholds("app").mutants(), "the environment over every file");
+        assertEquals(70, new McpConfig(Map.of(), module).coverageThresholds("app").mutants(),
+                "with no variable, the pom's declaration");
+        assertEquals(65, new McpConfig(Map.of(), module).coverageThresholds("app").branches(),
+                "the project's file needs no home");
+    }
+
+    @Test
+    @DisplayName("a timeout comes from the settings, and one that is no whole number of seconds is the default")
+    void timeoutsComeFromTheSettings() throws IOException {
+        Path module = javaModule("app");
+        Files.writeString(module.resolve(".sheriff.properties"), "SHERIFF_TEST_TIMEOUT=42\nSHERIFF_PULL=check\n");
+        McpConfig config = new McpConfig(Map.of("SHERIFF_MUTATION_TIMEOUT", "soon"), module);
+
+        assertEquals(Duration.ofSeconds(42), config.testTimeout());
+        assertEquals(Duration.ofMinutes(30), config.mutationTimeout());
+        assertEquals(Duration.ofMinutes(10), config.coverageTimeout());
+        assertEquals("check", config.pullPolicy());
+        McpConfig set = new McpConfig(Map.of("SHERIFF_COVERAGE_TIMEOUT", "1", "SHERIFF_MUTATION_TIMEOUT", "7",
+                "SHERIFF_TEST_TIMEOUT", "0"), module);
+        assertEquals(Duration.ofSeconds(1), set.coverageTimeout(), "one second is a time limit");
+        assertEquals(Duration.ofSeconds(7), set.mutationTimeout());
+        assertEquals(Duration.ofMinutes(10), set.testTimeout(), "none is not");
+    }
+
+    @Test
+    @DisplayName("the settings are read once, when they are first asked for, as the tools read them at the start")
+    void theSettingsAreReadOnce() throws IOException {
+        Path module = javaModule("app");
+        McpConfig config = new McpConfig(Map.of(), module);
+        Files.writeString(module.resolve(".sheriff.properties"), "SHERIFF_GATE_TTL=30\n");
+        assertEquals("30", config.settings().get("SHERIFF_GATE_TTL"));
+        Files.writeString(module.resolve(".sheriff.properties"), "SHERIFF_GATE_TTL=60\n");
+        assertEquals("30", config.settings().get("SHERIFF_GATE_TTL"));
+        assertEquals(Map.of(), config.givenEnvironment());
+    }
+
+    @Test
+    @DisplayName("a blank environment variable is no threshold: the project's declaration gives it")
+    void aBlankVariableIsNoThreshold() throws IOException {
+        Path module = javaModule("app");
+        Files.writeString(module.resolve("pom.xml"),
+                "<project><properties><sheriff.coverage>90</sheriff.coverage></properties></project>");
+        assertEquals(90, new McpConfig(Map.of("SHERIFF_COVERAGE", " "), module).coverageThresholds("app").lines());
+    }
+
+    @Test
     void aSingleModuleProjectIsMountedThroughItsParent() throws IOException {
         Path module = javaModule("weather");
         McpConfig config = new McpConfig(Map.of(), module);
@@ -226,5 +288,15 @@ final class McpConfigTest {
         McpConfig config = new McpConfig(Map.of("SHERIFF_RULES_CATALOG", "/tmp/rules_catalog.json"));
 
         assertEquals(Path.of("/tmp/rules_catalog.json"), config.rulesCatalog());
+    }
+
+    @Test
+    @DisplayName("the rounds of Sheriff's fixers have no limit unless a whole number from one sets one")
+    void theRepairRoundsComeFromTheSettings() throws IOException {
+        Path module = javaModule("app");
+        assertEquals(Integer.MAX_VALUE, new McpConfig(Map.of(), module).repairRounds());
+        assertEquals(1, new McpConfig(Map.of("SHERIFF_REPAIR_ROUNDS", "1"), module).repairRounds());
+        assertEquals(Integer.MAX_VALUE, new McpConfig(Map.of("SHERIFF_REPAIR_ROUNDS", "0"), module).repairRounds());
+        assertEquals(Integer.MAX_VALUE, new McpConfig(Map.of("SHERIFF_REPAIR_ROUNDS", "many"), module).repairRounds());
     }
 }

@@ -103,10 +103,13 @@
                 <configuration>
                     <!--
                       Sheriff's state folders, which the container puts under
-                      the user's cache, go inside the build for the tests.
+                      the user's cache, and the folders of locks and records,
+                      which go in the temporary directory, are inside the
+                      build for the tests.
                     -->
                     <systemPropertyVariables>
                         <sheriff.state.home>${project.build.directory}/sheriff-state</sheriff.state.home>
+                        <sheriff.temp.home>${project.build.directory}/sheriff-temp</sheriff.temp.home>
                     </systemPropertyVariables>
                 </configuration>
             </plugin>
