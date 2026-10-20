@@ -26,6 +26,10 @@ import java.util.stream.Stream;
  * session and component built up for good. The folders of markers are pruned
  * when they are written to; a lock file is never removed, since removing one
  * another process may be waiting on would let two runs hold the same mount.
+ *
+ * <p>The {@code sheriff.temp.home} property, which the tests set, puts them
+ * all somewhere else: a test run left a hundred lock files, which are never
+ * pruned, and dozens of records in the real folders each time.
  */
 public final class TemporaryFolders {
 
@@ -36,6 +40,7 @@ public final class TemporaryFolders {
     public static final Duration MARKER_LIFETIME = Duration.ofDays(7);
 
     private static final String TEMPORARY_DIRECTORY = "java.io.tmpdir";
+    private static final String HOME_PROPERTY = "sheriff.temp.home";
     private static final String USER_NAME = "user.name";
     private static final String NAME_FORMAT = "%s-%s";
     private static final String UNSAFE_CHARACTERS = "[^A-Za-z0-9._-]";
@@ -51,8 +56,9 @@ public final class TemporaryFolders {
     }
 
     /**
-     * The folder of the system's temporary directory for one purpose, of the
-     * user running this JVM.
+     * The folder of the system's temporary directory, or of the one the
+     * {@code sheriff.temp.home} property names, for one purpose, of the user
+     * running this JVM.
      *
      * @param purpose what the folder holds, such as {@code sheriff-gate}
      * @return that folder, not necessarily created yet
@@ -72,7 +78,21 @@ public final class TemporaryFolders {
     static Path forUser(String purpose, String user) {
         String safe = user == null || user.isBlank() ? UNKNOWN_USER
                 : user.replaceAll(UNSAFE_CHARACTERS, SAFE_CHARACTER);
-        return Path.of(System.getProperty(TEMPORARY_DIRECTORY), String.format(NAME_FORMAT, purpose, safe));
+        return home(System.getProperty(HOME_PROPERTY)).resolve(String.format(NAME_FORMAT, purpose, safe));
+    }
+
+    /**
+     * The folder that holds every user's folders.
+     *
+     * @param configured the folder the {@code sheriff.temp.home} property
+     *     names, possibly unset or blank
+     * @return that folder, or the system's temporary directory without one
+     */
+    static Path home(String configured) {
+        if (configured == null || configured.isBlank()) {
+            return Path.of(System.getProperty(TEMPORARY_DIRECTORY));
+        }
+        return Path.of(configured);
     }
 
     /**

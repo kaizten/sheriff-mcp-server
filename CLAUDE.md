@@ -608,7 +608,8 @@ Sheriff keeps its state in the component's state folder; two components, or
 two single-module projects in one folder, no longer wait for each other. The
 lock files, the record of verdicts (`VerdictCache`), and the
 markers the hooks leave for their next run, live in a folder of the temporary
-directory per user (`TemporaryFolders`). Markers older than a week are pruned
+directory per user (`TemporaryFolders`; under `sheriff.temp.home` in the
+tests, which left a hundred lock files there each run). Markers older than a week are pruned
 when their folder is written; lock files never are.
 
 ## Windows

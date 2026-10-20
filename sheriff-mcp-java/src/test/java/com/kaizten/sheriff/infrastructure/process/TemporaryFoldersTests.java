@@ -25,7 +25,7 @@ class TemporaryFoldersTests {
     @Test
     @DisplayName("each user gets a folder of their own, named so any user name makes a valid one")
     void eachUserGetsAFolderOfTheirOwn() {
-        Path temporary = Path.of(System.getProperty("java.io.tmpdir"));
+        Path temporary = TemporaryFolders.home(System.getProperty("sheriff.temp.home"));
 
         assertEquals(temporary.resolve("sheriff-gate-ana"), TemporaryFolders.forUser("sheriff-gate", "ana"));
         assertEquals(temporary.resolve("sheriff-gate-DOMAIN_ana_l_pez"),
@@ -34,6 +34,23 @@ class TemporaryFoldersTests {
         assertEquals(temporary.resolve("sheriff-gate-user"), TemporaryFolders.forUser("sheriff-gate", null));
         assertEquals(TemporaryFolders.forUser("sheriff-locks", System.getProperty("user.name")),
                 TemporaryFolders.forUser("sheriff-locks"));
+    }
+
+    @Test
+    @DisplayName("the folders are in the system's temporary directory unless sheriff.temp.home names another")
+    void thePropertyMovesEveryFolder() {
+        Path temporary = Path.of(System.getProperty("java.io.tmpdir"));
+
+        assertEquals(temporary, TemporaryFolders.home(null));
+        assertEquals(temporary, TemporaryFolders.home(" "));
+        assertEquals(folder, TemporaryFolders.home(folder.toString()));
+    }
+
+    @Test
+    @DisplayName("the tests' folders are inside the build, never the real ones")
+    void theTestsWriteInsideTheBuild() {
+        assertTrue(TemporaryFolders.forUser("sheriff-locks").toAbsolutePath().normalize()
+                .startsWith(Path.of("target").toAbsolutePath().normalize()));
     }
 
     @Test
