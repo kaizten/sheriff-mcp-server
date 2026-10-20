@@ -88,8 +88,9 @@ It reads the steps out of `ci.yml` by name and runs them as written, in a
 HOME, a Java `user.home` and a PATH of their own (with the real `claude` the
 installers would set this machine up), plus `install.ps1` in PowerShell 7 in
 a container, `install.sh` under bash 3.2, the workflows' syntax and the
-playbook. It cannot reach Windows PowerShell 5.1, cmd, Git Bash, winget or
-macOS, and says so: only those should be tried first on GitHub. A new CI step
+playbook. It cannot reach macOS, which only GitHub tries, nor Windows
+PowerShell 5.1, cmd, Git Bash or winget, which nothing tries while Windows is
+out of the workflows; it says so. A new CI step
 that can run on Linux belongs in it too.
 
 No module declares the aggregator as its parent, so each still builds on its
@@ -225,11 +226,14 @@ closed"; re-run the script after pulling.
 
 `.github/workflows/ci.yml` runs on every push to `main` and every pull
 request: `mvn -B install`, then `scripts/e2e.sh` against the pulled image (a
-red e2e with a green build can be a new image rather than the code). On each
-of the three systems it also runs the installer as a user would: with no
-assistant, then with stand-in `claude`, `codex` and `agy` that only record
-their calls, under `/bin/bash` (3.2 on macOS, Git Bash on Windows) and
-Windows PowerShell; and on Windows with Java on no PATH and no `JAVA_HOME`.
+red e2e with a green build can be a new image rather than the code). On Linux
+and macOS it also runs the installer as a user would: with no assistant, then
+with stand-in `claude`, `codex` and `agy` that only record their calls, under
+`/bin/bash` (3.2 on macOS). **Windows is out of both matrices** (`ci.yml`
+and `release.yml`) while the product is not meant for it, to keep the runs
+short; its code and its steps (Git Bash, Windows PowerShell, Java on no PATH,
+winget) stay, and putting `windows-latest` back in the matrix runs them
+again. `scripts/ci-local.sh` still runs `install.ps1` in PowerShell 7.
 
 `image.yml` publishes `ghcr.io/kaizten/sheriff-mcp-server` when CI passes on
 `main`, only builds it on a pull request, and fails rather than publish the
@@ -237,10 +241,10 @@ rule catalog (the Dockerfile copies one that sits beside it).
 
 `release.yml` publishes a release when a tag `v<version>` is pushed: it fails
 unless the tag is the version the jar reports and the jar is free of the
-catalog, and then runs the install line on Linux, macOS and Windows (Windows
-PowerShell and PowerShell 7). A tag with a suffix is a prerelease, which the
-install line never picks: that is how a release is tried first, and on
-Windows it has to be tried with real assistants, which CI does not have.
+catalog, and then runs the install line on Linux and macOS. A tag with a
+suffix is a prerelease, which the install line never picks: that is how a
+release is tried first, and on Windows, which no workflow reaches now, it has
+to be tried by hand.
 
 ## Things about Sheriff that will waste your time otherwise
 
@@ -607,8 +611,9 @@ when their folder is written; lock files never are.
 
 ## Windows
 
-**It runs on Linux, macOS and Windows, and CI builds on all three**, but
-Windows CI has no Docker and no assistant, so nothing below shows in it. What
+**It is written to run on Linux, macOS and Windows**, but CI no longer builds
+on Windows (see CI and releases), and when it did it had no Docker and no
+assistant, so nothing below ever showed in it. What
 differs lives in `Platform`: `cmd.exe /c` instead of `/bin/sh -c` for the
 project's tests, paths compared with Sheriff's and git's always written with
 `/` (never compare `Path.toString()` with a path Sheriff or git wrote),

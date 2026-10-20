@@ -1,8 +1,10 @@
 # Two jobs, because they need different things and fail for different reasons.
 #
-# build: both modules and every unit suite, on Linux, macOS and Windows. None
-# of them needs Docker, so a red here is always the code, and a red on one
-# system only is that system's paths, shells or executables.
+# build: both modules and every unit suite, on Linux and macOS. None of them
+# needs Docker, so a red here is always the code, and a red on one system only
+# is that system's paths, shells or executables. Windows is out of the matrix
+# while the product is not meant for it: the code and its steps below stay, so
+# putting windows-latest back in the matrix is all it takes to run them again.
 #
 # e2e: scripts/e2e.sh against the real kaizten/sheriff image and real git,
 # with a stand-in for the model, so it costs no tokens. It is the only check
@@ -29,7 +31,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5

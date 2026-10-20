@@ -736,7 +736,8 @@ PowerShells) against what it published. A tag with a suffix (`v0.1.1-rc.1`)
 is a prerelease, which the install line never picks: it is how a release is
 tried before its real tag.
 
-On Windows the release's CI has no Docker and no assistant, so a change that
+No workflow runs on Windows now (it is out of the matrices while the product
+is not meant for it; `windows-latest` brings it back), so a change that
 touches Windows (the installers, the hooks, how commands or Docker are run)
 is tried on the prerelease by hand, on a Windows machine, before the real
 tag: install it, open a Codex session and a Claude Code session on a project
