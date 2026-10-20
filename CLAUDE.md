@@ -503,6 +503,21 @@ positive (the Jackson ones in this repository's `pom.xml`) held up every new
 file and every turn. A verdict that stopped at the first error knows only one,
 so it never counts as only deferred.
 
+**A repair of Sheriff's that was undone is not made again.** The same record
+keeps the errors Sheriff's fixers removed; one of them back later had its
+repair undone, which a model does when the repair broke the build, and
+every `sheriff_fix` made it again, as an error a repair removes never counts
+as an attempt. Such an error is left for the end at once, so it
+blocks neither the gate nor the Stop hook, and `SheriffRepair` takes it out
+of `sheriff_errors.json` before every `fix`: `fix` repairs only what that
+record holds, and with a finding taken out neither the default set nor
+`--fixers` naming its rule touched its file (measured on PetClinic, image of
+20 October). The answer names it. Tests that fail after a repair that changed
+nothing name the files an earlier repair of the session changed
+(`AnswerMemory`), and a failed build is shown by `BuildOutput.excerpt`: the
+lines that say why, then its end, as Maven puts the cause first and the
+answer used to show only the class path that follows it.
+
 **A clean component is not finished while a method the change added has no
 test** (`UntestedMethods`): a non-private method with a body in `src/main`
 that the last commit does not have must be called from a test file that

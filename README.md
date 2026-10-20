@@ -231,6 +231,7 @@ fails on errors. For a CI runner, install the plugin there too
 | "Nothing was analyzed" | The component holds no sources of that profile's language: pass `component`, or check the profile the project declares |
 | "No rule catalog is available" | No Docker when the server first started: start Docker, and the next rule lookup tries again (at most a minute later) |
 | The hooks do nothing | The session did not pick up the change to its settings: restart it, and check them with `/hooks` |
+| "the repair was undone since, so no fixer makes it again" | One of Sheriff's fixers changed something the assistant then put back, usually because it broke the build (on PetClinic under Java 17, checkstyle raised to a version that needs Java 21). `sheriff_fix` does not make it again, and the error is left for the end and told to you with its reason. Nothing to do |
 | `package-info.java` fails `FilenamePascalCase` | A false positive of Sheriff's: Java fixes that file name. Leave it |
 
 Tried from scratch on 28 September: a fresh clone of this repository (no

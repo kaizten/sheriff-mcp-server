@@ -700,6 +700,19 @@ Next step: none: the 1 error(s) above stayed through every repair and every
 edit made for them, so the work on them is over. Tell the user each one, in a
 line, and why it cannot be fixed; the rest of the component is done.
 \end{command}
+  \item \textbf{Una reparación de Sheriff que deshaces no se repite.} Si un
+        fixer de Sheriff rompe la compilación y el asistente deshace el cambio,
+        \code{sheriff_fix} deja ese error en paz desde entonces, lo dice y lo
+        deja para el final como los demás. En PetClinic, con Java 17, el fixer
+        subía checkstyle a 14.3.0, que necesita Java 21:
+\begin{command}[basicstyle=\ttfamily\footnotesize]{respuesta}
+Ran every fixer Sheriff has for these errors on spring-petclinic: 1 error(s)
+before, 1 after (0 repaired).
+Sheriff's fixers repaired 1 of these error(s) before, and the repair was undone
+since, so no fixer makes it again and they are left for the end:
+spring-petclinic/pom.xml: Maven dependency 'com.puppycrawl.tools:checkstyle' is
+outdated: 12.3.1 -> 14.3.0. [JavaPomOutdatedDependency]
+\end{command}
   \item \textbf{Se apartan para el agente de reparación}, que ya hace sus propias
         comprobaciones.
 \end{itemize}

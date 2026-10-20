@@ -1,6 +1,7 @@
 package com.kaizten.sheriff.infrastructure.coverage;
 
 import com.kaizten.sheriff.infrastructure.git.GitVersionControl;
+import com.kaizten.sheriff.infrastructure.process.BuildOutput;
 import com.kaizten.sheriff.infrastructure.process.Platform;
 import com.kaizten.sheriff.infrastructure.process.ProcessOutcome;
 import com.kaizten.sheriff.infrastructure.process.ProcessRunner;
@@ -356,16 +357,16 @@ public final class ChangeCoverage {
     }
 
     /**
-     * The end of what a run said, which is where Maven says why it failed.
+     * What a run said about why it failed.
      *
      * @param outcome what the run did
-     * @return its last lines, or why it did not run
+     * @return the lines that say why and its last lines, or why it did not
+     *     run
      */
     private static String said(ProcessOutcome outcome) {
         if (!outcome.ran()) {
             return outcome.failure();
         }
-        String output = (outcome.standardOutput() + outcome.standardError()).strip();
-        return output.length() <= OUTPUT_SHOWN ? output : output.substring(output.length() - OUTPUT_SHOWN);
+        return BuildOutput.excerpt(outcome.standardOutput() + outcome.standardError(), OUTPUT_SHOWN);
     }
 }

@@ -8,6 +8,7 @@ import com.kaizten.sheriff.infrastructure.mcp.AcceptedCode;
 import com.kaizten.sheriff.infrastructure.mcp.FindingsRenderer;
 import com.kaizten.sheriff.infrastructure.mcp.FixRun;
 import com.kaizten.sheriff.infrastructure.mcp.task.Task;
+import com.kaizten.sheriff.infrastructure.process.BuildOutput;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -69,10 +70,16 @@ final class SheriffFixTool {
     private static final String TESTS_PASS_AFTER = "%nThe project's own tests still pass after the repair (%s).";
     private static final String TESTS_FAIL_AFTER =
             "%nThe project's own tests FAIL after the repair (%s). The repair is left in place for you "
-            + "to review: fix what broke, or revert it.%n%s";
+            + "to review: fix what broke, or undo it; a repair of Sheriff's that is undone is not made again.%n%s";
     private static final String TESTS_FAIL_UNCHANGED =
-            "%nThe project's own tests FAIL (%s), but this repair changed no file, so they were already "
-            + "failing before it: not something the repair broke.%n%s";
+            "%nThe project's own tests FAIL (%s). This repair changed no file, so it did not break them.%n%s";
+    private static final String TESTS_FAIL_EARLIER =
+            "%nThe project's own tests FAIL (%s). This repair changed no file, but an earlier one changed %s, "
+            + "which may be what broke them: fix what broke, or undo that change; a repair of Sheriff's that is "
+            + "undone is not made again.%n%s";
+    private static final String UNDONE = "%nSheriff's fixers repaired %d of these error(s) before, and the repair "
+            + "was undone since, so no fixer makes it again and they are left for the end: %s";
+    private static final String UNDONE_LINE = "%s: %s [%s]";
     private static final int TEST_OUTPUT_LIMIT = 2000;
     private static final String NO_TESTS =
             "%nNo build tool with tests was found in %s (Maven, Gradle or an npm test script), so no tests "
@@ -141,8 +148,10 @@ final class SheriffFixTool {
      */
     private String fix(Task task, String component, String profile, String referenceCode, boolean verify,
             String asked) {
+        Path directory = context.config().repository().resolve(component);
+        Set<String> repairedBefore = context.stuck().repairedBefore(directory);
         FixRun run = context.runner().exportingTo(task.directory()).fix(component, profile, referenceCode,
-                context.config().repairRounds());
+                context.config().repairRounds(), finding -> repairedBefore.contains(StuckErrors.key(finding)));
         if (run.before().total() == NO_ERRORS && !context.config().layout().holdsSourcesFor(component, profile)) {
             throw new IllegalArgumentException(ToolContext.nothingAnalyzed(component, profile));
         }
@@ -154,6 +163,17 @@ final class SheriffFixTool {
                 FIX_SUMMARY, scope, component, run.before().total(), run.after().total(), repaired));
         if (run.rounds() > ONE_ROUND) {
             body.append(String.format(ROUNDS, run.rounds()));
+        }
+        Set<String> undone = context.stuck().undone(directory, StuckErrors.keys(run.before().errors()));
+        Set<String> removed = new LinkedHashSet<>(StuckErrors.keys(run.before().errors()));
+        removed.removeAll(StuckErrors.keys(run.after().errors()));
+        context.stuck().repaired(directory, removed);
+        if (!undone.isEmpty()) {
+            List<String> lines = run.after().errors().stream().filter(error -> undone.contains(StuckErrors.key(error)))
+                    .map(error -> String.format(UNDONE_LINE, error.file(), SheriffFinding.brief(error.description()),
+                            error.referenceCode()))
+                    .distinct().toList();
+            body.append(String.format(UNDONE, lines.size(), String.join(FAILURE_SEPARATOR, lines)));
         }
         if (!run.fixerFailures().isEmpty()) {
             body.append(String.format(NOT_APPLIED, run.fixerFailures().size(),
@@ -168,10 +188,18 @@ final class SheriffFixTool {
                 body.append(String.format(UNDER, prefix));
             }
         }
+        List<String> earlier = context.answers().repairChanged(component);
+        if (!changed.isEmpty()) {
+            context.answers().repairChanged(component, changed);
+        }
         boolean testsRun = verify && context.config().layout().hasTests(component);
         VerificationResult tests = testsRun ? context.tests().apply(component) : null;
         if (verify) {
-            body.append(verification(component, tests, !run.before().trackedFiles().isEmpty() && changed.isEmpty()));
+            boolean unchanged = !run.before().trackedFiles().isEmpty() && changed.isEmpty();
+            body.append(verification(component, tests, unchanged ? earlier : null));
+        }
+        if (tests != null && tests.ok()) {
+            context.answers().repairChanged(component, List.of());
         }
         if (run.after().total() > NO_ERRORS) {
             body.append(outstanding(component, asked, run, referenceCode));
@@ -351,12 +379,13 @@ final class SheriffFixTool {
      *
      * @param component the component that was repaired
      * @param result how its tests went, or {@code null} when it has none
-     * @param unchanged whether the hashes Sheriff recorded before and after
-     *     show no file changed, so a failure was there before the repair;
-     *     {@code false} when there were no hashes to compare
+     * @param earlier when the hashes Sheriff recorded before and after show
+     *     this repair changed no file, the files an earlier repair of this
+     *     session changed, which may be none; {@code null} when this repair
+     *     changed files, or there were no hashes to compare
      * @return the lines to append to the answer
      */
-    private String verification(String component, VerificationResult result, boolean unchanged) {
+    private String verification(String component, VerificationResult result, List<String> earlier) {
         if (result == null) {
             return String.format(NO_TESTS, component);
         }
@@ -364,11 +393,14 @@ final class SheriffFixTool {
         if (result.ok()) {
             return String.format(TESTS_PASS_AFTER, command);
         }
-        String output = result.output().strip();
-        String excerpt = output.length() <= TEST_OUTPUT_LIMIT
-                ? output
-                : output.substring(output.length() - TEST_OUTPUT_LIMIT);
-        return String.format(unchanged ? TESTS_FAIL_UNCHANGED : TESTS_FAIL_AFTER, command, excerpt);
+        String excerpt = BuildOutput.excerpt(result.output(), TEST_OUTPUT_LIMIT);
+        if (earlier == null) {
+            return String.format(TESTS_FAIL_AFTER, command, excerpt);
+        }
+        if (earlier.isEmpty()) {
+            return String.format(TESTS_FAIL_UNCHANGED, command, excerpt);
+        }
+        return String.format(TESTS_FAIL_EARLIER, command, String.join(FILE_SEPARATOR, earlier), excerpt);
     }
 
 }

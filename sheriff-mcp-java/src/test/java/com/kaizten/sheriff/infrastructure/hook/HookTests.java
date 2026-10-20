@@ -660,6 +660,19 @@ class HookTests {
         }
 
         @Test
+        @DisplayName("long failing output is shown by the line that says why, not only by its end")
+        void longFailingOutputShowsItsCause() throws IOException {
+            String output = "java.lang.UnsupportedClassVersionError: class file version 65.0\n"
+                    + "    at java.lang.ClassLoader.defineClass (ClassLoader.java:1017)\n".repeat(60)
+                    + "[ERROR] urls[0] = file:/home/ana/.m2/plexus-utils-4.0.1.jar\n".repeat(60) + "[ERROR] [Help 1]";
+            SheriffStopHook stop = withTests(
+                    com.kaizten.sheriff.domain.valueobject.VerificationResult.failed(output));
+            capturingStandardError(() -> stop.decide("{\"stop_hook_active\":false}"));
+            assertTrue(errors.contains("java.lang.UnsupportedClassVersionError: class file version 65.0\n[...]"), errors);
+            assertFalse(errors.contains("ClassLoader.defineClass"), errors);
+        }
+
+        @Test
         @DisplayName("failing tests come with the command that runs them, and the check to make after")
         void failingTestsNameTheirCommand() throws IOException {
             SheriffStopHook stop = withTests(

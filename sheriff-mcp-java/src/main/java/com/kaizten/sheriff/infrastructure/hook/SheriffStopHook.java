@@ -6,6 +6,7 @@ import com.kaizten.sheriff.domain.valueobject.VerificationResult;
 import com.kaizten.sheriff.infrastructure.coverage.CoverageVerdict;
 import com.kaizten.sheriff.infrastructure.git.GitVersionControl;
 import com.kaizten.sheriff.infrastructure.git.UntestedMethods;
+import com.kaizten.sheriff.infrastructure.process.BuildOutput;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -417,11 +418,8 @@ public final class SheriffStopHook {
             VerificationResult result = tests.apply(component);
             if (!result.ok()) {
                 first = first.isEmpty() ? component : first;
-                String output = result.output().strip();
-                String tail = output.length() <= TEST_OUTPUT_LIMIT
-                        ? output
-                        : output.substring(output.length() - TEST_OUTPUT_LIMIT);
-                failing.add(String.format(TESTS_REPORT, component, tail));
+                failing.add(String.format(TESTS_REPORT, component,
+                        BuildOutput.excerpt(result.output(), TEST_OUTPUT_LIMIT)));
             }
         }
         if (failing.isEmpty()) {

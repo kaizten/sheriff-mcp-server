@@ -695,6 +695,19 @@ Next step: none: the 1 error(s) above stayed through every repair and every
 edit made for them, so the work on them is over. Tell the user each one, in a
 line, and why it cannot be fixed; the rest of the component is done.
 \end{command}
+  \item \textbf{A repair of Sheriff's you undo is not made again.} When one of
+        Sheriff's fixers breaks the build and the assistant puts the change
+        back, \code{sheriff_fix} leaves that error alone from then on, says so,
+        and leaves it for the end like the rest. On PetClinic, under Java 17,
+        the fixer raised checkstyle to 14.3.0, which needs Java 21:
+\begin{command}[basicstyle=\ttfamily\footnotesize]{answer}
+Ran every fixer Sheriff has for these errors on spring-petclinic: 1 error(s)
+before, 1 after (0 repaired).
+Sheriff's fixers repaired 1 of these error(s) before, and the repair was undone
+since, so no fixer makes it again and they are left for the end:
+spring-petclinic/pom.xml: Maven dependency 'com.puppycrawl.tools:checkstyle' is
+outdated: 12.3.1 -> 14.3.0. [JavaPomOutdatedDependency]
+\end{command}
   \item \textbf{They stand aside for the repair agent}, which runs its own
         checks.
 \end{itemize}

@@ -1,6 +1,7 @@
 package com.kaizten.sheriff.infrastructure.hook;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.kaizten.sheriff.domain.valueobject.SheriffFinding;
 import java.io.IOException;
@@ -96,5 +97,71 @@ class StuckErrorsTests {
         stuck.attempted(component, Set.of("gone"), Set.of("a"));
         stuck.attempted(component, Set.of("gone"), Set.of("a", "gone"));
         assertEquals(Set.of(), stuck.deferred(component));
+    }
+
+    @Test
+    @DisplayName("an error Sheriff's fixers removed that is back had its repair undone: left for the end at once")
+    void anUndoneRepairIsLeftForTheEnd() {
+        StuckErrors stuck = new StuckErrors(folder);
+        stuck.repaired(component, Set.of("pom"));
+        stuck.repaired(component, Set.of());
+        assertEquals(Set.of("pom"), stuck.repairedBefore(component));
+        assertEquals(Set.of(), stuck.undone(component, Set.of("other")), "an error never repaired is not undone");
+        stuck.attempted(component, Set.of(), Set.of("other"));
+        assertEquals(Set.of("pom"), stuck.repairedBefore(component), "what was repaired outlives the attempts");
+
+        assertEquals(Set.of("pom"), stuck.undone(component, Set.of("pom", "other")));
+
+        assertTrue(stuck.deferred(component).contains("pom"));
+        assertEquals(Set.of(), stuck.exhausted(component));
+        stuck.attempted(component, Set.of("pom"), Set.of("pom"));
+        assertEquals(Set.of("pom"), stuck.exhausted(component), "one more answer through it, and the user is told");
+    }
+
+    @Test
+    @DisplayName("an error Sheriff repaired counts as left for the end wherever it is asked, as the gate asks")
+    void aRepairedErrorIsDeferredForTheHooks() {
+        StuckErrors stuck = new StuckErrors(folder);
+        stuck.repaired(component, Set.of("pom"));
+        assertEquals(Set.of("pom"), stuck.deferred(component));
+    }
+
+    @Test
+    @DisplayName("a record an earlier version wrote, attempts alone, is still read")
+    void anEarlierRecordIsRead() throws IOException {
+        StuckErrors stuck = new StuckErrors(folder);
+        stuck.stalled(component, Set.of("a"));
+        try (Stream<Path> files = Files.list(folder)) {
+            for (Path record : files.filter(Files::isRegularFile).toList()) {
+                Files.writeString(record, "{\"a\": 3, \"b\": 1}");
+            }
+        }
+        assertEquals(Set.of("a"), stuck.exhausted(component));
+        assertEquals(Set.of(), stuck.repairedBefore(component));
+    }
+
+    @Test
+    @DisplayName("nothing repaired and nothing undone write no record")
+    void nothingToRecordWritesNothing() throws IOException {
+        StuckErrors stuck = new StuckErrors(folder);
+        stuck.repaired(component, Set.of());
+        assertEquals(Set.of(), stuck.undone(component, Set.of("a")));
+        try (Stream<Path> files = Files.list(folder)) {
+            assertEquals(List.of(), files.toList());
+        }
+    }
+
+    @Test
+    @DisplayName("only numbers are attempts: a count written as text, or an empty record, counts nothing")
+    void onlyNumbersAreAttempts() throws IOException {
+        StuckErrors stuck = new StuckErrors(folder);
+        stuck.stalled(component, Set.of("a"));
+        try (Stream<Path> files = Files.list(folder)) {
+            Path record = files.filter(Files::isRegularFile).findFirst().orElseThrow();
+            Files.writeString(record, "{\"attempts\": {\"a\": \"5\", \"b\": 3}, \"repaired\": []}");
+            assertEquals(Set.of("b"), stuck.exhausted(component));
+            Files.writeString(record, "");
+            assertEquals(Set.of(), stuck.deferred(component));
+        }
     }
 }

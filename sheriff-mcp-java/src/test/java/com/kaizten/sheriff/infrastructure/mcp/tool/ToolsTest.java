@@ -233,7 +233,7 @@ final class ToolsTest {
     }
 
     @Test
-    @DisplayName("tests that fail after a repair that changed no file were failing before it, and are not blamed on it")
+    @DisplayName("tests that fail after a repair that changed no file, with none before it, are not blamed on it")
     void failingTestsAfterAnUnchangedRepairAreNotBlamedOnIt() throws IOException {
         mavenComponent("app");
         String before = "[{\"file\":\"/data/app/A.java\",\"description\":\"d\",\"howToSolve\":\"h\","
@@ -249,8 +249,157 @@ final class ToolsTest {
 
         String text = tools.call("sheriff_fix", Map.of("component", "app", "verify", "true")).text();
 
-        assertTrue(text.contains("changed no file, so they were already failing before it"), text);
+        assertTrue(text.contains("The project's own tests FAIL (cd 'app' && mvn -q test). This repair changed no "
+                + "file, so it did not break them.\nexpected: <25.0> but was: <0.0>"), text);
         assertFalse(text.contains("FAIL after the repair"), text);
+    }
+
+    @Test
+    @DisplayName("tests failing after a repair that changed nothing name the file an earlier repair changed")
+    void failingTestsNameAnEarlierRepair() throws IOException {
+        mavenComponent("app");
+        String before = "[{\"file\":\"/data/app/pom.xml\",\"description\":\"outdated\",\"howToSolve\":\"h\","
+                + "\"referenceCode\":\"JavaPomOutdatedDependency\",\"type\":\"ERROR\"}]";
+        String old = "{\"/data/app/pom.xml\": {\"hash\": \"aaa\"}}";
+        String raised = "{\"/data/app/pom.xml\": {\"hash\": \"bbb\"}}";
+        McpConfig config = new McpConfig(Map.of("SHERIFF_REPO", repository.toString(), "XDG_STATE_HOME", state.toString()));
+        SheriffRunner runner = new SheriffRunner(new QueuedProcessRunner(List.of(old, raised),
+                ProcessOutcome.completed(0, before, ""), ProcessOutcome.completed(0, "", ""),
+                ProcessOutcome.completed(0, "", ""), ProcessOutcome.completed(0, "[]", ""),
+                ProcessOutcome.completed(0, "[]", "")), config.image(), repository, Duration.ofSeconds(30));
+        Tools tools = new Tools(config, runner, List::of, config::rulesCatalog,
+                component -> VerificationResult.failed("[ERROR] Failed to execute goal checkstyle: class file version 65.0"));
+
+        String repair = tools.call("sheriff_fix", Map.of("component", "app")).text();
+        String verified = tools.call("sheriff_fix", Map.of("component", "app", "verify", "true")).text();
+
+        assertTrue(repair.contains("Files the fixers changed (1): pom.xml"), repair);
+        assertTrue(verified.contains("This repair changed no file, but an earlier one changed app/pom.xml, which may be "
+                + "what broke them: fix what broke, or undo that change; a repair of Sheriff's that is undone is not "
+                + "made again."), verified);
+        assertTrue(verified.contains("class file version 65.0"), verified);
+        assertFalse(verified.contains("already failing"), verified);
+    }
+
+    @Test
+    @DisplayName("a repair that was undone is not made again: its error is left for the end, then told to the user")
+    void anUndoneRepairIsNotMadeAgain() throws IOException {
+        mavenComponent("app");
+        String outdated = "[{\"file\":\"/data/app/pom.xml\",\"description\":\"Maven dependency "
+                + "'com.puppycrawl.tools:checkstyle' is outdated: 12.3.1 -> 14.3.0.\",\"howToSolve\":\"h\","
+                + "\"referenceCode\":\"JavaPomOutdatedDependency\",\"type\":\"ERROR\"}]";
+        McpConfig config = new McpConfig(Map.of("SHERIFF_REPO", repository.toString(), "XDG_STATE_HOME", state.toString()));
+        SheriffRunner runner = new SheriffRunner(new QueuedProcessRunner(
+                ProcessOutcome.completed(0, outdated, ""), ProcessOutcome.completed(0, "", ""),
+                ProcessOutcome.completed(0, "", ""), ProcessOutcome.completed(0, "[]", ""),
+                ProcessOutcome.completed(0, outdated, ""), ProcessOutcome.completed(0, outdated, "")),
+                config.image(), repository, Duration.ofSeconds(30));
+        Tools tools = new Tools(config, runner, List::of, config::rulesCatalog, component -> VerificationResult.passed("ok"));
+
+        String repaired = tools.call("sheriff_fix", Map.of("component", "app")).text();
+        String undone = tools.call("sheriff_fix", Map.of("component", "app")).text();
+        String told = tools.call("sheriff_fix", Map.of("component", "app")).text();
+
+        assertTrue(repaired.contains("1 error(s) before, 0 after (1 repaired)"), repaired);
+        assertFalse(repaired.contains("undone"), repaired);
+        assertTrue(undone.contains("1 error(s) before, 1 after (0 repaired)"),
+                "one analysis and no fixer, or the runner would have run out: " + undone);
+        assertTrue(undone.contains("Sheriff's fixers repaired 1 of these error(s) before, and the repair was undone "
+                + "since, so no fixer makes it again and they are left for the end: app/pom.xml: Maven dependency "
+                + "'com.puppycrawl.tools:checkstyle' is outdated: 12.3.1 -> 14.3.0. [JavaPomOutdatedDependency]"),
+                undone);
+        assertTrue(undone.contains("this answer is their last round"), undone);
+        assertTrue(told.contains("Next step: none: the 1 error(s) above stayed through every repair"), told);
+    }
+
+    private static final String POM_OUTDATED = "{\"file\":\"/data/app/pom.xml\",\"description\":\"outdated:\\n"
+            + "12.3.1 -> 14.3.0.\",\"howToSolve\":\"h\",\"referenceCode\":\"JavaPomOutdatedDependency\","
+            + "\"type\":\"ERROR\"}";
+    private static final String UNSORTED = "{\"file\":\"/data/app/A.java\",\"description\":\"unsorted\","
+            + "\"howToSolve\":\"h\",\"referenceCode\":\"SortedImport\",\"type\":\"ERROR\"}";
+    private static final String OLD_POM = "{\"/data/app/pom.xml\": {\"hash\": \"aaa\"}}";
+    private static final String RAISED_POM = "{\"/data/app/pom.xml\": {\"hash\": \"bbb\"}}";
+
+    private Tools fixTools(List<String> tracked, List<VerificationResult> results, ProcessOutcome... outcomes)
+            throws IOException {
+        mavenComponent("app");
+        McpConfig config = new McpConfig(Map.of("SHERIFF_REPO", repository.toString(), "XDG_STATE_HOME", state.toString()));
+        SheriffRunner runner = new SheriffRunner(new QueuedProcessRunner(tracked, outcomes), config.image(), repository,
+                Duration.ofSeconds(30));
+        Deque<VerificationResult> queue = new ArrayDeque<>(results);
+        return new Tools(config, runner, List::of, config::rulesCatalog, component -> queue.poll());
+    }
+
+    private static ProcessOutcome found(String... errors) {
+        return ProcessOutcome.completed(0, "[" + String.join(",", errors) + "]", "");
+    }
+
+    private static final ProcessOutcome FIXER_RAN = ProcessOutcome.completed(0, "", "");
+
+    @Test
+    @DisplayName("only the errors whose repair was undone are named as undone, each on one line")
+    void onlyUndoneErrorsAreNamed() throws IOException {
+        Tools tools = fixTools(List.of(), List.of(), found(POM_OUTDATED, UNSORTED), FIXER_RAN, FIXER_RAN,
+                found(UNSORTED), FIXER_RAN, FIXER_RAN, found(UNSORTED), found(POM_OUTDATED, UNSORTED), FIXER_RAN,
+                FIXER_RAN, found(POM_OUTDATED, UNSORTED));
+
+        tools.call("sheriff_fix", Map.of("component", "app"));
+        String undone = tools.call("sheriff_fix", Map.of("component", "app")).text();
+
+        assertTrue(undone.contains("Sheriff's fixers repaired 1 of these error(s) before, and the repair was undone "
+                + "since, so no fixer makes it again and they are left for the end: app/pom.xml: outdated: 12.3.1 -> "
+                + "14.3.0. [JavaPomOutdatedDependency]\n"), undone);
+    }
+
+    @Test
+    @DisplayName("the files a repair changed are named until the tests pass, through calls that changed nothing")
+    void anEarlierRepairIsRememberedUntilTheTestsPass() throws IOException {
+        VerificationResult failing = VerificationResult.failed("BUILD FAILURE");
+        Tools tools = fixTools(List.of(OLD_POM, RAISED_POM), List.of(failing, failing,
+                VerificationResult.passed("ok"), failing), found(POM_OUTDATED), FIXER_RAN, FIXER_RAN, found(),
+                found(), found(), found(), found(), found());
+        String earlier = "This repair changed no file, but an earlier one changed app/pom.xml";
+
+        tools.call("sheriff_fix", Map.of("component", "app"));
+        tools.call("sheriff_fix", Map.of("component", "app"));
+        String first = tools.call("sheriff_fix", Map.of("component", "app", "verify", "true")).text();
+        String second = tools.call("sheriff_fix", Map.of("component", "app", "verify", "true")).text();
+        String passing = tools.call("sheriff_fix", Map.of("component", "app", "verify", "true")).text();
+        String after = tools.call("sheriff_fix", Map.of("component", "app", "verify", "true")).text();
+
+        assertTrue(first.contains(earlier), "a call that changed nothing keeps what the one before it changed: " + first);
+        assertTrue(second.contains(earlier), "failing tests do not forget it: " + second);
+        assertTrue(passing.contains("still pass"), passing);
+        assertTrue(after.contains("This repair changed no file, so it did not break them."),
+                "passing tests forget it: " + after);
+    }
+
+    @Test
+    @DisplayName("tests failing after a repair that changed a file are put on that repair")
+    void failingTestsAfterAChangeArePutOnIt() throws IOException {
+        Tools tools = fixTools(List.of(OLD_POM, RAISED_POM), List.of(VerificationResult.failed("BUILD FAILURE")),
+                found(POM_OUTDATED), FIXER_RAN, FIXER_RAN, found());
+
+        String text = tools.call("sheriff_fix", Map.of("component", "app", "verify", "true")).text();
+
+        assertTrue(text.contains("Files the fixers changed (1): pom.xml"), text);
+        assertTrue(text.contains("The project's own tests FAIL after the repair (cd 'app' && mvn -q test)."), text);
+        assertFalse(text.contains("changed no file"), text);
+    }
+
+    @Test
+    @DisplayName("with no hashes to compare, failing tests are put on the repair, and a long output by its cause")
+    void withNoHashesTheRepairIsReviewed() throws IOException {
+        String output = "java.lang.IllegalStateException: the cause\n" + "MIDDLE\n".repeat(400) + "the end";
+        Tools tools = fixTools(List.of(), List.of(VerificationResult.failed(output)), found());
+
+        String text = tools.call("sheriff_fix", Map.of("component", "app", "verify", "true")).text();
+
+        assertTrue(text.contains("The project's own tests FAIL after the repair (cd 'app' && mvn -q test). The repair is "
+                + "left in place for you to review: fix what broke, or undo it; a repair of Sheriff's that is undone is "
+                + "not made again.\njava.lang.IllegalStateException: the cause\n[...]\n"), text);
+        assertTrue(text.contains("MIDDLE\nthe end"), text);
+        assertTrue(text.length() < output.length(), "the output is cut");
     }
 
     @Test
@@ -657,14 +806,23 @@ final class ToolsTest {
     private static final class QueuedProcessRunner implements ProcessRunner {
 
         private final Deque<ProcessOutcome> outcomes;
-        private final String tracked;
+        private final Deque<String> trackedRecords;
+        private String tracked;
 
         QueuedProcessRunner(ProcessOutcome... outcomes) {
-            this(null, outcomes);
+            this((String) null, outcomes);
         }
 
         QueuedProcessRunner(String tracked, ProcessOutcome... outcomes) {
-            this.tracked = tracked;
+            this(tracked == null ? List.of() : List.of(tracked), outcomes);
+        }
+
+        /**
+         * A runner whose analyses record these hashes in turn, the last one
+         * from then on.
+         */
+        QueuedProcessRunner(List<String> trackedRecords, ProcessOutcome... outcomes) {
+            this.trackedRecords = new ArrayDeque<>(trackedRecords);
             this.outcomes = new ArrayDeque<>(List.of(outcomes));
         }
 
@@ -682,6 +840,7 @@ final class ToolsTest {
                     Files.writeString(workingDirectory.resolve("sheriff_errors.json"),
                             "{\"file:/data\":{\"" + command.get(component + 1) + "\":{\""
                                     + command.get(profile + 1) + "\":" + findings + "}}}");
+                    tracked = trackedRecords.isEmpty() ? tracked : trackedRecords.poll();
                     if (tracked != null) {
                         Files.writeString(workingDirectory.resolve("sheriff_tracked_files.json"), tracked);
                     }

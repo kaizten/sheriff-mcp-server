@@ -2,6 +2,7 @@ package com.kaizten.sheriff.infrastructure.hook;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.kaizten.sheriff.domain.valueobject.SheriffFinding;
 import com.kaizten.sheriff.infrastructure.process.TemporaryFolders;
@@ -13,6 +14,7 @@ import java.util.Collection;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -33,6 +35,14 @@ import java.util.stream.Collectors;
  * error that goes away leaves the record, and so does one whose file changes
  * its message.
  *
+ * <p>It also keeps the errors Sheriff's own fixers removed. One of those that
+ * is back had its repair undone, which a model does when the repair broke
+ * something: on PetClinic a fixer raised checkstyle to a version that needs
+ * Java 21, the model put it back, and every {@code sheriff_fix} raised it
+ * again, five times in one session, as the error was gone after each repair
+ * and so never counted as an attempt. Such an error is left for the end at
+ * once, and {@code sheriff_fix} withholds it from the fixers.
+ *
  * <p>A file per component in the user's folder of the temporary directory,
  * shared by the MCP's answers and the hooks, pruned after a week.
  */
@@ -50,6 +60,8 @@ public final class StuckErrors {
     public static final int LAST_AT = 3;
 
     private static final String DIRECTORY = "sheriff-stuck";
+    private static final String ATTEMPTS_FIELD = "attempts";
+    private static final String REPAIRED_FIELD = "repaired";
     private static final String KEY_SEPARATOR = "|";
     private static final int ONE_MORE = 1;
     private static final int NONE = 0;
@@ -102,14 +114,15 @@ public final class StuckErrors {
      * @param present the errors there now
      */
     public void attempted(Path component, Set<String> shown, Set<String> present) {
-        Map<String, Integer> attempts = new TreeMap<>(read(component));
+        JsonNode record = read(component);
+        Map<String, Integer> attempts = new TreeMap<>(attemptsIn(record));
         attempts.keySet().retainAll(present);
         for (String key : shown) {
             if (present.contains(key)) {
                 attempts.merge(key, ONE_MORE, Integer::sum);
             }
         }
-        write(component, attempts);
+        write(component, attempts, repairedIn(record));
     }
 
     /**
@@ -120,20 +133,73 @@ public final class StuckErrors {
      * @param present the errors there now
      */
     public void stalled(Path component, Set<String> present) {
-        Map<String, Integer> attempts = new TreeMap<>(read(component));
+        JsonNode record = read(component);
+        Map<String, Integer> attempts = new TreeMap<>(attemptsIn(record));
         attempts.keySet().retainAll(present);
         present.forEach(key -> attempts.merge(key, DEFERRED_AT, Math::max));
-        write(component, attempts);
+        write(component, attempts, repairedIn(record));
     }
 
     /**
-     * The errors left for the end.
+     * Remembers errors Sheriff's own fixers removed, so that one back later
+     * is known as a repair that was undone.
+     *
+     * @param component the component's directory
+     * @param keys the errors a repair removed
+     */
+    public void repaired(Path component, Set<String> keys) {
+        if (keys.isEmpty()) {
+            return;
+        }
+        JsonNode record = read(component);
+        Set<String> repaired = new TreeSet<>(repairedIn(record));
+        repaired.addAll(keys);
+        write(component, attemptsIn(record), repaired);
+    }
+
+    /**
+     * The errors Sheriff's fixers removed before, whatever is there now:
+     * those a repair must not make again.
+     *
+     * @param component the component's directory
+     * @return their keys
+     */
+    public Set<String> repairedBefore(Path component) {
+        return repairedIn(read(component));
+    }
+
+    /**
+     * The errors there now that Sheriff's fixers removed before, so their
+     * repair was undone, left for the end from now on.
+     *
+     * @param component the component's directory
+     * @param present the errors there now
+     * @return those of them whose repair was undone
+     */
+    public Set<String> undone(Path component, Set<String> present) {
+        JsonNode record = read(component);
+        Set<String> back = new TreeSet<>(repairedIn(record));
+        back.retainAll(present);
+        if (!back.isEmpty()) {
+            Map<String, Integer> attempts = new TreeMap<>(attemptsIn(record));
+            back.forEach(key -> attempts.merge(key, DEFERRED_AT, Math::max));
+            write(component, attempts, repairedIn(record));
+        }
+        return back;
+    }
+
+    /**
+     * The errors left for the end: those that stayed through the work on
+     * them, and those whose repair by Sheriff was undone.
      *
      * @param component the component's directory
      * @return their keys
      */
     public Set<String> deferred(Path component) {
-        return reaching(component, DEFERRED_AT);
+        JsonNode record = read(component);
+        Set<String> deferred = new TreeSet<>(reaching(attemptsIn(record), DEFERRED_AT));
+        deferred.addAll(repairedIn(record));
+        return deferred;
     }
 
     /**
@@ -143,18 +209,18 @@ public final class StuckErrors {
      * @return their keys
      */
     public Set<String> exhausted(Path component) {
-        return reaching(component, LAST_AT);
+        return reaching(attemptsIn(read(component)), LAST_AT);
     }
 
     /**
      * The errors that have had at least a number of attempts.
      *
-     * @param component the component's directory
+     * @param attempts each error's attempts
      * @param least the number
      * @return their keys
      */
-    private Set<String> reaching(Path component, int least) {
-        return read(component).entrySet().stream().filter(entry -> entry.getValue() >= least)
+    private static Set<String> reaching(Map<String, Integer> attempts, int least) {
+        return attempts.entrySet().stream().filter(entry -> entry.getValue() >= least)
                 .map(Map.Entry::getKey).collect(Collectors.toSet());
     }
 
@@ -162,18 +228,45 @@ public final class StuckErrors {
      * What is on record for a component.
      *
      * @param component the component's directory
-     * @return each error's attempts, nothing when there is no record
+     * @return the record, an empty object when there is none, a missing node
+     *     when the file is empty
      */
-    private Map<String, Integer> read(Path component) {
-        JsonNode record;
+    private JsonNode read(Path component) {
         try {
-            record = json.readTree(Files.readString(fileFor(component)));
+            return json.readTree(Files.readString(fileFor(component)));
         } catch (IOException exception) {
-            return Map.of();
+            return json.createObjectNode();
         }
-        Map<String, Integer> attempts = new TreeMap<>();
-        record.properties().forEach(entry -> attempts.put(entry.getKey(), entry.getValue().asInt(NONE)));
-        return attempts;
+    }
+
+    /**
+     * Each error's attempts in a record, which an earlier version wrote as
+     * the whole object.
+     *
+     * @param record the record
+     * @return the attempts
+     */
+    private static Map<String, Integer> attemptsIn(JsonNode record) {
+        JsonNode attempts = record.has(ATTEMPTS_FIELD) ? record.path(ATTEMPTS_FIELD) : record;
+        Map<String, Integer> counts = new TreeMap<>();
+        attempts.properties().forEach(entry -> {
+            if (entry.getValue().isNumber()) {
+                counts.put(entry.getKey(), entry.getValue().asInt(NONE));
+            }
+        });
+        return counts;
+    }
+
+    /**
+     * The errors Sheriff's fixers removed, in a record.
+     *
+     * @param record the record
+     * @return their keys
+     */
+    private static Set<String> repairedIn(JsonNode record) {
+        Set<String> repaired = new TreeSet<>();
+        record.path(REPAIRED_FIELD).forEach(key -> repaired.add(key.asText()));
+        return repaired;
     }
 
     /**
@@ -182,10 +275,13 @@ public final class StuckErrors {
      *
      * @param component the component's directory
      * @param attempts each error's attempts
+     * @param repaired the errors Sheriff's fixers removed
      */
-    private void write(Path component, Map<String, Integer> attempts) {
+    private void write(Path component, Map<String, Integer> attempts, Set<String> repaired) {
         ObjectNode record = json.createObjectNode();
-        attempts.forEach(record::put);
+        attempts.forEach(record.putObject(ATTEMPTS_FIELD)::put);
+        ArrayNode removed = record.putArray(REPAIRED_FIELD);
+        repaired.forEach(removed::add);
         try {
             Files.createDirectories(directory);
             TemporaryFolders.prune(directory, TemporaryFolders.MARKER_LIFETIME);
