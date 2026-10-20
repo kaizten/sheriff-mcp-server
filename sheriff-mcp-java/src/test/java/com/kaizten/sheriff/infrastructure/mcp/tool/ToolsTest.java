@@ -1141,6 +1141,25 @@ final class ToolsTest {
     }
 
     @Test
+    @DisplayName("a repair that took several rounds says how many; one that took one says nothing of rounds")
+    void aRepairSaysHowManyRoundsItTook() throws IOException {
+        mavenComponent("app");
+        String two = errors("A.java:one", "A.java:two");
+        String one = errors("A.java:two");
+        Tools tools = toolsWithTests(VerificationResult.passed(""), ProcessOutcome.completed(0, two, ""),
+                ProcessOutcome.completed(1, "fixed", ""), ProcessOutcome.completed(1, "fixed", ""),
+                ProcessOutcome.completed(0, one, ""), ProcessOutcome.completed(1, "fixed", ""),
+                ProcessOutcome.completed(1, "fixed", ""), ProcessOutcome.completed(0, one, ""));
+
+        String text = tools.call("sheriff_fix", Map.of("component", "app")).text();
+
+        assertTrue(text.contains("2 error(s) before, 1 after (1 repaired). The fixers ran 2 rounds, each measured by "
+                + "a new analysis."), text);
+        String single = tools(List.of(), repairLeaving(one)).call("sheriff_fix", Map.of("component", "app")).text();
+        assertFalse(single.contains("rounds"), single);
+    }
+
+    @Test
     @DisplayName("the errors left for the end are counted per file, under the folder they share when they share one")
     void errorsLeftForTheEndAreCounted() {
         SheriffFinding a = new SheriffFinding("app/src/A.java", "d", "h", "R", "ERROR", Map.of());

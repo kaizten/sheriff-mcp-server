@@ -4,6 +4,7 @@ import com.kaizten.sheriff.domain.Rules;
 import com.kaizten.sheriff.domain.valueobject.LoopSettings;
 import com.kaizten.sheriff.infrastructure.catalog.CatalogProvisioning;
 import com.kaizten.sheriff.infrastructure.docker.ImageProvisioning;
+import com.kaizten.sheriff.infrastructure.docker.SheriffRepair;
 import com.kaizten.sheriff.infrastructure.process.Platform;
 import java.net.URISyntaxException;
 import java.nio.file.Path;
@@ -82,6 +83,7 @@ public final class Configuration {
     private static final String STOP_MAX_STALLS = "SHERIFF_STOP_MAX_STALLS";
     private static final int DEFAULT_STOP_MAX_STALLS = 1;
     private static final String GATE_TTL = "SHERIFF_GATE_TTL";
+    private static final String REPAIR_ROUNDS = "SHERIFF_REPAIR_ROUNDS";
     private static final int DEFAULT_GATE_TTL = 900;
     private static final int NO_STALLS = 0;
     private static final String NEGATIVE = "%s must be 0 or more, but it is '%s'.";
@@ -696,6 +698,18 @@ public final class Configuration {
             throw new IllegalArgumentException(String.format(NEGATIVE, STOP_MAX_STALLS, configured));
         }
         return configured;
+    }
+
+    /**
+     * How many rounds of Sheriff's own fixers a repair runs.
+     *
+     * @return {@code SHERIFF_REPAIR_ROUNDS}, or no limit: until a round
+     *     repairs nothing
+     * @throws IllegalArgumentException when it is set to anything but a
+     *     whole number from one
+     */
+    public int repairRounds() {
+        return positive(REPAIR_ROUNDS, SheriffRepair.NO_LIMIT);
     }
 
     /**

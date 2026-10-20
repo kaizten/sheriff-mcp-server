@@ -43,6 +43,8 @@ final class SheriffFixTool {
     private static final String SPECIFIC_FIXER_SCOPE = "the `%s` fixer";
     private static final String FIX_SUMMARY =
             "Ran %s on %s: %d error(s) before, %d after (%d repaired).";
+    private static final String ROUNDS = " The fixers ran %d rounds, each measured by a new analysis.";
+    private static final int ONE_ROUND = 1;
     private static final String NOT_APPLIED =
             "%nSheriff could not apply %d of its fixers, so the rules they cover were not repaired "
             + "and need editing by hand: %s";
@@ -139,7 +141,8 @@ final class SheriffFixTool {
      */
     private String fix(Task task, String component, String profile, String referenceCode, boolean verify,
             String asked) {
-        FixRun run = context.runner().exportingTo(task.directory()).fix(component, profile, referenceCode);
+        FixRun run = context.runner().exportingTo(task.directory()).fix(component, profile, referenceCode,
+                context.config().repairRounds());
         if (run.before().total() == NO_ERRORS && !context.config().layout().holdsSourcesFor(component, profile)) {
             throw new IllegalArgumentException(ToolContext.nothingAnalyzed(component, profile));
         }
@@ -149,6 +152,9 @@ final class SheriffFixTool {
                 : String.format(SPECIFIC_FIXER_SCOPE, referenceCode);
         StringBuilder body = new StringBuilder(String.format(
                 FIX_SUMMARY, scope, component, run.before().total(), run.after().total(), repaired));
+        if (run.rounds() > ONE_ROUND) {
+            body.append(String.format(ROUNDS, run.rounds()));
+        }
         if (!run.fixerFailures().isEmpty()) {
             body.append(String.format(NOT_APPLIED, run.fixerFailures().size(),
                     String.join(FAILURE_SEPARATOR, run.fixerFailures())));

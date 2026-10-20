@@ -7,6 +7,7 @@ SHERIFF_IMAGE	word	kaizten/sheriff:latest	project	Sheriff's image. A digest, kai
 SHERIFF_PULL	choice:always,check,never	always	project	always pulls a newer image when the server starts, check only says one is published, never does not ask.
 SHERIFF_PROFILE	word		project	The rule profile, over the project's declaration. Empty: the declared one, else the one the sources call for.
 SHERIFF_TIMEOUT	seconds	300	project	Seconds one run of Sheriff gets (900 through WSL's Docker).
+SHERIFF_REPAIR_ROUNDS	count:1		project	Rounds of Sheriff's own fixers in a repair, each measured by a new analysis. Empty: until a round repairs nothing.
 SHERIFF_FAIL_FAST	flag	0	project	1 makes the hooks stop Sheriff at the first error.
 SHERIFF_GATE_TTL	seconds	900	project	Seconds the hooks reuse a verdict before running Sheriff again.
 SHERIFF_STOP_MAX_BLOCKS	count:1	5	project	Times in a row the Stop hook sends a turn back while errors remain.

@@ -6,6 +6,7 @@ import com.kaizten.sheriff.infrastructure.config.Configuration;
 import com.kaizten.sheriff.infrastructure.config.Settings;
 import com.kaizten.sheriff.infrastructure.coverage.CoverageThresholds;
 import com.kaizten.sheriff.infrastructure.docker.ImageProvisioning;
+import com.kaizten.sheriff.infrastructure.docker.SheriffRepair;
 import com.kaizten.sheriff.infrastructure.process.Platform;
 import java.net.URISyntaxException;
 import java.nio.file.Files;
@@ -57,6 +58,8 @@ public final class McpConfig {
     private static final String NOT_A_NUMBER = "%s must be a whole number of seconds, but it is '%s'.";
     private static final int MINIMUM_TIMEOUT_SECONDS = 1;
     private static final String TEST_TIMEOUT = "SHERIFF_TEST_TIMEOUT";
+    private static final String REPAIR_ROUNDS = "SHERIFF_REPAIR_ROUNDS";
+    private static final int MINIMUM_ROUNDS = 1;
     private static final String COVERAGE_TIMEOUT = "SHERIFF_COVERAGE_TIMEOUT";
     private static final String MUTATION_TIMEOUT = "SHERIFF_MUTATION_TIMEOUT";
     private static final Duration DEFAULT_TEST_TIMEOUT = Duration.ofMinutes(10);
@@ -414,6 +417,21 @@ public final class McpConfig {
      */
     public String pullPolicy() {
         return ImageProvisioning.policyIn(settings());
+    }
+
+    /**
+     * How many rounds of Sheriff's own fixers a repair runs.
+     *
+     * @return {@code SHERIFF_REPAIR_ROUNDS}, or no limit, when it is unset or
+     *     no whole number from one
+     */
+    public int repairRounds() {
+        try {
+            int configured = Integer.parseInt(value(REPAIR_ROUNDS, NO_VALUE).strip());
+            return configured >= MINIMUM_ROUNDS ? configured : SheriffRepair.NO_LIMIT;
+        } catch (NumberFormatException exception) {
+            return SheriffRepair.NO_LIMIT;
+        }
     }
 
     /**

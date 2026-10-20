@@ -39,6 +39,8 @@ class ConfigurationTests {
         assertEquals(0, configuration.stopMaxStalls());
         assertEquals(Duration.ofSeconds(30), configuration.gateTtl());
         assertEquals(1, new Configuration(Map.of(), folder).stopMaxStalls(), "the default, with no file");
+        assertEquals(Integer.MAX_VALUE, new Configuration(Map.of(), folder).repairRounds(), "no limit");
+        assertEquals(4, new Configuration(Map.of("SHERIFF_REPAIR_ROUNDS", "4"), folder).repairRounds());
         assertEquals(3, new Configuration(Map.of("SHERIFF_STOP_MAX_STALLS", "3", "CLAUDE_PROJECT_DIR",
                 project.toString()), folder).stopMaxStalls());
         assertEquals("SHERIFF_STOP_MAX_STALLS must be 0 or more, but it is '-1'.", assertThrows(

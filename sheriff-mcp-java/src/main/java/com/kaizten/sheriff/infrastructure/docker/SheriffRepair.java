@@ -42,12 +42,19 @@ import java.util.stream.Collectors;
  * <p>Profile by profile, since {@code fix} reads the state of the
  * {@code test} just before it, and in rounds: one fixer's change can be
  * another's finding, so a profile whose count the round before lowered is
- * repaired again, up to three rounds. Each round's analysis measures the one
+ * repaired again, until a round repairs nothing ({@code SHERIFF_REPAIR_ROUNDS}
+ * sets a limit). It always ends: a round runs only when the count before it
+ * dropped, and a count cannot drop for ever. Each round's analysis measures the one
  * before, so the last analysis, the one that repaired nothing, is the state
  * the repair left; a fixer that exits 0 having done nothing is caught there.
  * With rules named, only their fixers run, once.
  */
 public final class SheriffRepair {
+    /**
+     * No limit on the rounds: they run until one repairs nothing, which they
+     * reach, as a round runs only when the count before it dropped.
+     */
+    public static final int NO_LIMIT = Integer.MAX_VALUE;
 
     private static final String FIX_COMMAND = "fix";
     private static final String APPLY_FLAG = "-f";
@@ -58,13 +65,16 @@ public final class SheriffRepair {
     private static final String CODE_SEPARATOR = ",";
     private static final int NO_ERRORS = 0;
     private static final int FIRST_ROUND = 1;
-    private static final int EVERY_FIXER_ROUNDS = 3;
+    private static final int NO_ROUNDS = 0;
+    private static final int ONE_ROUND = 1;
     private static final int NAMED_FIXER_ROUNDS = 1;
+
     private static final int FIRST_PROFILE = 0;
 
     private final SheriffContainer container;
     private final SheriffDockerAnalyzer analyzer;
     private final String component;
+    private int roundLimit = NO_LIMIT;
 
     /**
      * Wires the repair to one component.
@@ -82,6 +92,18 @@ public final class SheriffRepair {
     }
 
     /**
+     * The same repair, with a limit on its rounds.
+     *
+     * @param limit the most rounds of fixers it runs, one or more;
+     *     {@link #NO_LIMIT} for none
+     * @return this repair
+     */
+    public SheriffRepair withRounds(int limit) {
+        this.roundLimit = limit;
+        return this;
+    }
+
+    /**
      * Every repair Sheriff has: its default set and the fixer of every rule
      * found, in rounds while they help.
      *
@@ -91,7 +113,7 @@ public final class SheriffRepair {
      * @return what it did, measured
      */
     public RepairOutcome everyFixer(List<SheriffRule> rules) {
-        return MountLock.holding(analyzer.lockKey(), () -> repair(rules, Optional.empty(), EVERY_FIXER_ROUNDS));
+        return MountLock.holding(analyzer.lockKey(), () -> repair(rules, Optional.empty(), roundLimit));
     }
 
     /**
@@ -122,6 +144,7 @@ public final class SheriffRepair {
         AnalysisResult before = null;
         AnalysisResult after;
         int round = FIRST_ROUND;
+        int repairRounds = NO_ROUNDS;
         boolean repaired;
         do {
             repaired = false;
@@ -150,10 +173,11 @@ public final class SheriffRepair {
             }
             after = AnalysisResult.merged(analyses);
             before = before == null ? after : before;
+            repairRounds += repaired ? ONE_ROUND : NO_ROUNDS;
             round++;
         } while (repaired);
         return new RepairOutcome(before, after, List.copyOf(codes), failures.stream().distinct().toList(),
-                Optional.empty());
+                Optional.empty(), repairRounds);
     }
 
     /**

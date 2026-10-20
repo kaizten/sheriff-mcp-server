@@ -912,6 +912,8 @@ SHERIFF\_STOP\_MAX\_STALLS & Stops in a row with nothing changed it still sends
   back; 1. Set 0 while a false positive of the checker is left. \\
 SHERIFF\_STOP\_RUNS\_TESTS & 1: the Stop hook requires green tests too. \\
 SHERIFF\_TIMEOUT & Seconds per analysis; 300, 900 with WSL's Docker. \\
+SHERIFF\_REPAIR\_ROUNDS & Rounds of Sheriff's own fixers in a repair; no
+  limit: they go on until one repairs nothing. \\
 SHERIFF\_COVERAGE, \_BRANCHES, \_MUTATION & What the tests of a change must
   reach: 100, 100 and 80. \\
 SHERIFF\_TEST\_TIMEOUT, \_COVERAGE\_TIMEOUT, \_MUTATION\_TIMEOUT & Seconds for

@@ -15,23 +15,14 @@ import java.util.List;
  * @param after what is still wrong coming out
  * @param fixerFailures the fixers Sheriff said it could not apply, each as
  *     {@code CODE: reason}
+ * @param rounds how many rounds of fixers ran
  */
-public record FixRun(AnalysisResult before, AnalysisResult after, List<String> fixerFailures) {
+public record FixRun(AnalysisResult before, AnalysisResult after, List<String> fixerFailures, int rounds) {
 
     /**
      * Makes the failure list unmodifiable.
      */
     public FixRun {
         fixerFailures = fixerFailures == null ? List.of() : List.copyOf(fixerFailures);
-    }
-
-    /**
-     * A run with no fixer Sheriff failed to apply.
-     *
-     * @param before what was wrong going in
-     * @param after what is still wrong coming out
-     */
-    public FixRun(AnalysisResult before, AnalysisResult after) {
-        this(before, after, List.of());
     }
 }

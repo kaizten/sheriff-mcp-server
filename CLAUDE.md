@@ -536,8 +536,14 @@ left out. A measure that cannot run says why and holds nothing. The versions are
 `sheriff_fix`, the loop's first pass and `sheriff:fix` repair with one class,
 `SheriffRepair` (`SheriffRunner.fix` and `DeterministicFixer` only call it
 and word its outcome): Sheriff's default set, then `--fixers` with every rule
-found, again for each profile whose count the round before lowered, up to
-three rounds, each round's analysis measuring the one before; a `fix` that
+found, again for each profile whose count the round before lowered, until a
+round repairs nothing (`SHERIFF_REPAIR_ROUNDS` sets a limit), each round's
+analysis measuring the one before. It always ends, as a round runs only when
+the count dropped. The limit of three it used to have did not bind on
+PetClinic (290 errors to 241 in three rounds, the third repairing nothing,
+with and without it), but fixers that make room for each other can need more,
+and each round past the limit was work left to a model. The answer says how
+many rounds ran when there were several. A `fix` that
 did not run is a failure, not a repair that found nothing.
 `DeterministicFixerTests` checks the loop and `sheriff_fix` give Sheriff the
 same commands.

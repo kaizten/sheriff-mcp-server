@@ -539,7 +539,8 @@ public final class Composition {
                 processes, configuration.image(), configuration.testType(), configuration.component(),
                 configuration.targetRepository(), configuration.sheriffTimeout(), false));
         return new DeterministicFixer(processes, ruleCatalog(), stateKeeping, configuration.image(),
-                configuration.component(), configuration.targetRepository(), configuration.sheriffTimeout());
+                configuration.component(), configuration.targetRepository(), configuration.sheriffTimeout())
+                .withRounds(configuration.repairRounds());
     }
 
     /**

@@ -649,6 +649,7 @@ which no tool reports.
 | `sheriff.branches` / `branches` | `100` | Likewise: the share of the branches of those lines' conditions its tests must take |
 | `sheriff.mutation` / `mutation` | `80` | Likewise: the share of PIT's mutants of those lines its tests must kill |
 | `sheriff.mutators` / `mutators` | `STRONGER,REMOVE_CONDITIONALS,EXPERIMENTAL_ARGUMENT_PROPAGATION` | Likewise: PIT's mutators, or groups (`DEFAULTS`, `STRONGER`, `ALL`), the mutants are made with |
+| `SHERIFF_REPAIR_ROUNDS` | no limit | Rounds of Sheriff's own fixers in a repair, each measured by a new analysis. With none set they go on until a round repairs nothing, which they always reach: a round runs only when the one before lowered the count |
 | `SHERIFF_GATE_TTL` | `900` | Seconds the hooks reuse a verdict a tool or a hook recorded before running Sheriff again |
 | `SHERIFF_STOP_MAX_STALLS` | `1` | How many stops in a row with nothing changed since the last block the Stop hook still sends back; the next goes through. `0` lets the first through, which a checker's false positive that nothing can fix calls for |
 | `SHERIFF_TEST_TIMEOUT` | `600` | Seconds the project's tests get when the tools run them (`VERIFICATION_TIMEOUT`, 300, in the hooks and the loop) |

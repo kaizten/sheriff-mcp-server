@@ -289,4 +289,14 @@ final class McpConfigTest {
 
         assertEquals(Path.of("/tmp/rules_catalog.json"), config.rulesCatalog());
     }
+
+    @Test
+    @DisplayName("the rounds of Sheriff's fixers have no limit unless a whole number from one sets one")
+    void theRepairRoundsComeFromTheSettings() throws IOException {
+        Path module = javaModule("app");
+        assertEquals(Integer.MAX_VALUE, new McpConfig(Map.of(), module).repairRounds());
+        assertEquals(1, new McpConfig(Map.of("SHERIFF_REPAIR_ROUNDS", "1"), module).repairRounds());
+        assertEquals(Integer.MAX_VALUE, new McpConfig(Map.of("SHERIFF_REPAIR_ROUNDS", "0"), module).repairRounds());
+        assertEquals(Integer.MAX_VALUE, new McpConfig(Map.of("SHERIFF_REPAIR_ROUNDS", "many"), module).repairRounds());
+    }
 }

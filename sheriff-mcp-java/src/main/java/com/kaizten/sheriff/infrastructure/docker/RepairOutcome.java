@@ -19,13 +19,18 @@ import java.util.Optional;
  *     {@code CODE: reason}
  * @param failure why the repair could not be carried out, when it could not:
  *     an analysis that could not be trusted, or a {@code fix} that did not run
+ * @param rounds how many rounds of fixers ran, each measured by the analysis
+ *     after it
  */
 public record RepairOutcome(
         AnalysisResult before,
         AnalysisResult after,
         List<String> codes,
         List<String> fixerFailures,
-        Optional<String> failure) {
+        Optional<String> failure,
+        int rounds) {
+
+    private static final int NO_ROUNDS = 0;
 
     /**
      * Makes the lists unmodifiable.
@@ -34,6 +39,22 @@ public record RepairOutcome(
         codes = codes == null ? List.of() : List.copyOf(codes);
         fixerFailures = fixerFailures == null ? List.of() : List.copyOf(fixerFailures);
         failure = failure == null ? Optional.empty() : failure;
+    }
+
+    /**
+     * An outcome that does not say how many rounds ran.
+     *
+     * @param before what the first analysis found
+     * @param after what the last analysis found
+     * @param codes the rules the catalog knows a fixer for, among those handed
+     *     to the fixers
+     * @param fixerFailures the fixers Sheriff said it could not apply
+     * @param failure why the repair could not be carried out, when it could
+     *     not
+     */
+    public RepairOutcome(AnalysisResult before, AnalysisResult after, List<String> codes, List<String> fixerFailures,
+            Optional<String> failure) {
+        this(before, after, codes, fixerFailures, failure, NO_ROUNDS);
     }
 
     /**
