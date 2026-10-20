@@ -66,6 +66,12 @@ final class ServerInstructionsTest {
     }
 
     @Test
+    @DisplayName("asked which Sheriff it used, Claude Code said no tool told: it sees an MCP tool's name, not its description")
+    void sayWhereTheVersionIs() throws Exception {
+        assertTrue(McpServer.instructions().contains("call sheriff_task with no id: it says both"));
+    }
+
+    @Test
     @DisplayName("the same state must lead every model to the same step, so the order of work is the answers'")
     void sendTheModelToTheNextStepOfEachAnswer() throws Exception {
         assertTrue(McpServer.instructions().contains("Do exactly that step"));
