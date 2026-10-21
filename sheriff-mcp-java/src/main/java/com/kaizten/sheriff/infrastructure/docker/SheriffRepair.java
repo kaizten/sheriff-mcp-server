@@ -11,6 +11,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 /**
@@ -48,6 +49,10 @@ import java.util.stream.Collectors;
  * before, so the last analysis, the one that repaired nothing, is the state
  * the repair left; a fixer that exits 0 having done nothing is caught there.
  * With rules named, only their fixers run, once.
+ *
+ * <p>Findings it is told to withhold are taken out of the state before every
+ * {@code fix}, so no fixer makes their repair again: one whose repair was
+ * undone, as it broke the build, was made again by every call.
  */
 public final class SheriffRepair {
     /**
@@ -75,6 +80,7 @@ public final class SheriffRepair {
     private final SheriffDockerAnalyzer analyzer;
     private final String component;
     private int roundLimit = NO_LIMIT;
+    private Predicate<SheriffFinding> withheld = finding -> false;
 
     /**
      * Wires the repair to one component.
@@ -100,6 +106,17 @@ public final class SheriffRepair {
      */
     public SheriffRepair withRounds(int limit) {
         this.roundLimit = limit;
+        return this;
+    }
+
+    /**
+     * The same repair, leaving some findings to no fixer.
+     *
+     * @param findings which findings no fixer may repair
+     * @return this repair
+     */
+    public SheriffRepair withholding(Predicate<SheriffFinding> findings) {
+        this.withheld = findings;
         return this;
     }
 
@@ -159,10 +176,12 @@ public final class SheriffRepair {
                     analyses.add(analysis);
                     boolean helping = analysis.total() < previous.get(index);
                     previous.set(index, analysis.total());
-                    if (round <= rounds && helping && repairable(analysis, rules)) {
-                        codes.addAll(DeterministicPolicy.fixableCodes(analysis.errors(), rules));
+                    List<SheriffFinding> repairable = analysis.errors().stream().filter(withheld.negate()).toList();
+                    if (round <= rounds && helping && repairable(repairable, rules)) {
+                        single.withholdFromState(withheld);
+                        codes.addAll(DeterministicPolicy.fixableCodes(repairable, rules));
                         failures.addAll(named.isPresent() ? runFix(List.of(FIXERS_FLAG, named.get()))
-                                : everyFixerFor(analysis));
+                                : everyFixerFor(repairable));
                         repaired = true;
                     }
                 } catch (FixNotRun exception) {
@@ -184,12 +203,12 @@ public final class SheriffRepair {
      * Sheriff's default set, then the fixer of every rule one analysis
      * found, while the state that analysis left is still there to read.
      *
-     * @param analysis the analysis under one profile
+     * @param errors the errors under one profile that a fixer may repair
      * @return the fixers that could not be applied
      */
-    private List<String> everyFixerFor(AnalysisResult analysis) {
+    private List<String> everyFixerFor(List<SheriffFinding> errors) {
         List<String> failures = new ArrayList<>(runFix(List.of()));
-        String found = analysis.errors().stream().map(SheriffFinding::referenceCode).filter(code -> !code.isEmpty())
+        String found = errors.stream().map(SheriffFinding::referenceCode).filter(code -> !code.isEmpty())
                 .distinct().collect(Collectors.joining(CODE_SEPARATOR));
         if (!found.isEmpty()) {
             failures.addAll(runFix(List.of(FIXERS_FLAG, found)));
@@ -198,16 +217,16 @@ public final class SheriffRepair {
     }
 
     /**
-     * Whether an analysis leaves anything for Sheriff's fixers: errors, and,
-     * when there is a catalog, a rule among them it knows a fixer for.
+     * Whether errors leave anything for Sheriff's fixers: some, and, when
+     * there is a catalog, a rule among them it knows a fixer for.
      *
-     * @param analysis the analysis under one profile
+     * @param errors the errors under one profile that a fixer may repair
      * @param rules the catalog, empty when there is none
      * @return {@code true} when the fixers are worth running
      */
-    private static boolean repairable(AnalysisResult analysis, List<SheriffRule> rules) {
-        return analysis.total() > NO_ERRORS
-                && (rules.isEmpty() || !DeterministicPolicy.fixableCodes(analysis.errors(), rules).isEmpty());
+    private static boolean repairable(List<SheriffFinding> errors, List<SheriffRule> rules) {
+        return errors.size() > NO_ERRORS
+                && (rules.isEmpty() || !DeterministicPolicy.fixableCodes(errors, rules).isEmpty());
     }
 
     /**

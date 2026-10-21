@@ -22,6 +22,7 @@ final class AnswerMemory {
 
     private final Map<String, String> listed = new ConcurrentHashMap<>();
     private final Map<String, Set<String>> shown = new ConcurrentHashMap<>();
+    private final Map<String, List<String>> changedByRepair = new ConcurrentHashMap<>();
 
     /**
      * Records the errors listed for a component, and says whether they are
@@ -59,5 +60,28 @@ final class AnswerMemory {
      */
     void shown(String component, Set<String> keys) {
         shown.put(component, Set.copyOf(keys));
+    }
+
+    /**
+     * The files the last repair of this session that changed any changed in
+     * a component, until its tests pass, so that tests failing after a
+     * repair that changed nothing are not said to have been failing before
+     * every repair.
+     *
+     * @param component the component
+     * @return those files, none when no repair changed any
+     */
+    List<String> repairChanged(String component) {
+        return changedByRepair.getOrDefault(component, List.of());
+    }
+
+    /**
+     * Records the files a repair changed, or forgets them with none.
+     *
+     * @param component the component
+     * @param files the files, repository-relative
+     */
+    void repairChanged(String component, List<String> files) {
+        changedByRepair.put(component, List.copyOf(files));
     }
 }

@@ -25,6 +25,7 @@ public final class FakeProcessRunner implements ProcessRunner {
     private final List<Map<String, String>> environments = new ArrayList<>();
     private final List<Path> directories = new ArrayList<>();
     private final List<String> inputs = new ArrayList<>();
+    private final List<String> errorRecords = new ArrayList<>();
 
     /**
      * @param outcomes what successive runs should return
@@ -80,6 +81,7 @@ public final class FakeProcessRunner implements ProcessRunner {
         commands.add(command);
         environments.add(environment);
         directories.add(workingDirectory);
+        errorRecords.add(errorRecordIn(workingDirectory));
         ProcessOutcome outcome = outcomes.size() == 1 ? outcomes.peek() : outcomes.removeFirst();
         if (recordsSheriffReport) {
             recordSheriffTest(outcome, command, workingDirectory);
@@ -122,6 +124,27 @@ public final class FakeProcessRunner implements ProcessRunner {
         }
         int start = standardOutput.indexOf('[');
         return start < 0 ? "[]" : standardOutput.substring(start);
+    }
+
+    private static String errorRecordIn(Path directory) {
+        if (directory == null) {
+            return "";
+        }
+        try {
+            return Files.readString(directory.resolve("sheriff_errors.json"));
+        } catch (IOException missing) {
+            return "";
+        }
+    }
+
+    /**
+     * The findings record each run found in its working directory before it
+     * ran, which is what a {@code fix} reads: empty when there was none.
+     *
+     * @return one per command, in order
+     */
+    public List<String> errorRecords() {
+        return errorRecords;
     }
 
     /**

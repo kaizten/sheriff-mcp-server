@@ -2,6 +2,7 @@ package com.kaizten.sheriff.infrastructure.docker;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.kaizten.sheriff.domain.Rules;
 import com.kaizten.sheriff.domain.port.CodeAnalyzer;
 import com.kaizten.sheriff.domain.valueobject.AnalysisResult;
@@ -20,6 +21,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 /**
@@ -122,6 +124,10 @@ public final class SheriffDockerAnalyzer implements CodeAnalyzer {
             + "state file, so nothing was analyzed. That is not the same as a clean component, and "
             + "Sheriff gives no other way to tell the two apart: it exits 0 either way and says "
             + "nothing on an empty result.";
+
+    private static final int NONE_WITHHELD = 0;
+    private static final int LAST_TO_FIRST = -1;
+    private static final int FIRST_INDEX = 0;
 
     private final SheriffContainer container;
     private final ObjectMapper json = new ObjectMapper();
@@ -474,6 +480,50 @@ public final class SheriffDockerAnalyzer implements CodeAnalyzer {
             return Optional.empty();
         }
         return Optional.of(root);
+    }
+
+    /**
+     * Takes findings out of the record Sheriff's {@code fix} reads, so that
+     * its fixers leave them alone. Measured on PetClinic: with a finding
+     * taken out, neither the default set nor {@code --fixers} naming its
+     * rule touched the file it was about.
+     *
+     * <p>The record is the container's, root's on Linux, in a folder of the
+     * user's, so it is replaced rather than written over. Best effort: one
+     * that cannot be replaced stays as it was, and the fixers see every
+     * finding.
+     *
+     * @param withheld the findings to take out
+     * @return how many were taken out
+     */
+    public int withholdFromState(Predicate<SheriffFinding> withheld) {
+        Optional<JsonNode> root = stateFile(ERRORS_STATE_FILE);
+        if (root.isEmpty()) {
+            return NONE_WITHHELD;
+        }
+        int removed = NONE_WITHHELD;
+        Iterator<JsonNode> contexts = root.get().elements();
+        while (contexts.hasNext()) {
+            JsonNode entries = contexts.next().path(component).path(testType);
+            if (entries instanceof ArrayNode array) {
+                for (int index = array.size() + LAST_TO_FIRST; index >= FIRST_INDEX; index--) {
+                    if (withheld.test(toFinding(array.get(index)))) {
+                        array.remove(index);
+                        removed++;
+                    }
+                }
+            }
+        }
+        if (removed > NONE_WITHHELD) {
+            Path record = stateFolder().resolve(ERRORS_STATE_FILE);
+            try {
+                Files.deleteIfExists(record);
+                Files.writeString(record, root.get().toString());
+            } catch (IOException exception) {
+                return NONE_WITHHELD;
+            }
+        }
+        return removed;
     }
 
     /**

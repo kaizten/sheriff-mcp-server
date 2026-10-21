@@ -87,6 +87,53 @@ class SheriffRepairTests {
     }
 
     @Test
+    @DisplayName("a finding withheld is out of the state every fix reads, its rule is not named, and alone it is no work")
+    void aWithheldFindingIsLeftToNoFixer() {
+        FakeProcessRunner runner = new FakeProcessRunner(List.of(ProcessOutcome.completed(0, TWO, ""), FIXED, FIXED,
+                ProcessOutcome.completed(0, ONE, "")));
+
+        RepairOutcome outcome = repair(runner).withholding(finding -> finding.description().equals("no javadoc"))
+                .everyFixer(List.of());
+
+        assertEquals(List.of("test", "fix", "fix SortedImport", "test"), steps(runner),
+                "the count dropped, but what is left is withheld, so no second round");
+        for (int fix : List.of(1, 2)) {
+            assertTrue(runner.errorRecords().get(fix).contains("unsorted"), runner.errorRecords().get(fix));
+            assertFalse(runner.errorRecords().get(fix).contains("no javadoc"), runner.errorRecords().get(fix));
+        }
+        assertEquals(2, outcome.before().total(), "what is withheld is still counted, before and after");
+        assertEquals(1, outcome.after().total());
+    }
+
+    @Test
+    @DisplayName("a finding with no rule is repaired by the default set, and no empty rule is named to --fixers")
+    void aFindingWithNoRuleNamesNone() {
+        String mixed = """
+                [ {"file":"/data/app/pom.xml","description":"no description","howToSolve":"",
+                   "referenceCode":"","type":"ERROR"},
+                  {"file":"/data/app/A.java","description":"unsorted","howToSolve":"sort",
+                   "referenceCode":"SortedImport","type":"ERROR"} ]
+                """;
+        FakeProcessRunner runner = new FakeProcessRunner(List.of(ProcessOutcome.completed(0, mixed, ""), FIXED, FIXED,
+                ProcessOutcome.completed(0, mixed, "")));
+
+        repair(runner).everyFixer(List.of());
+
+        assertEquals(List.of("test", "fix", "fix SortedImport", "test"), steps(runner));
+    }
+
+    @Test
+    @DisplayName("with only withheld findings no fixer runs at all")
+    void onlyWithheldFindingsRunNothing() {
+        FakeProcessRunner runner = new FakeProcessRunner(List.of(ProcessOutcome.completed(0, ONE, "")));
+
+        RepairOutcome outcome = repair(runner).withholding(finding -> true).everyFixer(List.of());
+
+        assertEquals(List.of("test"), steps(runner));
+        assertEquals(0, outcome.rounds());
+    }
+
+    @Test
     @DisplayName("rules named: only their fixers, once, and the analysis after")
     void onlyRulesRunsTheirFixersOnce() {
         FakeProcessRunner runner = new FakeProcessRunner(List.of(ProcessOutcome.completed(0, TWO, ""), FIXED,

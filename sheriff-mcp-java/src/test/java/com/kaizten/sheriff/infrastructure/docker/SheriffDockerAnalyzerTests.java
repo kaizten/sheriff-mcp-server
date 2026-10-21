@@ -257,6 +257,60 @@ class SheriffDockerAnalyzerTests {
     }
 
     @Test
+    @DisplayName("withheld findings leave the record fix reads, the others stay; with no record nothing happens")
+    void withheldFindingsLeaveTheRecord() throws IOException {
+        Path state = state();
+        SheriffDockerAnalyzer analyzer = analyzer(FakeProcessRunner.always(ProcessOutcome.completed(0, "", "")));
+        assertEquals(0, analyzer.withholdFromState(finding -> true), "no record, nothing to withhold");
+        Files.writeString(state.resolve("sheriff_errors.json"), "{\"file:/other\": {\"lib\": {}}, "
+                + "\"file:/data\": {\"app\": {\"JAVA\": ["
+                + "{\"file\": \"/data/app/pom.xml\", \"description\": \"outdated\", \"referenceCode\": \"Old\"},"
+                + "{\"file\": \"/data/app/A.java\", \"description\": \"unsorted\", \"referenceCode\": \"Sort\"}],"
+                + "\"JAVA_DDD\": [{\"file\": \"/data/app/pom.xml\", \"referenceCode\": \"Old\"}]}}}");
+
+        int withheld = analyzer.withholdFromState(finding -> finding.file().equals("app/pom.xml"));
+
+        assertEquals(1, withheld, "only the profile analyzed is this analyzer's");
+        String record = Files.readString(state.resolve("sheriff_errors.json"));
+        assertFalse(record.contains("outdated"), record);
+        assertTrue(record.contains("unsorted"), record);
+        assertTrue(record.contains("JAVA_DDD"), record);
+        String untouched = record;
+        assertEquals(0, analyzer.withholdFromState(finding -> false));
+        assertEquals(untouched, Files.readString(state.resolve("sheriff_errors.json")));
+    }
+
+    @Test
+    @DisplayName("withholding nothing leaves Sheriff's record as it wrote it, not rewritten")
+    void withholdingNothingRewritesNothing() throws IOException {
+        Path state = state();
+        String asWritten = "{\n  \"file:/data\" : {\n    \"app\" : {\n      \"JAVA\" : [ {\n"
+                + "        \"file\" : \"/data/app/A.java\", \"referenceCode\" : \"Sort\" } ] } } }\n";
+        Files.writeString(state.resolve("sheriff_errors.json"), asWritten);
+
+        assertEquals(0, analyzer(FakeProcessRunner.always(ProcessOutcome.completed(0, "", "")))
+                .withholdFromState(finding -> false));
+
+        assertEquals(asWritten, Files.readString(state.resolve("sheriff_errors.json")));
+    }
+
+    @Test
+    @DisplayName("a record that cannot be replaced is left as it was, and nothing counts as withheld")
+    void aRecordThatCannotBeReplacedIsLeft() throws IOException {
+        Path state = state();
+        String record = "{\"file:/data\": {\"app\": {\"JAVA\": [{\"file\": \"/data/app/pom.xml\"}]}}}";
+        Files.writeString(state.resolve("sheriff_errors.json"), record);
+        state.toFile().setWritable(false);
+        try {
+            assertEquals(0, analyzer(FakeProcessRunner.always(ProcessOutcome.completed(0, "", "")))
+                    .withholdFromState(finding -> true));
+        } finally {
+            state.toFile().setWritable(true);
+        }
+        assertEquals(record, Files.readString(state.resolve("sheriff_errors.json")));
+    }
+
+    @Test
     void cleansUpEvenWhenTheRunFailed() throws IOException {
         Path state = state();
         Files.writeString(state.resolve(SheriffDockerAnalyzer.STATE_FILES.get(0)), "{}");
