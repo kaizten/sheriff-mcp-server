@@ -17,10 +17,12 @@ import java.util.regex.Pattern;
  * @param minimum the least number it takes, for a number
  * @param choices the values it takes, for a choice
  * @param project whether a project's {@code .sheriff.properties} may set it
+ * @param projectImage the one image repository a project may set it to, a
+ *     tag or a digest of it; empty when a project may set any value
  * @param help what it does, in a line
  */
 public record Setting(String name, String defaultValue, SettingKind kind, int minimum, List<String> choices,
-        boolean project, String help) {
+        boolean project, String projectImage, String help) {
 
     private static final int NONE = 0;
     private static final int ONE = 1;
@@ -39,6 +41,13 @@ public record Setting(String name, String defaultValue, SettingKind kind, int mi
     private static final int DETAIL_PART = 1;
     private static final String CHOICE_LIST = ",";
     private static final String PROJECT = "project";
+    private static final String SCOPE_SEPARATOR = ":";
+    private static final int SCOPE_PARTS = 2;
+    private static final String TAG_SEPARATOR = ":";
+    private static final String DIGEST_SEPARATOR = "@";
+    private static final String NOT_THAT_IMAGE = "%s takes only %s in a project's file, or a tag or a digest of it "
+            + "(%s@sha256:...), not '%s': a project that is cloned must not choose which image runs on the machine "
+            + "of whoever opens it. Set another image in your own file.";
     private static final String NOTHING = "";
     private static final String NOT_A_LINE = "Not a line of the settings catalog: '%s'.";
     private static final String ON = "1";
@@ -46,18 +55,29 @@ public record Setting(String name, String defaultValue, SettingKind kind, int mi
     private static final String TOO_SMALL = "%s takes %d or more, not '%s'.";
     private static final String NOT_A_SHARE = "%s takes a share from 0 to 100, not '%s'.";
     private static final String NOT_A_CHOICE = "%s takes one of %s, not '%s'.";
-    private static final String NOT_A_WORD = "%s takes a value with no spaces, not '%s'.";
+    private static final String NOT_A_WORD = "%s takes a value with no spaces or backslashes, not '%s'.";
     private static final String NOT_MUTATORS = "%s takes PIT mutators in capitals, separated by commas, not '%s'.";
     private static final String CHOICE_SEPARATOR = ", ";
-    private static final String WHITESPACE = ".*\\s.*";
+    private static final String TAKES_SECONDS = "Takes a whole number of seconds, 1 or more.";
+    private static final String TAKES_COUNT = "Takes a whole number, %d or more.";
+    private static final String TAKES_SHARE = "Takes a share from 0 to 100, with or without %.";
+    private static final String PERCENT = "%";
+    private static final String SPACE = " ";
+    private static final String TAKES_FLAG = "Takes 0 or 1.";
+    private static final String TAKES_CHOICE = "Takes one of %s.";
+    private static final String TAKES_WORD = "Takes a value with no spaces or backslashes.";
+    private static final String TAKES_MUTATORS = "Takes PIT mutators or groups in capitals, separated by commas.";
+    private static final String TAKES_EMPTY = " Empty puts the default back.";
+    private static final String WHITESPACE = "(?s).*[\\s\\\\].*";
     private static final String MUTATOR_NAMES = "[A-Z0-9_]+(,[A-Z0-9_]+)*";
     private static final Pattern MUTATOR_LIST = Pattern.compile(MUTATOR_NAMES);
 
     /**
      * A setting as one line of the catalog writes it: its name, its kind
      * ({@code count:1} and {@code choice:a,b} carry their minimum and their
-     * values), its default, who may set it, and what it does, separated by
-     * tabs.
+     * values), its default, who may set it ({@code project:<image>} lets a
+     * project set it only to that image, a tag or a digest of it), and what
+     * it does, separated by tabs.
      *
      * @param line the line
      * @return that setting
@@ -73,8 +93,37 @@ public record Setting(String name, String defaultValue, SettingKind kind, int mi
         SettingKind settingKind = SettingKind.valueOf(kind[NAME_PART].toUpperCase(Locale.ROOT));
         int least = settingKind == SettingKind.COUNT ? Integer.parseInt(detail) : NONE;
         List<String> choices = settingKind == SettingKind.CHOICE ? List.of(detail.split(CHOICE_LIST)) : List.of();
+        String[] scope = fields[SCOPE_FIELD].split(SCOPE_SEPARATOR, SCOPE_PARTS);
+        String image = scope.length == SCOPE_PARTS ? scope[DETAIL_PART] : NOTHING;
         return new Setting(fields[NAME_FIELD], fields[DEFAULT_FIELD], settingKind, least, choices,
-                PROJECT.equals(fields[SCOPE_FIELD]), fields[HELP_FIELD]);
+                PROJECT.equals(scope[NAME_PART]), image, fields[HELP_FIELD]);
+    }
+
+    /**
+     * The same setting under another name, as a project's own key for it
+     * ({@code coverage} for {@code SHERIFF_COVERAGE}) is checked, so that
+     * what is wrong is said in the name that was written.
+     *
+     * @param otherName the name
+     * @return that setting
+     */
+    public Setting named(String otherName) {
+        return new Setting(otherName, defaultValue, kind, minimum, choices, project, projectImage, help);
+    }
+
+    /**
+     * Why a project's file may not give this setting a value it may
+     * otherwise set: an image outside the one repository it allows.
+     *
+     * @param value the value, trimmed
+     * @return the reason, or empty when a project may set it
+     */
+    public Optional<String> projectProblemWith(String value) {
+        if (projectImage.isEmpty() || value.isEmpty() || value.equals(projectImage)
+                || value.startsWith(projectImage + TAG_SEPARATOR) || value.startsWith(projectImage + DIGEST_SEPARATOR)) {
+            return Optional.empty();
+        }
+        return Optional.of(String.format(NOT_THAT_IMAGE, name, projectImage, projectImage, value));
     }
 
     /**
@@ -97,9 +146,28 @@ public record Setting(String name, String defaultValue, SettingKind kind, int mi
                     : Optional.of(String.format(NOT_A_CHOICE, name, String.join(CHOICE_SEPARATOR, choices), value));
             case WORD -> value.matches(WHITESPACE) ? Optional.of(String.format(NOT_A_WORD, name, value))
                     : Optional.empty();
-            case MUTATORS -> MUTATOR_LIST.matcher(value).matches() ? Optional.empty()
+            case MUTATORS -> MUTATOR_LIST.matcher(value.replace(SPACE, NOTHING)).matches() ? Optional.empty()
                     : Optional.of(String.format(NOT_MUTATORS, name, value));
         };
+    }
+
+    /**
+     * The values this setting takes, as a person reads them: the same that
+     * {@link #problemWith(String)} lets through.
+     *
+     * @return that sentence
+     */
+    public String accepted() {
+        String values = switch (kind) {
+            case SECONDS -> TAKES_SECONDS;
+            case COUNT -> String.format(TAKES_COUNT, minimum);
+            case SHARE -> TAKES_SHARE;
+            case FLAG -> TAKES_FLAG;
+            case CHOICE -> String.format(TAKES_CHOICE, String.join(CHOICE_SEPARATOR, choices));
+            case WORD -> TAKES_WORD;
+            case MUTATORS -> TAKES_MUTATORS;
+        };
+        return values + TAKES_EMPTY;
     }
 
     /**
@@ -126,7 +194,7 @@ public record Setting(String name, String defaultValue, SettingKind kind, int mi
      */
     private Optional<String> shareProblem(String value) {
         try {
-            int share = Integer.parseInt(value);
+            int share = Integer.parseInt(value.replace(PERCENT, NOTHING));
             return share < NONE || share > ALL ? Optional.of(String.format(NOT_A_SHARE, name, value))
                     : Optional.empty();
         } catch (NumberFormatException exception) {

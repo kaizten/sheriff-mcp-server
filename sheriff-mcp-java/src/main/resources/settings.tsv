@@ -1,27 +1,32 @@
 # The settings a user can change, one per line, its fields separated by tabs:
 # name (its environment variable), kind (seconds, count:<least>, share, flag,
 # choice:<a,b,c>, word, mutators), default (empty when it is worked out),
-# who may set it (project: a project's .sheriff.properties too; user: only the
-# user's own file), and what it does, as sheriff_config and the user's file say.
-SHERIFF_IMAGE	word	kaizten/sheriff:latest	project	Sheriff's image. A digest, kaizten/sheriff@sha256:..., keeps one build, as Sheriff is published only as latest.
+# who may set it (project: a project's .sheriff.properties too; project:<image>:
+# a project's file too, but only to that image, a tag or a digest of it; user:
+# only the user's own file), and what it does, as sheriff_config and the user's
+# file say.
+SHERIFF_IMAGE	word	kaizten/sheriff:latest	project:kaizten/sheriff	Sheriff's image. A digest, kaizten/sheriff@sha256:..., keeps one build, as Sheriff is published only as latest. A project's file may set only kaizten/sheriff; another image, only your own file.
 SHERIFF_PULL	choice:always,check,never	always	project	always pulls a newer image when the server starts, check only says one is published, never does not ask.
-SHERIFF_PROFILE	word		project	The rule profile, over the project's declaration. Empty: the declared one, else the one the sources call for.
+SHERIFF_PROFILE	word		project	The rule profile, over the project's declaration, for the components written in its language. Empty: the declared one, else the one the sources call for.
 SHERIFF_TIMEOUT	seconds	300	project	Seconds one run of Sheriff gets (900 through WSL's Docker).
 SHERIFF_REPAIR_ROUNDS	count:1		project	Rounds of Sheriff's own fixers in a repair, each measured by a new analysis. Empty: until a round repairs nothing.
 SHERIFF_FAIL_FAST	flag	0	project	1 makes the hooks stop Sheriff at the first error.
 SHERIFF_GATE_TTL	seconds	900	project	Seconds the hooks reuse a verdict before running Sheriff again.
 SHERIFF_STOP_MAX_BLOCKS	count:1	5	project	Times in a row the Stop hook sends a turn back while errors remain.
 SHERIFF_STOP_MAX_STALLS	count:0	1	project	Stops in a row with nothing changed that the Stop hook still sends back. 0 lets the first through, as a false positive needs.
+SHERIFF_PROTOTYPE	flag	0	project	1 is for trying an idea out: a component is done when Sheriff finds no errors, with no tests asked for, run or measured, by the tools, the Stop hook or the repair loop. Set it back to 0 before the work is kept.
 SHERIFF_STOP_RUNS_TESTS	flag	0	project	1 makes the Stop hook require green tests, and measure how well they test the turn's change.
-SHERIFF_TEST_TIMEOUT	seconds	600	project	Seconds the project's tests get when the tools run them.
-VERIFICATION_TIMEOUT	seconds	300	project	Seconds the project's tests get in the hooks and the repair loop.
-SHERIFF_COVERAGE	share	100	project	Share of the lines a change wrote that its tests must run. A pom.xml's sheriff.coverage wins.
-SHERIFF_BRANCHES	share	100	project	Share of the branches of those lines' conditions its tests must take. A pom.xml's sheriff.branches wins.
-SHERIFF_MUTATION	share	80	project	Share of PIT's mutants of those lines its tests must kill. A pom.xml's sheriff.mutation wins.
-SHERIFF_MUTATORS	mutators	STRONGER,REMOVE_CONDITIONALS,EXPERIMENTAL_ARGUMENT_PROPAGATION	project	PIT's mutators, or groups (DEFAULTS, STRONGER, ALL). A pom.xml's sheriff.mutators wins.
+SHERIFF_TEST_TIMEOUT	seconds	600	project	Seconds the project's tests get when the MCP tools run them (sheriff_fix with verify); VERIFICATION_TIMEOUT is the hooks' and the repair loop's.
+VERIFICATION_TIMEOUT	seconds	300	project	Seconds the project's tests get in the hooks and the repair loop (sheriff_autofix); SHERIFF_TEST_TIMEOUT is the MCP tools'.
+SHERIFF_COVERAGE	share	100	project	Share of the lines a change wrote that its tests must run. A pom.xml's sheriff.coverage, or coverage in a project's .sheriff.properties, wins over the files.
+SHERIFF_BRANCHES	share	100	project	Share of the branches of those lines' conditions its tests must take. A pom.xml's sheriff.branches, or branches in a project's .sheriff.properties, wins over the files.
+SHERIFF_MUTATION	share	80	project	Share of PIT's mutants of those lines its tests must kill. A pom.xml's sheriff.mutation, or mutation in a project's .sheriff.properties, wins over the files.
+SHERIFF_MUTATORS	mutators	STRONGER,REMOVE_CONDITIONALS,EXPERIMENTAL_ARGUMENT_PROPAGATION	project	PIT's mutators, or groups (DEFAULTS, STRONGER, ALL). A pom.xml's sheriff.mutators, or mutators in a project's .sheriff.properties, wins over the files.
 SHERIFF_COVERAGE_TIMEOUT	seconds	600	project	Seconds the tests get under JaCoCo.
 SHERIFF_MUTATION_TIMEOUT	seconds	1800	project	Seconds PIT gets.
 SHERIFF_MAX_ITERATIONS	count:1		project	Passes of the repair loop. Empty: sized from the errors, and grown while they drop.
 SHERIFF_MAX_FILES_PER_BATCH	count:1	5	project	Files the repair loop gives a model at once.
 AI_BACKEND	choice:claude_cli,codex_cli,antigravity_cli,anthropic_api,openai_api,local	claude_cli	user	Who answers in the repair loop.
-SHERIFF_AGENT_CLAUDE_TIMEOUT	seconds	600	user	Seconds one pass of claude gets in the repair loop.
+SHERIFF_AGENT_CLAUDE_TIMEOUT	seconds	600	user	Seconds one pass of claude gets in the repair loop (AI_BACKEND=claude_cli).
+SHERIFF_AGENT_CODEX_TIMEOUT	seconds	600	user	Seconds one pass of codex gets in the repair loop (AI_BACKEND=codex_cli).
+SHERIFF_AGENT_ANTIGRAVITY_TIMEOUT	seconds	600	user	Seconds one pass of agy gets in the repair loop (AI_BACKEND=antigravity_cli).

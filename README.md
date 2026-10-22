@@ -423,8 +423,10 @@ to no phase, because it rewrites source; it analyzes again after repairing and
 fails if errors remain, one module at a time even in a parallel build. Both
 leave Sheriff's JSON in `target/sheriff/` and skip modules with no `src/`.
 Parameters: `sheriff.profile` (the project's declaration, else `JAVA`), `sheriff.image`, `sheriff.timeout`
-(`300`), `sheriff.failOnError` (`true`), `sheriff.failOnRemaining` (`true`),
-`sheriff.skip`.
+(the project's `SHERIFF_IMAGE` and `SHERIFF_TIMEOUT`, else `kaizten/sheriff:latest` and `300`),
+`sheriff.failOnError` (`true`), `sheriff.failOnRemaining` (`true`), `sheriff.skip`. The other settings come
+from the `.sheriff.properties` at the top of the build too, as the MCP server reads it; never from your own
+file, so a build does not depend on who runs it.
 
 ## Codex
 
@@ -574,15 +576,21 @@ one's profile and the test command from the project it is started in.
 assistant.** The first time the server starts it writes
 `~/.config/sheriff-mcp/sheriff.properties` (`$XDG_CONFIG_HOME/sheriff-mcp/`,
 or `%APPDATA%\sheriff-mcp\` on Windows), every setting in it at its default
-and commented out: take the `#` off a line and change its value. A setting a
+and commented out, under a line saying the values it takes: take the `#` off
+a line and change its value. A setting a
 newer version brings is added at the end of the file when the server next
 starts, commented out the same way; nothing already in it is touched. A project's
 `.sheriff.properties` can set the same names for everyone who opens it (all
-but `AI_BACKEND` and `SHERIFF_AGENT_CLAUDE_TIMEOUT`, which a cloned project
-must not choose), and an environment variable of the same name wins over both
+but `AI_BACKEND` and the `SHERIFF_AGENT_*_TIMEOUT` of each assistant, which a
+cloned project must not choose; and `SHERIFF_IMAGE` only as `kaizten/sheriff`,
+a tag or a digest of it, as a cloned project must not choose which image runs), and an environment variable of the same name wins over both
 files. Or ask the assistant: `sheriff_config` lists them and changes one,
 refusing a value the tools could not use. `java -jar sheriff-mcp.jar --config`
-prints the same list. The tools read the settings when a session starts, the
+prints the same list, and `--config NAME=VALUE` (with `--project`, in the
+project's file) changes one the same way. A value written by hand into a file that its setting
+does not take, a name that is no setting, or one a project may not set, is
+ignored, so the next file or the default decides; the listing ends with what
+is wrong, and so does the tools' first answer of a session. The tools read the settings when a session starts, the
 hooks on every run. The names are those of the table below, which also holds
 the variables no file sets (`SHERIFF_REPO`, `SHERIFF_DOCKER`, the API keys).
 
@@ -641,8 +649,8 @@ which no tool reports.
 | `SHERIFF_REPO` | from the working directory | Directory mounted at `/data` (MCP server) |
 | `TARGET_REPO` | from the working directory | The same, for the agent's CLI: the directory that holds the module |
 | `SHERIFF_COMPONENT` | the project, or its only component (the agent's CLI with `TARGET_REPO` set: `sheriff-mcp-java`) | Component when a call names none |
-| `SHERIFF_PROFILE` / `SHERIFF_TEST_TYPE` | declared, else from the sources / `JAVA` | Rule profile (server / agent), overriding the project's declaration |
-| `SHERIFF_IMAGE` | `kaizten/sheriff:latest` | A digest (`kaizten/sheriff@sha256:...`, as `task.json` records it) keeps the rules from changing until you change it |
+| `SHERIFF_PROFILE` / `SHERIFF_TEST_TYPE` | declared, else from the sources / `JAVA` | Rule profile (server / agent), overriding the project's declaration for the components written in its language |
+| `SHERIFF_IMAGE` | `kaizten/sheriff:latest` | A digest (`kaizten/sheriff@sha256:...`, as `task.json` records it) keeps the rules from changing until you change it. A project's `.sheriff.properties` may set only `kaizten/sheriff`, a tag or a digest of it; another image, only your own file |
 | `SHERIFF_PULL` | `always` | `always` pulls a newer image when the server, `--check`, the agent or a Maven goal starts: newer means the digest Docker Hub publishes for the tag differs from the one the image here was pulled by, as Sheriff is only published as `latest`, with no versions. `check` only reports it, once per session; `never` does not even ask Docker Hub |
 | `SHERIFF_TIMEOUT` | `300` (`900` through WSL's Docker) | Seconds per run; the container is removed after. Through WSL (`SHERIFF_DOCKER=wsl`) the default is 900, and Codex is given 1800 s a call instead of 600: a `sheriff_fix` of PetClinic took 511 s there |
 | `SHERIFF_DOCKER` | unset | Windows only: `wsl` (or `wsl:<distro>`) runs every `docker` as `wsl.exe -e docker`, for the engine inside WSL with no Docker Desktop. `--docker-wsl` (`-DockerWsl`) sets it for the user and in each assistant's registration |
@@ -655,6 +663,7 @@ which no tool reports.
 | `SHERIFF_REPAIR_ROUNDS` | no limit | Rounds of Sheriff's own fixers in a repair, each measured by a new analysis. With none set they go on until a round repairs nothing, which they always reach: a round runs only when the one before lowered the count |
 | `SHERIFF_GATE_TTL` | `900` | Seconds the hooks reuse a verdict a tool or a hook recorded before running Sheriff again |
 | `SHERIFF_STOP_MAX_STALLS` | `1` | How many stops in a row with nothing changed since the last block the Stop hook still sends back; the next goes through. `0` lets the first through, which a checker's false positive that nothing can fix calls for |
+| `SHERIFF_PROTOTYPE` | `0` | `1` while an idea is being tried out: a component is done when Sheriff finds no errors, and neither the tools, the Stop hook nor the repair loop ask for, run or measure its tests (new methods without a test, coverage, mutation, `SHERIFF_STOP_RUNS_TESTS`). Set it back to `0` before the work is kept |
 | `SHERIFF_TEST_TIMEOUT` | `600` | Seconds the project's tests get when the tools run them (`VERIFICATION_TIMEOUT`, 300, in the hooks and the loop) |
 | `SHERIFF_COVERAGE`, `SHERIFF_BRANCHES`, `SHERIFF_MUTATION`, `SHERIFF_MUTATORS` | `100`, `100`, `80`, the set above | What the tests of a change must reach, for every project; a project's `sheriff.coverage` and the rest win |
 | `SHERIFF_COVERAGE_TIMEOUT`, `SHERIFF_MUTATION_TIMEOUT` | `600`, `1800` | Seconds the tests get under JaCoCo, and PIT gets |
@@ -667,7 +676,7 @@ which no tool reports.
 | `AI_BACKEND` | Needs |
 |---|---|
 | `claude_cli` | A logged-in `claude`; no API key. Edits only inside the component, and may run the project's test command and nothing else |
-| `codex_cli` | A logged-in `codex`; runs with `--cd <component>` |
+| `codex_cli` | A logged-in `codex`; runs with `--cd <component>`; `SHERIFF_AGENT_CODEX_TIMEOUT` (`600`) the seconds per pass |
 | `antigravity_cli` | A logged-in `agy`, Google Antigravity's command line. Runs inside the component with `--mode accept-edits`, which writes only there, and may run the project's test command and `git mv`, nothing else: each pass gets a `HOME` of its own whose settings, a copy of yours, allow those two, and it is deleted after, so your own settings are never written. On Windows, where that has not been tried, it runs no commands. `ANTIGRAVITY_COMMAND` (`agy --mode accept-edits`) picks the model: `... --model claude-sonnet-5-5-high`, from `agy models`; `SHERIFF_AGENT_ANTIGRAVITY_TIMEOUT` (`600`) the seconds per pass |
 | `anthropic_api` | `ANTHROPIC_API_KEY`; `ANTHROPIC_MODEL` |
 | `openai_api` | `OPENAI_API_KEY`; `OPENAI_MODEL`, `OPENAI_BASE_URL` |

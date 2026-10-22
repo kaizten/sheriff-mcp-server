@@ -6,6 +6,7 @@ import com.kaizten.sheriff.infrastructure.catalog.CatalogProvisioning;
 import com.kaizten.sheriff.infrastructure.config.Composition;
 import com.kaizten.sheriff.infrastructure.config.Configuration;
 import com.kaizten.sheriff.infrastructure.config.DeclaredProfile;
+import com.kaizten.sheriff.infrastructure.config.Settings;
 import com.kaizten.sheriff.infrastructure.docker.ImageProvisioning;
 import java.io.File;
 import java.io.IOException;
@@ -77,16 +78,6 @@ public abstract class SheriffMojo extends AbstractMojo {
     private static final String MAVEN_BUILD = "pom.xml";
 
     /**
-     * The image used when nothing says otherwise. Mirrors the annotation.
-     */
-    private static final String DEFAULT_IMAGE = "kaizten/sheriff:latest";
-
-    /**
-     * The per-run timeout used when nothing says otherwise. Mirrors the annotation.
-     */
-    private static final int DEFAULT_TIMEOUT = 300;
-
-    /**
      * The directory whose presence means the module has code to analyze.
      */
     private static final String SOURCES = "src";
@@ -145,16 +136,18 @@ public abstract class SheriffMojo extends AbstractMojo {
     protected String profile;
 
     /**
-     * The Sheriff image to run.
+     * The Sheriff image to run; left unset, the project's
+     * {@code SHERIFF_IMAGE}, else {@code kaizten/sheriff:latest}.
      */
-    @Parameter(property = "sheriff.image", defaultValue = "kaizten/sheriff:latest")
-    protected String image = DEFAULT_IMAGE;
+    @Parameter(property = "sheriff.image")
+    protected String image;
 
     /**
-     * Seconds allowed for one Sheriff run.
+     * Seconds allowed for one Sheriff run; left unset, the project's
+     * {@code SHERIFF_TIMEOUT}, else 300.
      */
-    @Parameter(property = "sheriff.timeout", defaultValue = "300")
-    protected int timeoutSeconds = DEFAULT_TIMEOUT;
+    @Parameter(property = "sheriff.timeout")
+    protected Integer timeoutSeconds;
 
     /**
      * Whether to do nothing at all.
@@ -193,6 +186,24 @@ public abstract class SheriffMojo extends AbstractMojo {
     }
 
     /**
+     * The project whose {@code .sheriff.properties} gives the settings: the
+     * top of the Maven build this module belongs to, as the MCP server reads
+     * it for a project opened there. Never the user's own file, so that a
+     * build does not depend on who runs it.
+     *
+     * @return that folder
+     */
+    protected Path settingsProject() {
+        Path project = moduleDirectory().toPath();
+        Path parent = project.getParent();
+        while (parent != null && Files.isRegularFile(parent.resolve(MAVEN_BUILD))) {
+            project = parent;
+            parent = parent.getParent();
+        }
+        return project;
+    }
+
+    /**
      * The agent's composition, wired for this module.
      *
      * <p>Sheriff mounts a directory and analyzes a subdirectory of it, so a
@@ -214,13 +225,17 @@ public abstract class SheriffMojo extends AbstractMojo {
      */
     protected Map<String, String> environment() {
         File module = moduleDirectory();
-        Map<String, String> environment = new HashMap<>();
+        Map<String, String> environment = new HashMap<>(Settings.layered(Map.of(), settingsProject()));
         String mounted = module.getParent();
         environment.put(TARGET_REPOSITORY, mounted == null ? module.getPath() : mounted);
         environment.put(COMPONENT, module.getName());
         environment.put(TEST_TYPE, profile());
-        environment.put(IMAGE, image);
-        environment.put(TIMEOUT, String.valueOf(timeoutSeconds));
+        if (image != null) {
+            environment.put(IMAGE, image);
+        }
+        if (timeoutSeconds != null) {
+            environment.put(TIMEOUT, String.valueOf(timeoutSeconds));
+        }
         if (buildDirectory != null) {
             environment.put(EXPORT_DIRECTORY, buildDirectory.toPath().resolve(EXPORT_FOLDER).toString());
         }

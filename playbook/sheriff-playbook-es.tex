@@ -888,7 +888,8 @@ Cada número y cada opción que usan las herramientas tiene un valor por defecto
 puedes cambiarlo. La primera vez que arranca, el servidor escribe tu fichero de
 ajustes, \code{~/.config/sheriff-mcp/}\allowbreak\code{sheriff.properties}
 (\texttt{\%APPDATA\%\textbackslash sheriff-mcp} en Windows), con todos los ajustes
-en su valor por defecto y comentados. Un ajuste que traiga una versión nueva se
+en su valor por defecto y comentados, y encima de cada uno los valores que
+admite. Un ajuste que traiga una versión nueva se
 añade al final la próxima vez que arranque el servidor, igual; lo que hayas
 cambiado se queda como está. Hay tres formas de cambiar uno:
 
@@ -896,9 +897,15 @@ cambiado se queda como está. Hay tres formas de cambiar uno:
   \item \textbf{Pídeselo al asistente}, que llama a \code{sheriff_config}:
         \ask{fija la imagen de Sheriff en la que tengo ahora}, \ask{deja pasar
         una parada sin cambios}. Comprueba el valor antes de escribirlo.
+  \item \textbf{Desde la línea de comandos}:
+        \code{java -jar ~/.local/share/sheriff-agent/sheriff-mcp.jar --config SHERIFF_PROTOTYPE=1},
+        con \code{--project} para escribirlo en el fichero del proyecto. También comprueba el valor.
   \item \textbf{Edita el fichero}: quita el \texttt{\#} de una línea y cambia su valor.
   \item \textbf{Para todo el equipo}, pon la misma línea en el
         \code{.sheriff.properties} del proyecto; en ese proyecto gana a la tuya.
+        Va en la raíz del proyecto, donde se abre la sesión: uno dentro de un
+        módulo solo declara el perfil y los umbrales de cobertura de ese
+        módulo. \code{mvn package} lee el mismo fichero, nunca el tuyo.
 \end{itemize}
 
 Una variable de entorno con el mismo nombre gana a los dos ficheros. Las
@@ -916,8 +923,11 @@ SHERIFF_STOP_MAX_STALLS is 0 in /home/you/.config/sheriff-mcp/sheriff.properties
 The tools take it when the next session starts; the hooks, from their next run.
 \end{command}
 
-Un valor que no sirve se rechaza diciendo qué admite, y no se escribe. Dejar
-un ajuste vacío es lo mismo que no ponerlo: vale su valor por defecto. Abajo
+Un valor que no sirve se rechaza diciendo qué admite, y no se escribe. Si lo
+escribes a mano en un fichero, o pones un nombre que no es ningún ajuste, se
+ignora: decide el fichero siguiente o el valor por defecto, y la primera
+respuesta de las herramientas en la sesión dice qué está mal, igual que
+\code{--config}. Dejar un ajuste vacío es lo mismo que no ponerlo: vale su valor por defecto. Abajo
 están todos, agrupados por lo que controlan; los segundos y las veces son
 números enteros.
 
@@ -931,7 +941,9 @@ y cuándo se actualiza.
   entrega), fija la que tienes por su digest,
   \code{kaizten/sheriff@sha256:...}: lo encuentras en el \code{task.json} de
   cualquier tarea, o pídeselo al asistente. Mientras esté fijada no se
-  actualiza.}
+  actualiza. El \code{.sheriff.properties} de un proyecto solo puede fijar
+  \code{kaizten/sheriff}, una etiqueta o un digest suyo: un proyecto clonado no
+  elige qué imagen se ejecuta en tu máquina. Otra imagen va en tu fichero.}
 
 \setting{SHERIFF_PULL}{\code{always}}{\code{always}, \code{check} o
   \code{never}}{Qué se hace al arrancar si Docker Hub tiene una build más
@@ -947,7 +959,8 @@ y cuándo se actualiza.
   ninguno, el que piden sus fuentes}{un perfil de Sheriff: \code{JAVA},
   \code{JAVA_HEXAGONAL}, \code{JAVA_DDD}, \code{TYPESCRIPT},
   \code{TYPESCRIPT_HEXAGONAL}, \code{VUEJS}}{El perfil de reglas con el que se
-  analiza, por encima de lo que declare el proyecto. Lo normal es no tocarlo y
+  analiza, por encima de lo que declare el proyecto, en los componentes de su
+  lenguaje (un front en TypeScript sigue con el suyo si pones uno de Java). Lo normal es no tocarlo y
   declarar el perfil en el proyecto (sección~\ref{sec:perfil}), que lo leen
   igual todas las herramientas. Un perfil de arquitectura se analiza siempre
   junto al base de su lenguaje, nunca en su lugar.}
@@ -989,6 +1002,12 @@ gastan tokens.
   que quedan se dejan para el final y ya no bloquean. Con \code{0} lo hace en
   la primera parada sin cambios: útil si te topas con un falso positivo del
   checker que nadie puede arreglar.}
+
+\setting{SHERIFF_PROTOTYPE}{\code{0}}{\code{0} o \code{1}}{Con \code{1}, para
+  probar una idea, un componente está terminado en cuanto Sheriff no encuentra
+  errores: no se piden, ejecutan ni miden tests, ni en las herramientas, ni al
+  final del turno, ni en el bucle de reparación, así que probar una funcionalidad es más rápido. Vuelve a
+  \code{0} antes de quedarte con el trabajo.}
 
 \setting{SHERIFF_STOP_RUNS_TESTS}{\code{0}}{\code{0} o \code{1}}{Con \code{1},
   el turno no termina hasta que los tests del proyecto pasan y, en Java con
@@ -1067,6 +1086,12 @@ del \code{pom.xml} (\code{sheriff.coverage}, \code{sheriff.branches},
 \setting{SHERIFF_AGENT_CLAUDE_TIMEOUT}{\code{600}}{segundos, 1 o más}{Lo que
   puede tardar una pasada de \code{claude} en el bucle. También solo de tu
   fichero.}
+
+\setting{SHERIFF_AGENT_CODEX_TIMEOUT}{\code{600}}{segundos, 1 o más}{Lo mismo
+  para \code{codex}. Solo de tu fichero.}
+
+\setting{SHERIFF_AGENT_ANTIGRAVITY_TIMEOUT}{\code{600}}{segundos, 1 o más}{Lo
+  mismo para \code{agy}. Solo de tu fichero.}
 
 \subsubsection*{Solo con variables de entorno} Dos cosas no van en ningún
 fichero: \code{SHERIFF_DOCKER}, que en Windows usa el Docker de WSL (lo pone
@@ -1192,7 +1217,7 @@ En el bucle, Antigravity está acotado:
         y la pasada termina; el bucle lo anota y sigue.
   \item \textbf{Tus ajustes de Antigravity no se tocan.} Cada pasada trabaja
         con una copia temporal de ellos, que se borra al terminar.
-  \item \textbf{Cada pasada tiene 600 segundos.} La variable
+  \item \textbf{Cada pasada tiene 600 segundos.} El ajuste
         \code{SHERIFF_AGENT_ANTIGRAVITY_TIMEOUT} cambia ese límite.
   \item \textbf{En Windows no se ha probado}, y por eso allí no ejecuta ningún
         comando, tampoco los tests.

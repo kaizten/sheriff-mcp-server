@@ -776,6 +776,33 @@ final class ToolsTest {
     }
 
     @Test
+    @DisplayName("what is wrong in the settings is said once a session, on the first answer that is not "
+            + "sheriff_config's, before its step")
+    void whatIsWrongInTheSettingsIsSaidOnce() throws IOException {
+        Path config = state.resolve("config");
+        Files.createDirectories(config.resolve("sheriff-mcp"));
+        Files.writeString(config.resolve("sheriff-mcp/sheriff.properties"), "SHERIFF_PULL=sometimes\n");
+        McpConfig settings = new McpConfig(Map.of("SHERIFF_REPO", repository.toString(),
+                "XDG_STATE_HOME", state.toString(), "XDG_CONFIG_HOME", config.toString(),
+                "APPDATA", config.toString()));
+        SheriffRunner runner = new SheriffRunner(new QueuedProcessRunner(), settings.image(), repository,
+                Duration.ofSeconds(30));
+        Tools tools = new Tools(settings, runner, List::of);
+
+        String listing = tools.call("sheriff_config", Map.of()).text();
+        String first = tools.call("sheriff_task", Map.of()).text();
+        String second = tools.call("sheriff_task", Map.of()).text();
+
+        assertTrue(listing.contains("SHERIFF_PULL takes one of always, check, never, not 'sometimes'."), listing);
+        assertFalse(listing.contains("Sheriff's settings have something wrong"), listing);
+        assertTrue(first.contains("Sheriff's settings have something wrong"), first);
+        assertTrue(first.contains("SHERIFF_PULL takes one of always, check, never, not 'sometimes'. It is ignored."),
+                first);
+        assertFalse(second.contains("Sheriff's settings have something wrong"), second);
+        assertEquals("always", settings.pullPolicy(), "the value that is wrong is not used");
+    }
+
+    @Test
     @DisplayName("while the image is pulled, sheriff_guidelines still answers from a catalog it can read now")
     void guidelinesAnswerWhileTheImageIsPulled() {
         ProcessRunner noDocker = (command, directory, environment, timeout) ->
@@ -1393,6 +1420,38 @@ final class ToolsTest {
                 + "the project's tests and then measures how well they test the lines this change wrote: the lines "
                 + "they run and the branches of each condition they take (JaCoCo), and the changes to those lines "
                 + "they notice (PIT's mutation testing)."), text);
+    }
+
+    @Test
+    @DisplayName("while an idea is tried out, a clean component is done: no test asked for, run or measured, not "
+            + "even for a new method no test calls")
+    void aPrototypeIsDoneWhenClean() throws IOException, InterruptedException {
+        Path app = measurableChange();
+        Files.delete(app.resolve("src/test/java/demo/CalcTest.java"));
+        Files.writeString(repository.resolve(".sheriff.properties"), "SHERIFF_PROTOTYPE=1\n");
+
+        String text = toolsMeasuring(coverageWriting(app, COVERED, mutants("KILLED")),
+                ProcessOutcome.completed(0, "", "")).call("sheriff_test", Map.of("component", "app")).text();
+
+        assertTrue(text.endsWith("Next step: none, the component is done: it meets the standards. SHERIFF_PROTOTYPE "
+                + "is 1, so nothing asks for its tests, runs them, measures them; tell the user so, and that setting it "
+                + "back to 0 asks for them before the work is kept."), text);
+        assertFalse(text.contains("Calc.java: abs"), text);
+        assertFalse(text.contains("verify true"), text);
+    }
+
+    @Test
+    @DisplayName("while an idea is tried out, tests a model ran anyway with verify are not measured")
+    void aPrototypeIsNotMeasured() throws IOException, InterruptedException {
+        Path app = measurableChange();
+        Files.writeString(repository.resolve(".sheriff.properties"), "SHERIFF_PROTOTYPE=1\n");
+
+        String text = toolsMeasuring(coverageWriting(app, COVERED, mutants("KILLED", "SURVIVED")), repairedToClean())
+                .call("sheriff_fix", Map.of("component", "app", "verify", true)).text();
+
+        assertTrue(text.endsWith("Next step: none, the component is done: it meets the standards and its tests "
+                + "pass."), text);
+        assertFalse(text.contains("mutants"), text);
     }
 
     @Test

@@ -30,6 +30,15 @@ class NextStepTest {
     }
 
     @Test
+    @DisplayName("while an idea is tried out, a clean component is done, and the step says why its tests are left")
+    void aCleanPrototypeIsDone() {
+        String step = NextStep.afterCleanPrototype();
+        assertTrue(step.contains(NextStep.MARK + " none, the component is done"), step);
+        assertTrue(step.contains("SHERIFF_PROTOTYPE is 1"), step);
+        isOneStepLast(step);
+    }
+
+    @Test
     @DisplayName("tests that reach the thresholds are done, with how well they test the change")
     void measuredTestsAreDone() {
         String step = NextStep.afterMeasuredTests("The tests run 3 of the 3 lines.");

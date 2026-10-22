@@ -1,6 +1,7 @@
 package com.kaizten.sheriff.infrastructure.config;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -100,6 +101,22 @@ class SettingsTests {
     }
 
     @Test
+    @DisplayName("the user's file says, above each setting's line, the values it takes")
+    void theUserFileListsTheValuesEachSettingTakes() throws IOException {
+        Settings.ensureUserFile(environment);
+        String written = Files.readString(userFile());
+        for (Setting setting : Settings.ALL) {
+            assertTrue(written.contains("\n# " + setting.accepted() + "\n# " + setting.name() + "="), setting.name());
+        }
+        assertTrue(written.contains("\n# Takes one of always, check, never. Empty puts the default back.\n"
+                + "# SHERIFF_PULL=always\n"), written);
+        assertTrue(written.contains("\n# Takes 0 or 1. Empty puts the default back.\n# SHERIFF_FAIL_FAST=0\n"),
+                written);
+        assertTrue(written.contains("\n# Takes a whole number, 0 or more. Empty puts the default back.\n"
+                + "# SHERIFF_STOP_MAX_STALLS=1\n"), written);
+    }
+
+    @Test
     @DisplayName("a file of the user's that lacks settings gets them at its end, at their defaults, and what it had "
             + "stays as it was; a second start adds nothing")
     void aUsersFileGetsTheSettingsItLacks() throws IOException {
@@ -196,6 +213,121 @@ class SettingsTests {
     }
 
     @Test
+    @DisplayName("a value in a file that a setting does not take is ignored, so the next file, or the default, "
+            + "decides, and the report says what is wrong")
+    void aBadValueInAFileIsIgnoredAndNamed() throws IOException {
+        user("SHERIFF_GATE_TTL=60\nSHERIFF_PULL=siempre\n");
+        Files.writeString(project.resolve(".sheriff.properties"), "SHERIFF_GATE_TTL=soon\n");
+
+        Map<String, String> layered = Settings.layered(environment, project);
+        String report = Settings.report(environment, project);
+
+        assertEquals("60", layered.get("SHERIFF_GATE_TTL"), "the project's value is wrong, so the user's decides");
+        assertFalse(layered.containsKey("SHERIFF_PULL"), "a wrong value with nothing under it leaves the default");
+        assertTrue(report.contains("SHERIFF_GATE_TTL = 60 (" + userFile() + ")"), report);
+        assertTrue(report.contains("SHERIFF_PULL = always (default)"), report);
+        assertTrue(report.contains("What is wrong in them, and so not used:"), report);
+        assertEquals(List.of(
+                "In " + project.resolve(".sheriff.properties") + ", SHERIFF_GATE_TTL takes a whole number, not "
+                        + "'soon'. It is ignored.",
+                "In " + userFile() + ", SHERIFF_PULL takes one of always, check, never, not 'siempre'. It is "
+                        + "ignored."),
+                Settings.problems(environment, project));
+    }
+
+    @Test
+    @DisplayName("a name in a file that is no setting is named, with the closest one; a project's own keys and "
+            + "a setting only the user's file may set are told apart")
+    void aNameThatIsNoSettingIsNamed() throws IOException {
+        user("SHERIFF_TIMEOT=600\nprofile=JAVA\nCOMPLETELY_ELSE=1\n");
+        Files.writeString(project.resolve(".sheriff.properties"),
+                "profile=JAVA_DDD\ncoverage=90\nbranches=80\nmutation=70\nmutators=ALL\nAI_BACKEND=local\n");
+
+        List<String> problems = Settings.problems(environment, project);
+
+        assertEquals(List.of(
+                "In " + project.resolve(".sheriff.properties") + ", AI_BACKEND is ignored: it is read only from your "
+                        + "own file, as a cloned project must not choose it for whoever opens it.",
+                "In " + userFile() + ", COMPLETELY_ELSE is not a setting, so it does nothing.",
+                "In " + userFile() + ", SHERIFF_TIMEOT is not a setting, so it does nothing. Did you mean "
+                        + "SHERIFF_TIMEOUT?",
+                "In " + userFile() + ", profile is not a setting, so it does nothing."), problems);
+    }
+
+    @Test
+    @DisplayName("a value in the environment that a setting does not take is named and left to what reads it; "
+            + "a file that cannot be read is named; settings that are all well say nothing")
+    void theEnvironmentAndUnreadableFilesAreNamed() throws IOException {
+        Map<String, String> given = Map.of("XDG_CONFIG_HOME", config.toString(), "APPDATA", config.toString(),
+                "SHERIFF_TIMEOUT", "soon");
+        assertEquals(List.of(), Settings.problems(environment, project));
+        Files.writeString(project.resolve(".sheriff.properties"), "SHERIFF_IMAGE=\\u12\n");
+
+        List<String> problems = Settings.problems(given, project);
+
+        assertEquals("In the environment, SHERIFF_TIMEOUT takes a whole number, not 'soon'. Change the variable or "
+                + "unset it.", problems.get(0));
+        assertTrue(problems.get(1).startsWith(project.resolve(".sheriff.properties") + " could not be read ("),
+                problems.toString());
+        assertEquals("soon", Settings.layered(given, project).get("SHERIFF_TIMEOUT"),
+                "what reads the variable says when it cannot use it");
+    }
+
+    @Test
+    @DisplayName("the edits between two names count each letter added, taken out or changed, case aside")
+    void editsBetweenNames() {
+        assertEquals(3, Settings.edits("", "ABC"));
+        assertEquals(3, Settings.edits("ABC", ""));
+        assertEquals(1, Settings.edits("A", "B"));
+        assertEquals(0, Settings.edits("a", "A"));
+        assertEquals(3, Settings.edits("KITTEN", "SITTING"));
+        assertEquals(1, Settings.edits("AB", "XAB"));
+        assertEquals(1, Settings.edits("XAB", "AB"));
+        assertEquals(1, Settings.edits("ABC", "AC"));
+        assertEquals(1, Settings.edits("AC", "ABC"));
+    }
+
+    @Test
+    @DisplayName("a name three edits from a setting is told the setting, one four away is not; a project's file "
+            + "names what is no setting too, and a user's file may set what only it may")
+    void theClosestSettingIsAtMostThreeEditsAway() throws IOException {
+        user("SHERIFF_FAIL_F=1\nSHERIFF_FAIL_=1\nAI_BACKEND=local\n");
+        Files.writeString(project.resolve(".sheriff.properties"), "SHERIFF_GATE_T=5\n");
+
+        assertEquals(List.of(
+                "In " + project.resolve(".sheriff.properties") + ", SHERIFF_GATE_T is not a setting, so it does "
+                        + "nothing. Did you mean SHERIFF_GATE_TTL?",
+                "In " + userFile() + ", SHERIFF_FAIL_ is not a setting, so it does nothing.",
+                "In " + userFile() + ", SHERIFF_FAIL_F is not a setting, so it does nothing. Did you mean "
+                        + "SHERIFF_FAIL_FAST?"),
+                Settings.problems(environment, project));
+    }
+
+    @Test
+    @DisplayName("a blank variable is no value, and a report with nothing wrong has no list of what is")
+    void aBlankVariableAndACleanReport() {
+        Map<String, String> given = Map.of("XDG_CONFIG_HOME", config.toString(), "APPDATA", config.toString(),
+                "SHERIFF_PULL", "  ");
+
+        String report = Settings.report(given, project);
+
+        assertTrue(report.contains("SHERIFF_PULL = always (default)"), report);
+        assertFalse(report.contains("What is wrong"), report);
+    }
+
+    @Test
+    @DisplayName("the list of what is wrong starts on a paragraph of its own")
+    void theListOfWhatIsWrongIsAParagraph() throws IOException {
+        user("SHERIFF_PULL=siempre\n");
+        String newline = System.lineSeparator();
+
+        String report = Settings.report(environment, project);
+
+        assertTrue(report.contains("." + newline + newline + "What is wrong in them, and so not used:" + newline
+                + "  - In "), report);
+    }
+
+    @Test
     @DisplayName("each kind of setting takes its own values, and every one takes the empty value")
     void eachKindTakesItsValues() {
         Setting flag = Settings.named("SHERIFF_FAIL_FAST").orElseThrow();
@@ -254,6 +386,84 @@ class SettingsTests {
         Settings.change(environment, project, "SHERIFF_PULL", "check", true);
         assertEquals("SHERIFF_GATE_TTL=60\nSHERIFF_PULL=check\n",
                 Files.readString(project.resolve(".sheriff.properties")));
+    }
+
+    @Test
+    @DisplayName("a project's file may set Sheriff's image, a tag or a digest of it, but no other image, which "
+            + "only the user's own file may choose")
+    void aProjectChoosesOnlySheriffsImage() throws IOException {
+        Path file = project.resolve(".sheriff.properties");
+        user("SHERIFF_IMAGE=registry.local/sheriff:mine\n");
+        Files.writeString(file, "SHERIFF_IMAGE=evil/miner:latest\n");
+
+        assertEquals("registry.local/sheriff:mine", Settings.layered(environment, project).get("SHERIFF_IMAGE"));
+        assertEquals(List.of("In " + file + ", SHERIFF_IMAGE takes only kaizten/sheriff in a project's file, or a "
+                + "tag or a digest of it (kaizten/sheriff@sha256:...), not 'evil/miner:latest': a project that is "
+                + "cloned must not choose which image runs on the machine of whoever opens it. Set another image in "
+                + "your own file. It is ignored."), Settings.problems(environment, project));
+        assertTrue(Settings.report(environment, project).contains("SHERIFF_IMAGE = registry.local/sheriff:mine ("
+                + userFile() + ")"));
+        assertThrows(IllegalArgumentException.class, () -> Settings.change(environment, project, "SHERIFF_IMAGE",
+                "evil/miner:latest", true));
+        Settings.change(environment, project, "SHERIFF_IMAGE", "kaizten/sheriff@sha256:abc", true);
+        assertEquals("kaizten/sheriff@sha256:abc", Settings.layered(environment, project).get("SHERIFF_IMAGE"));
+        assertTrue(Settings.problems(environment, project).isEmpty());
+    }
+
+    @Test
+    @DisplayName("a project's own threshold keys are checked as their settings are, in the name that was written")
+    void aProjectsThresholdKeysAreChecked() throws IOException {
+        Path file = project.resolve(".sheriff.properties");
+        Files.writeString(file, "coverage=9O\nbranches=85%\nmutators=STRONGER, ALL\nmutation=x\n");
+
+        assertEquals(List.of(
+                "In " + file + ", coverage takes a share from 0 to 100, not '9O'. It is ignored.",
+                "In " + file + ", mutation takes a share from 0 to 100, not 'x'. It is ignored."),
+                Settings.problems(environment, project));
+    }
+
+    @Test
+    @DisplayName("a change goes over every line that sets the setting, so that it is the one read, and putting the "
+            + "default back brings no older line back")
+    void aChangeGoesOverEveryLineThatSetsIt() throws IOException {
+        user("# SHERIFF_TIMEOUT=300\nSHERIFF_TIMEOUT=400\nSHERIFF_GATE_TTL=60\nSHERIFF_TIMEOUT=600\n");
+
+        Settings.change(environment, project, "SHERIFF_TIMEOUT", "900", false);
+        assertEquals("900", Settings.layered(environment, project).get("SHERIFF_TIMEOUT"));
+        assertTrue(Files.readString(userFile()).startsWith(
+                "# SHERIFF_TIMEOUT=300\nSHERIFF_TIMEOUT=900\nSHERIFF_GATE_TTL=60\nSHERIFF_TIMEOUT=900\n"),
+                "the settings the file did not name are added after it");
+        Settings.change(environment, project, "SHERIFF_TIMEOUT", "", false);
+        assertNull(Settings.layered(environment, project).get("SHERIFF_TIMEOUT"));
+        assertEquals("60", Settings.layered(environment, project).get("SHERIFF_GATE_TTL"));
+        Settings.change(environment, project, "SHERIFF_IMAGE", "kaizten/sheriff:$1", false);
+        Settings.change(environment, project, "SHERIFF_IMAGE", "kaizten/sheriff:$2", false);
+        assertEquals("kaizten/sheriff:$2", Settings.layered(environment, project).get("SHERIFF_IMAGE"));
+    }
+
+    @Test
+    @DisplayName("a setting only commented out is written over its own line, not added again at the end")
+    void aCommentedSettingIsWrittenInPlace() throws IOException {
+        Files.writeString(project.resolve(".sheriff.properties"), "# SHERIFF_GATE_TTL=900\nprofile=JAVA\n");
+
+        Settings.change(environment, project, "SHERIFF_GATE_TTL", "60", true);
+
+        assertEquals("SHERIFF_GATE_TTL=60\nprofile=JAVA\n", Files.readString(project.resolve(".sheriff.properties")));
+    }
+
+    @Test
+    @DisplayName("a setting in a module's own file is named, as only the project's file gives the session's "
+            + "settings; the module's profile and thresholds are its own")
+    void aModulesSettingIsNamed() throws IOException {
+        Path module = Files.createDirectories(project.resolve("app"));
+        Files.writeString(module.resolve(".sheriff.properties"), "profile=JAVA_DDD\ncoverage=90\nSHERIFF_GATE_TTL=60\n");
+
+        assertEquals(List.of("In " + module.resolve(".sheriff.properties") + ", SHERIFF_GATE_TTL does nothing: "
+                + "settings hold for the whole session, so they are read from " + project.resolve(".sheriff.properties")
+                + ", and a module's file declares only its profile and coverage thresholds."),
+                Settings.problems(environment, project));
+        assertNull(Settings.layered(environment, project).get("SHERIFF_GATE_TTL"));
+        assertEquals(List.of(), Settings.problems(Map.of(), project.resolve("missing")), "no project, nothing wrong");
     }
 
     @Test

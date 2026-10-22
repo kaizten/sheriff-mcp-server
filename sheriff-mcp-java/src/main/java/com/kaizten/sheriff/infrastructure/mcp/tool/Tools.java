@@ -60,6 +60,10 @@ public final class Tools implements AutoCloseable {
             "The server is misconfigured: %s Fix it in the MCP server's environment (for Claude Code, in "
             + "the registration: claude mcp add ... -e) and restart the session.";
     private static final String EMPTY = "";
+    private static final String SETTINGS_NOTICE = "Sheriff's settings have something wrong; what is wrong in a "
+            + "file is ignored, so the next file that sets it, or its default, decides. Tell the user each one and "
+            + "how to fix it; %s lists the settings and changes one:%s";
+    private static final String SETTINGS_PROBLEM = "%n  - %s";
     private static final String SERVER_VERSION_FIELD = "server_version";
 
     private final TaskRegistry tasks;
@@ -72,6 +76,7 @@ public final class Tools implements AutoCloseable {
     private final McpConfig configuration;
     private final RuleCatalog catalog;
     private final AtomicBoolean noticeGiven = new AtomicBoolean();
+    private final AtomicBoolean settingsNoticeGiven = new AtomicBoolean();
 
     /**
      * Wires the tools to what actually runs Sheriff and reads its rules.
@@ -281,7 +286,8 @@ public final class Tools implements AutoCloseable {
             return ToolOutcome.failure(NextStep.afterFailure(blocked.get(), testCall));
         }
         try {
-            return ToolOutcome.ok(NextStep.last(tool.handler().handle(safeArguments) + noticeOnce()));
+            return ToolOutcome.ok(NextStep.last(tool.handler().handle(safeArguments) + noticeOnce()
+                    + settingsNoticeOnce(name)));
         } catch (TaskFailure failure) {
             Task task = failure.task();
             return ToolOutcome.failure(NextStep.afterFailure(reasonFor((RuntimeException) failure.getCause())
@@ -347,6 +353,27 @@ public final class Tools implements AutoCloseable {
             return EMPTY;
         }
         return String.format(NOTICE_FORMAT, notice.get());
+    }
+
+    /**
+     * The note that something in the settings is wrong, once a session, as
+     * the image's: on the first answer of a tool other than
+     * {@code sheriff_config}, whose listing says it already.
+     *
+     * @param name the tool that answers
+     * @return the note, on its own paragraph, or empty
+     */
+    private String settingsNoticeOnce(String name) {
+        if (name.equals(configTool)) {
+            return EMPTY;
+        }
+        List<String> problems = configuration.settingsProblems();
+        if (problems.isEmpty() || !settingsNoticeGiven.compareAndSet(false, true)) {
+            return EMPTY;
+        }
+        StringBuilder list = new StringBuilder();
+        problems.forEach(problem -> list.append(String.format(SETTINGS_PROBLEM, problem)));
+        return String.format(NOTICE_FORMAT, String.format(SETTINGS_NOTICE, configTool, list));
     }
 
     /**

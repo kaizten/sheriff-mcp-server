@@ -43,9 +43,26 @@ final class HookCommandTest {
     @Test
     @DisplayName("Codex names no project: the Stop hook asked git from the mount and let every turn end")
     void theProjectReachesTheAgentWhenTheAssistantDoesNotNameIt() {
-        Map<String, String> environment = HookCommand.agentEnvironment(Map.of(), new McpConfig(Map.of(), project),
-                project);
+        Map<String, String> environment = HookCommand.agentEnvironment(new McpConfig(Map.of(), project), project);
 
         assertEquals(project.toString(), environment.get("CLAUDE_PROJECT_DIR"));
+    }
+
+    @Test
+    @DisplayName("the hooks read their settings from the same project's file as the tools, even from a folder "
+            + "inside a module")
+    void theHooksReadTheToolsSettings() throws Exception {
+        McpConfig config = new McpConfig(Map.of(), project);
+        java.nio.file.Files.writeString(config.settingsProject().resolve(".sheriff.properties"),
+                "SHERIFF_PROTOTYPE=1\n");
+        Path inside = java.nio.file.Files.createDirectories(project.resolve("src/main"));
+
+        McpConfig hooks = new McpConfig(Map.of(), project);
+        Map<String, String> environment = HookCommand.agentEnvironment(hooks, inside);
+
+        assertEquals("1", environment.get("SHERIFF_PROTOTYPE"));
+        assertEquals(hooks.repository().toString(), environment.get("TARGET_REPO"));
+        assertEquals("kaizten/sheriff:latest", environment.get("SHERIFF_IMAGE"));
+        assertTrue(new com.kaizten.sheriff.infrastructure.config.Configuration(environment, project).prototype());
     }
 }

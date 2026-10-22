@@ -2,6 +2,7 @@ package com.kaizten.sheriff.infrastructure.config;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 import java.util.Optional;
@@ -18,12 +19,34 @@ class SettingTests {
     @DisplayName("a line of the catalog gives the name, the kind with its minimum or choices, the default, who may "
             + "set it and its help")
     void aLineOfTheCatalogIsASetting() {
-        assertEquals(new Setting("A_COUNT", "5", SettingKind.COUNT, 3, List.of(), true, "Help."),
+        assertEquals(new Setting("A_COUNT", "5", SettingKind.COUNT, 3, List.of(), true, "", "Help."),
                 Setting.parse("A_COUNT\tcount:3\t5\tproject\tHelp."));
-        assertEquals(new Setting("A_CHOICE", "x", SettingKind.CHOICE, 0, List.of("x", "y"), false, "Pick."),
+        assertEquals(new Setting("A_CHOICE", "x", SettingKind.CHOICE, 0, List.of("x", "y"), false, "", "Pick."),
                 Setting.parse("A_CHOICE\tchoice:x,y\tx\tuser\tPick."));
-        assertEquals(new Setting("A_WORD", "", SettingKind.WORD, 0, List.of(), true, "Worked out."),
+        assertEquals(new Setting("A_WORD", "", SettingKind.WORD, 0, List.of(), true, "", "Worked out."),
                 Setting.parse("A_WORD\tword\t\tproject\tWorked out."));
+        assertEquals(new Setting("AN_IMAGE", "", SettingKind.WORD, 0, List.of(), true, "kaizten/sheriff", "Image."),
+                Setting.parse("AN_IMAGE\tword\t\tproject:kaizten/sheriff\tImage."));
+    }
+
+    @Test
+    @DisplayName("a project may set an image only to its one repository, a tag or a digest of it")
+    void aProjectSetsOnlyItsImage() {
+        Setting image = Setting.parse("AN_IMAGE\tword\t\tproject:kaizten/sheriff\tImage.");
+        assertTrue(image.projectProblemWith("").isEmpty());
+        Setting share = Setting.parse("A_SHARE\tshare\t80\tproject\tShare.");
+        assertTrue(share.problemWith("80%").isEmpty());
+        assertEquals("A_SHARE takes a share from 0 to 100, not '101%'.", share.problemWith("101%").orElseThrow());
+        assertTrue(Setting.parse("SOME\tmutators\t\tproject\tM.").problemWith("STRONGER, ALL").isEmpty());
+        assertEquals("coverage", share.named("coverage").name());
+        assertEquals("A_WORD takes a value with no spaces or backslashes, not 'a\\b'.",
+                Setting.parse("A_WORD\tword\t\tproject\tAny.").problemWith("a\\b").orElseThrow());
+        assertTrue(image.projectProblemWith("kaizten/sheriff").isEmpty());
+        assertTrue(image.projectProblemWith("kaizten/sheriff:latest").isEmpty());
+        assertTrue(image.projectProblemWith("kaizten/sheriff@sha256:abc").isEmpty());
+        assertTrue(image.projectProblemWith("kaizten/sheriffs:latest").isPresent());
+        assertTrue(image.projectProblemWith("evil/miner").isPresent());
+        assertTrue(Setting.parse("A_WORD\tword\t\tproject\tAny.").projectProblemWith("evil/miner").isEmpty());
     }
 
     @Test
@@ -70,7 +93,7 @@ class SettingTests {
         assertEquals(Optional.empty(), choice.problemWith("never"));
         assertEquals(Optional.of("K takes one of always, never, not 'often'."), choice.problemWith("often"));
         assertEquals(Optional.empty(), word.problemWith("kaizten/sheriff@sha256:abc"));
-        assertEquals(Optional.of("W takes a value with no spaces, not 'a b'."), word.problemWith("a b"));
+        assertEquals(Optional.of("W takes a value with no spaces or backslashes, not 'a b'."), word.problemWith("a b"));
         assertEquals(Optional.empty(), mutators.problemWith("DEFAULTS,REMOVE_CONDITIONALS"));
         assertEquals(Optional.of("M takes PIT mutators in capitals, separated by commas, not 'all'."),
                 mutators.problemWith("all"));

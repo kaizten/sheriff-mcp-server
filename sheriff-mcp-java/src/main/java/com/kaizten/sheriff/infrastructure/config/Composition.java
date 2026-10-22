@@ -64,6 +64,8 @@ import java.util.function.UnaryOperator;
 public final class Composition {
 
     private static final String CLAUDE_CLI_BACKEND = "claude_cli";
+    private static final String PROTOTYPE_TESTS = "Not run: SHERIFF_PROTOTYPE is 1, so the repair loop leaves the "
+            + "tests alone.";
     private static final String ANTHROPIC_API_BACKEND = "anthropic_api";
     private static final String CODEX_CLI_BACKEND = "codex_cli";
     private static final String ANTIGRAVITY_CLI_BACKEND = "antigravity_cli";
@@ -409,11 +411,15 @@ public final class Composition {
     }
 
     /**
-     * The verification gate.
+     * The verification gate: none while an idea is tried out
+     * ({@code SHERIFF_PROTOTYPE}), as the loop then leaves the tests alone.
      *
      * @return that adapter
      */
     public TestRunner testRunner() {
+        if (configuration.prototype()) {
+            return () -> VerificationResult.notRun(PROTOTYPE_TESTS);
+        }
         return new ShellTestRunner(
                 processes,
                 configuration.verificationCommand(),
@@ -563,10 +569,11 @@ public final class Composition {
         Function<String, VerificationResult> tests = configuration.stopRunsTests()
                 ? component -> commandRunner(verifications.apply(component), configuration.targetRepository()).run()
                 : null;
-        return new SheriffStopHook(componentGate(), git, tests, new StopBlocks(), new TurnStart(),
+        SheriffStopHook hook = new SheriffStopHook(componentGate(), git, tests, new StopBlocks(), new TurnStart(),
                 configuration.stopMaxBlocks()).withTestCommands(modelTests)
-                .withUntestedMethods(new UntestedMethods(processes)).withChangeCoverage(changeCoverage)
                 .withMaxStalls(configuration.stopMaxStalls());
+        return configuration.prototype() ? hook
+                : hook.withUntestedMethods(new UntestedMethods(processes)).withChangeCoverage(changeCoverage);
     }
 
     /**

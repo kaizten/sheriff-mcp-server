@@ -47,8 +47,12 @@ public final class DeclaredProfile {
      */
     public static final String FILE_NAME = ".sheriff.properties";
 
+    /**
+     * The key that declares the profile in that file.
+     */
+    static final String FILE_KEY = "profile";
+
     private static final String ERROR_UTILITY_CLASS = "This is a utility class and cannot be instantiated.";
-    private static final String FILE_KEY = "profile";
     private static final String MAVEN_BUILD = "pom.xml";
     private static final String PROPERTIES_ELEMENT = "properties";
     private static final String PROPERTY_ELEMENT = "sheriff.profile";
