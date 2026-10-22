@@ -792,6 +792,30 @@ class HookTests {
             assertEquals(HookExit.ALLOW, capturingStandardError(() -> measured.decide("{\"stop_hook_active\":false}")));
         }
 
+        private List<List<String>> commandsOfAStopWith(Map<String, String> settings) throws IOException {
+            Files.createDirectories(repository.resolve("app/src/main/java"));
+            Files.writeString(repository.resolve("app/src/main/java/A.java"), "class A { public int a() { return 1; } }");
+            Map<String, String> environment = new java.util.HashMap<>(settings);
+            environment.put("TARGET_REPO", repository.toString());
+            FakeProcessRunner processes = new FakeProcessRunner(List.of(
+                    ProcessOutcome.completed(0, repository.toRealPath() + "\n", ""),
+                    ProcessOutcome.completed(0, " M app/src/main/java/A.java\0", ""),
+                    ProcessOutcome.completed(0, "", "")));
+            new Composition(new Configuration(environment, agent), processes).stopHook()
+                    .decide("{\"stop_hook_active\":false}");
+            return processes.commands();
+        }
+
+        @Test
+        @DisplayName("while an idea is tried out, a clean turn ends without git being asked for new methods")
+        void aPrototypeAsksNothingOfTheChange() throws IOException {
+            List<List<String>> checked = commandsOfAStopWith(Map.of());
+            List<List<String>> prototype = commandsOfAStopWith(Map.of("SHERIFF_PROTOTYPE", "1"));
+            assertEquals(List.of("git", "status", "--porcelain", "-z", "--untracked-files=all"),
+                    checked.get(checked.size() - 1), "the change is asked for its new methods: " + checked);
+            assertEquals("docker", prototype.get(prototype.size() - 1).get(0), "Sheriff is the last: " + prototype);
+        }
+
         @Test
         @DisplayName("a session outside any repository let every turn end without a word")
         void saysSoWhenGitCannotAnswer() {

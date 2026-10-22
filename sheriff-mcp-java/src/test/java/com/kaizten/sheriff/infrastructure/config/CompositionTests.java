@@ -1,6 +1,7 @@
 package com.kaizten.sheriff.infrastructure.config;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -181,5 +182,25 @@ class CompositionTests {
         Composition composition = with(Map.of("SHERIFF_STOP_RUNS_TESTS", "1"));
         assertSame(composition, composition.withChangeCoverage(component -> null));
         assertNotNull(composition.stopHook());
+    }
+
+    @Test
+    @DisplayName("while an idea is tried out, neither the Stop hook nor the repair loop runs the tests, even when asked to")
+    void aPrototypeRunsNoTestsAtTheStop() {
+        Configuration configuration = new Configuration(Map.of("SHERIFF_STOP_RUNS_TESTS", "1", "SHERIFF_PROTOTYPE",
+                "1"), Path.of("/repo/sheriff-mcp-java"));
+        assertTrue(configuration.prototype());
+        assertFalse(configuration.stopRunsTests());
+        Configuration checking = new Configuration(Map.of("SHERIFF_STOP_RUNS_TESTS", "1", "SHERIFF_PROTOTYPE", "0"),
+                Path.of("/repo/sheriff-mcp-java"));
+        assertFalse(checking.prototype());
+        assertTrue(checking.stopRunsTests());
+        assertFalse(new Configuration(Map.of(), Path.of("/repo/sheriff-mcp-java")).stopRunsTests());
+        Composition composition = new Composition(configuration,
+                FakeProcessRunner.always(ProcessOutcome.completed(0, "", "")));
+        assertNotNull(composition.stopHook());
+        assertFalse(composition.testRunner().run().ran(), "the repair loop leaves the tests alone");
+        assertTrue(new Composition(checking, FakeProcessRunner.always(ProcessOutcome.completed(0, "", "")))
+                .testRunner().run().ran());
     }
 }

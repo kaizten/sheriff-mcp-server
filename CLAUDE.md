@@ -420,10 +420,20 @@ none, and when it finds one adds at its end, the same way, the settings it
 does not name, so one a newer version brings is listed too; nothing in it is
 touched. Settings a cloned project must not choose for whoever opens it
 (`AI_BACKEND`) are read from the user's file only. Variables were the only way
-before, and Codex passes a server and its hooks almost none. `sheriff_config`
-(and `--config`) lists them with their source and changes one, checking the
-value first; it is not among the tools the installers allow without asking,
-as it writes the user's files.
+before, and Codex passes a server and its hooks almost none. A project's file
+may set `SHERIFF_IMAGE` only to `kaizten/sheriff`, a tag or a digest of it
+(`project:<image>` in the catalog), as a cloned project choosing the image
+would choose what runs on the machine of whoever opens it. `sheriff_config`
+(and `--config`, `--config NAME=VALUE [--project]`) lists them with their
+source and changes one, checking the value first. A value in a file that its setting does not take, a name that is
+no setting, or a user's setting in a project's file is ignored and named
+(`Settings.problems`), by the listing and once a session by the tools'
+answers. The Maven plugin reads the `.sheriff.properties` at the top of its
+build (`SheriffMojo.settingsProject`) and never the user's file, so CI and
+the tools agree on a pinned image; a project's own threshold keys (`coverage=` and the rest) are
+checked as their settings are, and one they do not take is passed over too. A bad variable is named too but left to what reads it, as some
+refuse to start on one. `sheriff_config` is not among the tools the
+installers allow without asking, as it writes the user's files.
 
 **A project declares its profile once, and the plugin and the MCP must agree
 on where** (`DeclaredProfile`): the `sheriff.profile` property of a
@@ -554,6 +564,11 @@ resolved), go to PIT as its `argLine`; PIT splits that at every space, quotes
 or not, and its test process dies on a value with one, so such a value is
 left out. A measure that cannot run says why and holds nothing. The versions are pinned in
 `ChangeCoverage`.
+
+**`SHERIFF_PROTOTYPE=1` takes both away**, for trying an idea out: the clean
+step is done, `sheriff_fix` with `verify` does not measure, the Stop hook
+checks neither the new methods, the tests nor the coverage, and the repair
+loop's test gate does not run (`Composition.testRunner`). Standards stay.
 
 `sheriff_fix`, the loop's first pass and `sheriff:fix` repair with one class,
 `SheriffRepair` (`SheriffRunner.fix` and `DeterministicFixer` only call it

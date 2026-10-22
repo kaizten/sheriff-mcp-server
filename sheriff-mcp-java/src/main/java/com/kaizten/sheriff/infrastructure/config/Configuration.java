@@ -78,6 +78,7 @@ public final class Configuration {
     private static final String AGENT_RUNNING = "SHERIFF_AGENT_RUNNING";
     private static final String PROJECT_DIRECTORY = "CLAUDE_PROJECT_DIR";
     private static final String STOP_RUNS_TESTS = "SHERIFF_STOP_RUNS_TESTS";
+    private static final String PROTOTYPE = "SHERIFF_PROTOTYPE";
     private static final String STOP_MAX_BLOCKS = "SHERIFF_STOP_MAX_BLOCKS";
     private static final int DEFAULT_STOP_MAX_BLOCKS = 5;
     private static final String STOP_MAX_STALLS = "SHERIFF_STOP_MAX_STALLS";
@@ -671,7 +672,17 @@ public final class Configuration {
      * @return {@code true} when {@code SHERIFF_STOP_RUNS_TESTS=1}
      */
     public boolean stopRunsTests() {
-        return ENABLED.equals(environment.get(STOP_RUNS_TESTS));
+        return ENABLED.equals(environment.get(STOP_RUNS_TESTS)) && !prototype();
+    }
+
+    /**
+     * Whether an idea is being tried out, so that a component is done when
+     * Sheriff finds no errors: no tests asked for, run or measured.
+     *
+     * @return {@code true} when {@code SHERIFF_PROTOTYPE=1}
+     */
+    public boolean prototype() {
+        return ENABLED.equals(environment.get(PROTOTYPE));
     }
 
     /**

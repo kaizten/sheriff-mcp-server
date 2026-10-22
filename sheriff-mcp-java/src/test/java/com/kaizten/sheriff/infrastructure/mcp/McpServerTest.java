@@ -200,13 +200,49 @@ final class McpServerTest {
         ByteArrayOutputStream printed = new ByteArrayOutputStream();
         PrintStream protocol = new PrintStream(printed, true, StandardCharsets.UTF_8);
 
-        assertFalse(McpServer.answeredSettings(config, List.of("--tools"), protocol));
+        assertEquals(McpServer.NOT_SETTINGS, McpServer.settingsCommand(config, List.of("--tools"), protocol,
+                protocol));
         assertTrue(Files.exists(workspace.resolve("sheriff-mcp/sheriff.properties")));
         assertEquals("", printed.toString(StandardCharsets.UTF_8));
-        assertTrue(McpServer.answeredSettings(config, List.of("--config"), protocol));
+        assertEquals(0, McpServer.settingsCommand(config, List.of("--config"), protocol, protocol));
         String listing = printed.toString(StandardCharsets.UTF_8);
         assertTrue(listing.startsWith("Settings, each from the first that sets it"), listing);
-        assertTrue(listing.contains("--call sheriff_config setting=NAME value=VALUE"), listing);
+        assertTrue(listing.contains("--config NAME=VALUE"), listing);
+    }
+
+    @Test
+    @DisplayName("--config NAME=VALUE changes one in the user's file, or the project's with --project, and refuses "
+            + "a value the setting does not take")
+    void theSettingsAreChangedFromTheCommandLine() throws IOException {
+        Map<String, String> environment = Map.of("XDG_CONFIG_HOME", workspace.toString(), "APPDATA",
+                workspace.toString());
+        Files.createDirectories(workspace.resolve("app/src"));
+        McpConfig config = new McpConfig(environment, workspace.resolve("app"));
+        ByteArrayOutputStream printed = new ByteArrayOutputStream();
+        ByteArrayOutputStream refused = new ByteArrayOutputStream();
+        PrintStream out = new PrintStream(printed, true, StandardCharsets.UTF_8);
+        PrintStream errors = new PrintStream(refused, true, StandardCharsets.UTF_8);
+
+        assertEquals(0, McpServer.settingsCommand(config, List.of("--config", "SHERIFF_PROTOTYPE=1"), out, errors));
+        assertTrue(Files.readString(workspace.resolve("sheriff-mcp/sheriff.properties"))
+                .contains("\nSHERIFF_PROTOTYPE=1"));
+        assertEquals(0, McpServer.settingsCommand(config, List.of("--config", "SHERIFF_GATE_TTL=60", "--project"),
+                out, errors));
+        assertTrue(Files.readString(config.settingsProject().resolve(".sheriff.properties"))
+                .contains("SHERIFF_GATE_TTL=60"));
+        assertEquals(2, McpServer.settingsCommand(config, List.of("--config", "SHERIFF_PROTOTYPE=yes"), out, errors));
+        assertEquals(2, McpServer.settingsCommand(config, List.of("--config", "SHERIFF_PROTOTYPE=0",
+                "SHERIFF_GATE_TTL=30"), out, errors));
+        assertTrue(refused.toString(StandardCharsets.UTF_8).contains("--config takes at most one NAME=VALUE"));
+        assertTrue(Files.readString(workspace.resolve("sheriff-mcp/sheriff.properties"))
+                .contains("\nSHERIFF_PROTOTYPE=1"), "nothing is written when two are given");
+        java.util.List<Integer> exits = new java.util.ArrayList<>();
+        assertFalse(McpServer.answeredSettings(config, List.of("--tools"), out, exits::add));
+        assertTrue(McpServer.answeredSettings(config, List.of("--config"), out, exits::add));
+        assertTrue(McpServer.answeredSettings(config, List.of("--config", "SHERIFF_PROTOTYPE=2"), out, exits::add));
+        assertEquals(List.of(2), exits, "only a refusal ends the process, with 2");
+        assertTrue(printed.toString(StandardCharsets.UTF_8).contains("SHERIFF_PROTOTYPE is 1 in "));
+        assertTrue(refused.toString(StandardCharsets.UTF_8).contains("SHERIFF_PROTOTYPE"));
     }
 
     @Test

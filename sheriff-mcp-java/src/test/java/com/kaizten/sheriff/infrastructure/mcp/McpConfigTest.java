@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -92,6 +93,19 @@ final class McpConfigTest {
     }
 
     @Test
+    @DisplayName("a declaration a threshold does not take is passed over, so the next place that sets it decides; "
+            + "a share may end in %")
+    void aBadDeclarationIsPassedOver() throws IOException {
+        Path module = javaModule("app");
+        Files.writeString(module.resolve(".sheriff.properties"),
+                "coverage=9O\nSHERIFF_COVERAGE=70\nbranches=85%\nmutators=STRONGER, ALL\n");
+        McpConfig config = new McpConfig(Map.of(), module);
+        assertEquals(70, config.coverageThresholds("app").lines());
+        assertEquals(85, config.coverageThresholds("app").branches());
+        assertEquals("STRONGER,ALL", config.coverageThresholds("app").mutators());
+    }
+
+    @Test
     @DisplayName("a blank environment variable is no threshold: the project's declaration gives it")
     void aBlankVariableIsNoThreshold() throws IOException {
         Path module = javaModule("app");
@@ -128,6 +142,21 @@ final class McpConfigTest {
 
         assertTrue(config.problem().orElse("").contains("SHERIFF_TIMEOUT"), config.problem().toString());
         assertEquals(Duration.ofSeconds(300), config.timeout());
+    }
+
+    @Test
+    @DisplayName("what is wrong in the settings is read from the project the server works on and the user's file")
+    void theSettingsProblemsAreThoseOfItsProject() throws IOException {
+        Path module = javaModule("app");
+        Path home = Files.createDirectories(workspace.resolve("home"));
+        Map<String, String> environment = Map.of("HOME", home.toString());
+        assertEquals(List.of(), new McpConfig(environment, module).settingsProblems(), "nothing wrong, nothing said");
+        Files.writeString(module.resolve(".sheriff.properties"), "SHERIFF_COVERAGE=120\n");
+
+        List<String> problems = new McpConfig(environment, module).settingsProblems();
+
+        assertEquals(List.of("In " + module.resolve(".sheriff.properties") + ", SHERIFF_COVERAGE takes a share from 0 "
+                + "to 100, not '120'. It is ignored."), problems);
     }
 
     @Test
@@ -175,7 +204,8 @@ final class McpConfigTest {
     }
 
     @Test
-    @DisplayName("a declared profile is added to its language's base one, and SHERIFF_PROFILE beats the declaration")
+    @DisplayName("a declared profile is added to its language's base one, and SHERIFF_PROFILE beats the declaration "
+            + "in its own language only")
     void theProjectsDeclarationComesBeforeItsLanguage() throws IOException {
         Path backend = Files.createDirectories(workspace.resolve("backend/src"));
         Files.writeString(backend.resolve("A.java"), "class A {}");
@@ -192,7 +222,14 @@ final class McpConfigTest {
         assertEquals("TYPESCRIPT", config.profileFor("front"));
         Files.writeString(workspace.resolve("front/.sheriff.properties"), "profile=TYPESCRIPT_HEXAGONAL");
         assertEquals("TYPESCRIPT,TYPESCRIPT_HEXAGONAL", config.profileFor("front"));
-        assertEquals("JAVA,JAVA_DDD", new McpConfig(Map.of("SHERIFF_PROFILE", "JAVA_DDD"), workspace).profileFor("front"));
+        McpConfig chosen = new McpConfig(Map.of("SHERIFF_PROFILE", "JAVA_DDD"), workspace);
+        assertEquals("JAVA,JAVA_DDD", chosen.profileFor("backend"));
+        assertEquals("TYPESCRIPT,TYPESCRIPT_HEXAGONAL", chosen.profileFor("front"));
+        assertEquals("JAVA,JAVA_DDD", chosen.profileFor(""));
+        Path javaOnly = Files.createDirectories(workspace.resolve("java-only/app/src"));
+        Files.writeString(javaOnly.resolve("A.java"), "class A {}");
+        assertEquals("TYPESCRIPT", new McpConfig(Map.of("SHERIFF_PROFILE", "TYPESCRIPT"),
+                workspace.resolve("java-only")).profileFor(""), "with no component named, the one asked for is used");
     }
 
     @Test

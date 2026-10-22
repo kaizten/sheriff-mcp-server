@@ -154,6 +154,30 @@ class CheckMojoTests {
         }
 
         @Test
+        @DisplayName("left unset, the image and the timeout are the project's settings, read from the top of the "
+                + "build, and else Sheriff's own defaults; the command line wins over both")
+        void theImageAndTimeoutFollowTheProjectsSettings(@TempDir Path root) throws Exception {
+            CheckMojo mojo = mojoAnswering(moduleWithSources(root), oneError());
+            mojo.image = null;
+            mojo.timeoutSeconds = null;
+            assertEquals(null, mojo.environment().get("SHERIFF_IMAGE"));
+            assertEquals("kaizten/sheriff:latest", new com.kaizten.sheriff.infrastructure.config.Configuration(
+                    mojo.environment(), mojo.agentDirectory()).image());
+            Files.writeString(root.resolve("pom.xml"), "<project/>");
+            Files.writeString(root.resolve(".sheriff.properties"),
+                    "SHERIFF_IMAGE=kaizten/sheriff@sha256:abc\nSHERIFF_TIMEOUT=120\nSHERIFF_REPAIR_ROUNDS=2\n");
+            assertEquals(root, mojo.settingsProject());
+            Map<String, String> environment = mojo.environment();
+            assertEquals("kaizten/sheriff@sha256:abc", environment.get("SHERIFF_IMAGE"));
+            assertEquals("120", environment.get("SHERIFF_TIMEOUT"));
+            assertEquals("2", environment.get("SHERIFF_REPAIR_ROUNDS"));
+            mojo.image = "kaizten/sheriff:latest";
+            mojo.timeoutSeconds = 45;
+            assertEquals("kaizten/sheriff:latest", mojo.environment().get("SHERIFF_IMAGE"));
+            assertEquals("45", mojo.environment().get("SHERIFF_TIMEOUT"));
+        }
+
+        @Test
         @DisplayName("Sheriff's findings and tracked files are exported under the build directory")
         void exportsUnderTheBuildDirectory(@TempDir Path root) throws Exception {
             CheckMojo mojo = mojoAnswering(moduleWithSources(root), oneError());

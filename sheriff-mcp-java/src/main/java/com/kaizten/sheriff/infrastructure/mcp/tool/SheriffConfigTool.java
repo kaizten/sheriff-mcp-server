@@ -19,9 +19,10 @@ import java.util.Map;
 final class SheriffConfigTool {
 
     private static final String DESCRIPTION =
-            "Sheriff's settings: with no arguments, each one with its value and where it comes from; with "
-            + "setting and value, changes one in the user's settings file (or the project's, with project "
-            + "true). Use it when the user asks to change how Sheriff or its hooks behave.";
+            "Sheriff's settings: with no arguments, the files they are read from, each setting with its value "
+            + "and where it comes from, and what is wrong in them; with setting and value, changes one in the "
+            + "user's settings file (or the project's, with project true). Use it when the user asks how Sheriff "
+            + "is configured, where its settings are, or to change how Sheriff or its hooks behave.";
     private static final String TITLE = "Read or change Sheriff's settings";
     private static final ToolAnnotations ANNOTATIONS = ToolAnnotations.changingSettings(TITLE);
     private static final String SETTING_ARGUMENT = "setting";

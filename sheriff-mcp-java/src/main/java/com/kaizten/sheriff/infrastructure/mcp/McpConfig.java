@@ -70,6 +70,8 @@ public final class McpConfig {
     private static final String MUTANTS_SETTING = "SHERIFF_MUTATION";
     private static final String MUTATORS_SETTING = "SHERIFF_MUTATORS";
     private static final String NO_VALUE = "";
+    private static final String PROTOTYPE = "SHERIFF_PROTOTYPE";
+    private static final String ENABLED = "1";
     private static final String NOT_POSITIVE = "%s must be at least 1 second, but it is '%s'.";
 
     private final Map<String, String> environment;
@@ -194,6 +196,9 @@ public final class McpConfig {
      * <p>An architecture profile comes with its language's base profile, as
      * a comma-separated list, because it does not include the base rules.
      *
+     * <p>{@code SHERIFF_PROFILE} keeps to its language too, as the user's
+     * own file sets it for every project they open.
+     *
      * @return {@code SHERIFF_PROFILE} when set; otherwise the one the
      *     project declares for it; otherwise the base profile of the
      *     language the component's sources are in; {@code JAVA} when there
@@ -212,10 +217,10 @@ public final class McpConfig {
      */
     private String chosenProfile(String component) {
         String configured = configuredProfile();
-        if (!configured.isEmpty()) {
+        ProjectLayout layout = layout();
+        if (!configured.isEmpty() && (component.isEmpty() || layout.holdsSourcesFor(component, configured))) {
             return configured;
         }
-        ProjectLayout layout = layout();
         Optional<String> declared = layout.declaredProfile(component)
                 .filter(profile -> layout.holdsSourcesFor(component, profile));
         if (declared.isPresent() || component.isEmpty()) {
@@ -390,6 +395,16 @@ public final class McpConfig {
     }
 
     /**
+     * What is wrong in the settings the server was started with, each of
+     * which is ignored ({@link Settings#problems}).
+     *
+     * @return a sentence per problem, none when all is well
+     */
+    public List<String> settingsProblems() {
+        return Settings.problems(environment, settingsProject());
+    }
+
+    /**
      * The environment the server was given, before any file: an environment
      * variable is the one setting no file overrides.
      *
@@ -432,6 +447,16 @@ public final class McpConfig {
         } catch (NumberFormatException exception) {
             return SheriffRepair.NO_LIMIT;
         }
+    }
+
+    /**
+     * Whether an idea is being tried out, so that a component is done when
+     * Sheriff finds no errors: no tests asked for, run or measured.
+     *
+     * @return {@code true} when {@code SHERIFF_PROTOTYPE=1}
+     */
+    public boolean prototype() {
+        return ENABLED.equals(value(PROTOTYPE, NO_VALUE).strip());
     }
 
     /**
@@ -482,7 +507,9 @@ public final class McpConfig {
     }
 
     /**
-     * One threshold, from the first place that gives it.
+     * One threshold, from the first place that gives it one it takes: a
+     * declaration it does not take is passed over, as a value in a settings
+     * file is.
      *
      * @param component the component
      * @param setting the setting that gives it
@@ -496,6 +523,8 @@ public final class McpConfig {
             return Optional.of(given);
         }
         return layout().declaredSetting(component, property, key)
+                .filter(declared -> Settings.named(setting).flatMap(known -> known.problemWith(declared.strip()))
+                        .isEmpty())
                 .or(() -> Optional.ofNullable(settings().get(setting)));
     }
 

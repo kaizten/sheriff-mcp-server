@@ -56,7 +56,7 @@ public final class HookCommand {
                 System.err.printf(COULD_NOT_START, config.problem().get());
                 return HookExit.ALLOW;
             }
-            Map<String, String> agentEnvironment = agentEnvironment(environment, config, project);
+            Map<String, String> agentEnvironment = agentEnvironment(config, project);
             Configuration configuration = new Configuration(agentEnvironment, config.cachedCatalog().getParent());
             Composition composition = Composition.real(configuration, config::profileFor,
                     config.layout()::verificationCommand, config.layout()::testCommandForModel)
@@ -78,13 +78,17 @@ public final class HookCommand {
      * module is its parent and no repository at all: the Stop hook asked git
      * from there, saw nothing changed and let every turn end.
      *
-     * @param environment the process environment
+     * <p>The settings are the server's, read from the same project's file,
+     * so that the hooks and the tools never read two different ones: the
+     * agent reads its file from the project that is open, which is a folder
+     * inside a module when the session was started there.
+     *
      * @param config the server's configuration, for that project
      * @param project the project the assistant has open
      * @return the environment for the agent
      */
-    static Map<String, String> agentEnvironment(Map<String, String> environment, McpConfig config, Path project) {
-        Map<String, String> agentEnvironment = config.agentEnvironment(environment, NO_COMPONENT);
+    static Map<String, String> agentEnvironment(McpConfig config, Path project) {
+        Map<String, String> agentEnvironment = config.agentEnvironment(config.settings(), NO_COMPONENT);
         agentEnvironment.put(PROJECT_VARIABLE, project.toString());
         return agentEnvironment;
     }

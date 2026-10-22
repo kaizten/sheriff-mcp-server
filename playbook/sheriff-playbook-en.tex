@@ -884,7 +884,7 @@ Every number and choice the tools use has a default, and you can change it. The
 first time the server starts it writes your settings file,
 \code{~/.config/sheriff-mcp/}\allowbreak\code{sheriff.properties}
 (\texttt{\%APPDATA\%\textbackslash sheriff-mcp} on Windows), with every setting at
-its default and commented out. A setting a newer version brings is added at its
+its default and commented out, and above each one the values it takes. A setting a newer version brings is added at its
 end when the server next starts, the same way; what you changed stays as it is.
 There are three ways to change one:
 
@@ -892,9 +892,15 @@ There are three ways to change one:
   \item \textbf{Ask the assistant}, which calls \code{sheriff_config}:
         \ask{pin Sheriff's image to the build I have now}, \ask{let a stop with
         nothing changed through}. It checks the value before writing it.
+  \item \textbf{From the command line}:
+        \code{java -jar ~/.local/share/sheriff-agent/sheriff-mcp.jar --config SHERIFF_PROTOTYPE=1},
+        with \code{--project} to write it in the project's file. It checks the value too.
   \item \textbf{Edit the file}: take the \texttt{\#} off a line and change its value.
   \item \textbf{For the whole team}, put the same line in the project's
         \code{.sheriff.properties}; it wins over yours for that project.
+        It goes at the top of the project, where the session is opened: one
+        inside a module declares only that module's profile and coverage
+        thresholds. \code{mvn package} reads the same file, never yours.
 \end{itemize}
 
 An environment variable of the same name wins over both files. The tools read
@@ -913,7 +919,10 @@ The tools take it when the next session starts; the hooks, from their next run.
 \end{command}
 
 A value that does not work is refused, saying what the setting takes, and
-nothing is written. A setting left empty is the same as one not set: its
+nothing is written. One written by hand into a file, or a name that is no
+setting, is ignored: the next file, or the default, decides, and the tools'
+first answer of the session says what is wrong, as \code{--config} does. A
+setting left empty is the same as one not set: its
 default applies. All of them are below, grouped by what they control; seconds
 and counts are whole numbers.
 
@@ -925,7 +934,10 @@ when it is updated.
   \code{latest}, with no versions, so every new build can bring new rules. To
   keep the rules from changing (during a delivery, say), pin the one you have
   by its digest, \code{kaizten/sheriff@sha256:...}: any task's \code{task.json}
-  records it, or ask the assistant. While it is pinned it is never updated.}
+  records it, or ask the assistant. While it is pinned it is never updated.
+  A project's \code{.sheriff.properties} may only pin \code{kaizten/sheriff},
+  a tag or a digest of it: a cloned project does not choose which image runs
+  on your machine. Another image goes in your own file.}
 
 \setting{SHERIFF_PULL}{\code{always}}{\code{always}, \code{check} or
   \code{never}}{What happens at start when Docker Hub has a newer build of the
@@ -941,7 +953,8 @@ when it is updated.
   the one its sources call for}{a Sheriff profile: \code{JAVA},
   \code{JAVA_HEXAGONAL}, \code{JAVA_DDD}, \code{TYPESCRIPT},
   \code{TYPESCRIPT_HEXAGONAL}, \code{VUEJS}}{The rule profile to analyze with,
-  over the project's declaration. Usually leave it alone and declare the
+  over the project's declaration, for the components written in its language
+  (a TypeScript front end keeps its own when you set a Java one). Usually leave it alone and declare the
   profile in the project (section~\ref{sec:profile}), which every tool reads
   the same way. An architecture profile always runs beside its language's base
   profile, never instead of it.}
@@ -983,6 +996,13 @@ back.
   left are left for the end and block no more. With \code{0} that happens at the
   first stop with nothing changed: useful when you hit a false positive of the
   checker that nobody can fix.}
+
+\setting{SHERIFF_PROTOTYPE}{\code{0}}{\code{0} or \code{1}}{With \code{1},
+  for trying an idea out, a component is done once Sheriff finds no errors: no
+  tests are asked for, run or measured, by the tools, at the end of a turn or
+  in the repair loop,
+  so trying a feature is quicker. Set it back to \code{0} before you keep the
+  work.}
 
 \setting{SHERIFF_STOP_RUNS_TESTS}{\code{0}}{\code{0} or \code{1}}{With
   \code{1} the turn does not end until the project's tests pass and, in Java
@@ -1058,6 +1078,12 @@ these settings.
 
 \setting{SHERIFF_AGENT_CLAUDE_TIMEOUT}{\code{600}}{seconds, 1 or more}{How long
   one pass of \code{claude} may take in the loop. Also from your file only.}
+
+\setting{SHERIFF_AGENT_CODEX_TIMEOUT}{\code{600}}{seconds, 1 or more}{The same
+  for \code{codex}. From your file only.}
+
+\setting{SHERIFF_AGENT_ANTIGRAVITY_TIMEOUT}{\code{600}}{seconds, 1 or more}{The
+  same for \code{agy}. From your file only.}
 
 \subsubsection*{Environment variables only} Two things go in no file:
 \code{SHERIFF_DOCKER}, which on Windows uses WSL's Docker (\code{--docker-wsl}
@@ -1182,7 +1208,7 @@ In the loop, Antigravity is confined:
   \item \textbf{Your Antigravity settings are left alone.} Each pass works with
         a temporary copy of them, deleted when it ends.
   \item \textbf{Each pass has 600 seconds.} The
-        \code{SHERIFF_AGENT_ANTIGRAVITY_TIMEOUT} variable changes that limit.
+        \code{SHERIFF_AGENT_ANTIGRAVITY_TIMEOUT} setting changes that limit.
   \item \textbf{It has not been tried on Windows}, so there it runs no command,
         not even the tests.
 \end{itemize}

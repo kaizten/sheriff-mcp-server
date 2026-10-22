@@ -46,6 +46,9 @@ final class NextStep {
             + "standards and has no tests to run.";
     private static final String PASSING = "%n" + MARK + " none, the component is done: it meets the "
             + "standards and its tests pass.";
+    private static final String PROTOTYPE = "%n" + MARK + " none, the component is done: it meets the "
+            + "standards. SHERIFF_PROTOTYPE is 1, so nothing asks for its tests, runs them, measures them; tell the "
+            + "user so, and that setting it back to 0 asks for them before the work is kept.";
     private static final String FAILING = "%n" + MARK + " fix what makes the tests fail, then %s again.";
     private static final String UNAVAILABLE = "%n%n" + MARK + " tell the user the code standards check could "
             + "not run, and why, in their words above. Go on with the rest of the work, run the project's own "
@@ -156,6 +159,16 @@ final class NextStep {
     static String afterUntested(List<String> untested, String testCommand, String testCall) {
         String list = UNTESTED_LINE + String.join(NEWLINE + UNTESTED_LINE, untested);
         return String.format(UNTESTED, list, testCommand.isEmpty() ? PROJECT_TESTS : testCommand, testCall);
+    }
+
+    /**
+     * The step once a component has no errors while an idea is being tried
+     * out: done, with no tests asked for.
+     *
+     * @return the step, as the answer's last line
+     */
+    static String afterCleanPrototype() {
+        return String.format(PROTOTYPE);
     }
 
     /**

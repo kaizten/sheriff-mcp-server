@@ -28,6 +28,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.IntConsumer;
 
 /**
  * Entry point of the one jar: wires the configuration, the Sheriff runner and
@@ -56,7 +57,17 @@ public final class McpServer {
     private static final String CALL_FLAG = "--call";
     private static final String CONFIG_FLAG = "--config";
     private static final String CHANGE_SETTINGS = "%n%nTo change one, edit that file, or run java -jar sheriff-mcp.jar "
-            + "--call sheriff_config setting=NAME value=VALUE (project=true for this project only).%n";
+            + "--config NAME=VALUE (--project for this project only; an empty VALUE puts the default back).%n";
+    private static final String PROJECT_FLAG = "--project";
+    private static final String CHANGED_LINE = "%s%n";
+    private static final String CONFIG_USAGE = "--config takes at most one NAME=VALUE; java -jar sheriff-mcp.jar "
+            + "--config lists the names.%n";
+    private static final String CONFIG_REFUSED = "%s%n";
+    /**
+     * What {@link #settingsCommand} answers when the command line is not
+     * one of its own.
+     */
+    static final int NOT_SETTINGS = -1;
     private static final String ARGUMENT_SEPARATOR = "=";
     private static final String CALL_USAGE = "--call takes a tool's name, then its arguments as name=value.";
     private static final int CALL_FAILED = 2;
@@ -81,7 +92,7 @@ public final class McpServer {
     private static final int UNKNOWN_OPTION_EXIT = 2;
     private static final List<String> OWN_OPTIONS = List.of(TOOLS_FLAG, CHECK_FLAG, HELP_FLAG, SHORT_HELP_FLAG,
             VERSION_FLAG, HOOK_GATE_FLAG, HOOK_STOP_FLAG, HOOK_TURN_FLAG, CALL_FLAG, CONFIG_FLAG, INSTRUCTIONS_FLAG,
-            INSTALL_HOOKS_FLAG, UNINSTALL_HOOKS_FLAG, USER_SCOPE_FLAG, INSTALL_CODEX_FLAG, UNINSTALL_CODEX_FLAG,
+            PROJECT_FLAG, INSTALL_HOOKS_FLAG, UNINSTALL_HOOKS_FLAG, USER_SCOPE_FLAG, INSTALL_CODEX_FLAG, UNINSTALL_CODEX_FLAG,
             INSTALL_ANTIGRAVITY_FLAG, UNINSTALL_ANTIGRAVITY_FLAG, FAIL_FAST_FLAG, NO_HOOKS_FLAG, PULL_ALWAYS_FLAG);
     private static final String JAVA_VARIABLE = "SHERIFF_JAVA";
     private static final String NOT_A_JAVA =
@@ -105,6 +116,11 @@ public final class McpServer {
               java -jar sheriff-mcp.jar --config   every setting, its value and where it comes from: an
                                                    environment variable, the project's .sheriff.properties,
                                                    your ~/.config/sheriff-mcp/sheriff.properties, the default
+              java -jar sheriff-mcp.jar --config NAME=VALUE [--project]
+                                                   change one in your file, or with --project in this
+                                                   project's .sheriff.properties; an empty VALUE puts the
+                                                   default back. SHERIFF_PROTOTYPE=1 tries an idea out:
+                                                   no tests asked for, run or measured
               java -jar sheriff-mcp.jar --install-hooks [--user]
                                                    guard this project with the two Claude Code
                                                    hooks, in .claude/settings.json, or with --user
@@ -216,7 +232,7 @@ public final class McpServer {
             System.exit(options.contains(INSTALL_ANTIGRAVITY_FLAG) ? installer.install() : installer.uninstall());
         }
         McpConfig config = McpConfig.fromEnvironment();
-        if (answeredSettings(config, options, protocol)) {
+        if (answeredSettings(config, options, protocol, System::exit)) {
             return;
         }
         SystemProcessRunner processes = new SystemProcessRunner();
@@ -406,23 +422,64 @@ public final class McpServer {
     }
 
     /**
-     * Writes the user's settings file at its defaults when there is none, and
-     * answers {@code --config} with every setting and where it comes from.
+     * Answers {@code --config} as {@link #settingsCommand} does, refusals on
+     * standard error, and ends the process when it refused.
      *
      * @param config the configuration, with the environment it was given
      * @param options the command line
-     * @param protocol where the answer goes
-     * @return {@code true} when it answered {@code --config}, and nothing else
-     *     is to run
+     * @param out where the answer goes
+     * @param exit what ends the process with a code
+     * @return {@code true} when it answered, and nothing else is to run
      */
-    static boolean answeredSettings(McpConfig config, List<String> options, PrintStream protocol) {
+    static boolean answeredSettings(McpConfig config, List<String> options, PrintStream out, IntConsumer exit) {
+        int code = settingsCommand(config, options, out, System.err);
+        if (code != NOT_SETTINGS && code != CALL_ANSWERED) {
+            exit.accept(code);
+        }
+        return code != NOT_SETTINGS;
+    }
+
+    /**
+     * Writes the user's settings file at its defaults when there is none, and
+     * answers {@code --config}: alone, with every setting and where it comes
+     * from; with {@code NAME=VALUE}, by changing that one in the user's file,
+     * or the project's with {@code --project}, as {@code sheriff_config}
+     * does.
+     *
+     * @param config the configuration, with the environment it was given
+     * @param options the command line
+     * @param out where the answer goes
+     * @param errors where a refusal goes
+     * @return {@link #NOT_SETTINGS} when the command line is not
+     *     {@code --config} and the server is to go on; else the exit code, 0
+     *     when it answered and 2 when it refused
+     */
+    static int settingsCommand(McpConfig config, List<String> options, PrintStream out, PrintStream errors) {
         Settings.ensureUserFile(config.givenEnvironment());
         if (!options.contains(CONFIG_FLAG)) {
-            return false;
+            return NOT_SETTINGS;
         }
-        protocol.print(Settings.report(config.givenEnvironment(), config.settingsProject()));
-        protocol.printf(CHANGE_SETTINGS);
-        return true;
+        List<String> assignments = options.stream().filter(option -> option.contains(ARGUMENT_SEPARATOR)).toList();
+        if (assignments.isEmpty()) {
+            out.print(Settings.report(config.givenEnvironment(), config.settingsProject()));
+            out.printf(CHANGE_SETTINGS);
+            return CALL_ANSWERED;
+        }
+        if (assignments.size() > AFTER_FIRST_OPTION) {
+            errors.printf(CONFIG_USAGE);
+            return CALL_FAILED;
+        }
+        String assignment = assignments.get(FIRST_OPTION);
+        int separator = assignment.indexOf(ARGUMENT_SEPARATOR);
+        try {
+            out.printf(CHANGED_LINE, Settings.change(config.givenEnvironment(), config.settingsProject(),
+                    assignment.substring(FIRST_OPTION, separator), assignment.substring(separator + AFTER_FIRST_OPTION),
+                    options.contains(PROJECT_FLAG)));
+            return CALL_ANSWERED;
+        } catch (IllegalArgumentException refused) {
+            errors.printf(CONFIG_REFUSED, refused.getMessage());
+            return CALL_FAILED;
+        }
     }
 
     /**
@@ -556,7 +613,7 @@ public final class McpServer {
             if (component.isEmpty() && target != null) {
                 return environment;
             }
-            return config.agentEnvironment(environment, component);
+            return config.agentEnvironment(config.settings(), component);
         } catch (RuntimeException exception) {
             return environment;
         }
