@@ -178,6 +178,17 @@ class CheckMojoTests {
         }
 
         @Test
+        @DisplayName("a single-module project's settings are its own, never those of the folder of its neighbours")
+        void aSingleModuleIgnoresItsNeighboursSettings(@TempDir Path root) throws Exception {
+            CheckMojo mojo = mojoAnswering(moduleWithSources(root), oneError());
+            Files.writeString(root.resolve(".sheriff.properties"), "SHERIFF_REPAIR_ROUNDS=1\n");
+            assertEquals(root.resolve("componente"), mojo.settingsProject());
+            assertEquals(com.kaizten.sheriff.infrastructure.docker.SheriffRepair.NO_LIMIT,
+                    new com.kaizten.sheriff.infrastructure.config.Configuration(mojo.environment(),
+                            mojo.agentDirectory()).repairRounds());
+        }
+
+        @Test
         @DisplayName("Sheriff's findings and tracked files are exported under the build directory")
         void exportsUnderTheBuildDirectory(@TempDir Path root) throws Exception {
             CheckMojo mojo = mojoAnswering(moduleWithSources(root), oneError());

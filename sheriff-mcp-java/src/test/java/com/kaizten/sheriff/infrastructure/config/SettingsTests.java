@@ -442,6 +442,27 @@ class SettingsTests {
     }
 
     @Test
+    @DisplayName("a line written with : or a space, as a properties file takes, is the one changed, and is not "
+            + "listed again commented out")
+    void everySeparatorIsALine() throws IOException {
+        user("SHERIFF_TIMEOUT: 600\nSHERIFF_GATE_TTL 60\nSHERIFF_MUTATION_TIMEOUT=900\n");
+
+        Settings.ensureUserFile(environment);
+        String listed = Files.readString(userFile());
+        Settings.change(environment, project, "SHERIFF_TIMEOUT", "", false);
+        Settings.change(environment, project, "SHERIFF_GATE_TTL", "30", false);
+        Settings.change(environment, project, "SHERIFF_MUTATION", "70", false);
+
+        assertFalse(listed.contains("# SHERIFF_TIMEOUT="), listed);
+        assertFalse(listed.contains("# SHERIFF_GATE_TTL="), listed);
+        assertNull(Settings.layered(environment, project).get("SHERIFF_TIMEOUT"));
+        assertEquals("30", Settings.layered(environment, project).get("SHERIFF_GATE_TTL"));
+        assertEquals("900", Settings.layered(environment, project).get("SHERIFF_MUTATION_TIMEOUT"),
+                "a setting whose name starts another's is not that one");
+        assertEquals("70", Settings.layered(environment, project).get("SHERIFF_MUTATION"));
+    }
+
+    @Test
     @DisplayName("a setting only commented out is written over its own line, not added again at the end")
     void aCommentedSettingIsWrittenInPlace() throws IOException {
         Files.writeString(project.resolve(".sheriff.properties"), "# SHERIFF_GATE_TTL=900\nprofile=JAVA\n");

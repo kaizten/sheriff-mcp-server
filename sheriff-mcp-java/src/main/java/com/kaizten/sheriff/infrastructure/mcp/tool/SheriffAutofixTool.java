@@ -47,6 +47,7 @@ final class SheriffAutofixTool {
     private static final String EXPORT_DIRECTORY_VARIABLE = "SHERIFF_EXPORT_DIR";
     private static final String LOGS_DIRECTORY = "logs";
     private static final String VERIFIED_WITH = "%nThe project's own tests were run with: %s";
+    private static final String PROTOTYPE_TESTS = "%nSHERIFF_PROTOTYPE is 1, so the loop left them alone.";
     private static final String SUMMARY =
             "Ran the fix loop on %s under %s via AI_BACKEND '%s': %s (%s). %d iteration(s) used%s. "
             + "Repair pass %s.";
@@ -146,7 +147,19 @@ final class SheriffAutofixTool {
         Configuration configuration = new Configuration(environment, agentDirectory);
         RunSummary summary = Composition.real(configuration).fixLoop().execute();
         return renderSummary(component, profile, configuration.backend(), summary, tested)
-                + String.format(VERIFIED_WITH, configuration.verificationCommand());
+                + testsTrailer(configuration.prototype(), configuration.verificationCommand());
+    }
+
+    /**
+     * The last line of a run's answer: the command its tests ran with, or,
+     * while an idea is tried out, why they did not run.
+     *
+     * @param prototype whether {@code SHERIFF_PROTOTYPE} is on
+     * @param command the command the loop runs the tests with
+     * @return that line, on a line of its own
+     */
+    static String testsTrailer(boolean prototype, String command) {
+        return prototype ? String.format(PROTOTYPE_TESTS) : String.format(VERIFIED_WITH, command);
     }
 
     /**
