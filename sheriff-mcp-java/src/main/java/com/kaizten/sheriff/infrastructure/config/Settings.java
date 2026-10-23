@@ -65,6 +65,7 @@ public final class Settings {
     private static final String LINE_START = "(?m)^[ \\t]*#?[ \\t]*";
     private static final String ACTIVE_LINE_START = "(?m)^[ \\t]*";
     private static final String LINE_END = "[ \\t]*=.*$";
+    private static final String ACTIVE_LINE_END = "(?:[ \\t]*[=:]|[ \\t]|$).*$";
     private static final String TEMPLATE_HEADER = """
             # Sheriff's settings for every project you open. Each one below is at its
             # default, commented out: take the # off a line and change its value, or ask
@@ -452,7 +453,8 @@ public final class Settings {
                 return;
             }
             String text = Files.readString(file.get());
-            List<Setting> missing = ALL.stream().filter(setting -> !lineOf(setting).matcher(text).find()).toList();
+            List<Setting> missing = ALL.stream().filter(setting -> !lineOf(setting).matcher(text).find()
+                    && !activeLineOf(setting).matcher(text).find()).toList();
             if (!missing.isEmpty()) {
                 Files.writeString(file.get(), text + (text.endsWith(NEWLINE) ? NOTHING : NEWLINE) + entries(missing));
             }
@@ -501,13 +503,15 @@ public final class Settings {
     }
 
     /**
-     * The lines that give a setting a value, not commented out.
+     * The lines that give a setting a value, not commented out, with any of
+     * the separators a properties file takes: {@code =}, {@code :} or a
+     * space.
      *
      * @param setting the setting
      * @return a pattern that finds each one
      */
     private static Pattern activeLineOf(Setting setting) {
-        return Pattern.compile(ACTIVE_LINE_START + setting.name() + LINE_END);
+        return Pattern.compile(ACTIVE_LINE_START + setting.name() + ACTIVE_LINE_END);
     }
 
     /**

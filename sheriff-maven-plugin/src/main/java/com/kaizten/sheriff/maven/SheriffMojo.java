@@ -57,6 +57,14 @@ public abstract class SheriffMojo extends AbstractMojo {
     private static final String TEST_TYPE = "SHERIFF_TEST_TYPE";
 
     /**
+     * The variable the agent reads the project from, whose
+     * {@code .sheriff.properties} gives the settings; without it the agent
+     * reads the file of the folder it mounts, which for a single-module
+     * project is the folder of its neighbours.
+     */
+    private static final String PROJECT_DIRECTORY = "CLAUDE_PROJECT_DIR";
+
+    /**
      * The variable the agent reads the image from.
      */
     private static final String IMAGE = "SHERIFF_IMAGE";
@@ -225,7 +233,9 @@ public abstract class SheriffMojo extends AbstractMojo {
      */
     protected Map<String, String> environment() {
         File module = moduleDirectory();
-        Map<String, String> environment = new HashMap<>(Settings.layered(Map.of(), settingsProject()));
+        Path project = settingsProject();
+        Map<String, String> environment = new HashMap<>(Settings.layered(Map.of(), project));
+        environment.put(PROJECT_DIRECTORY, project.toString());
         String mounted = module.getParent();
         environment.put(TARGET_REPOSITORY, mounted == null ? module.getPath() : mounted);
         environment.put(COMPONENT, module.getName());
