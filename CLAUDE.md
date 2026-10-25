@@ -273,9 +273,9 @@ to be tried by hand.
   be a project's own source. `scripts/e2e.sh` scenario 20 checks it.
 - **`test` exits 0 however many errors it found**, and with a profile it does
   not know; only a component that does not exist exits 1. `fix` used to exit
-  1 whatever happened; with the image of 19 October it exits 0 when it runs
-  and 1 when it cannot start. Decide what happened from the output, or by
-  analyzing again.
+  1 whatever happened; with the image of 16 October (`sha256:4127439f`) it
+  exits 0 when it runs and 1 when it cannot start. Decide what happened from
+  the output, or by analyzing again.
 - **A fixer that cannot run looks like one that changed nothing**, and one
   that lies looks like one that worked. Two defences, both needed:
   - A fixer that *fails* says so on stdout: `Could not apply fixer for error
@@ -403,9 +403,9 @@ component from the working directory (the `src/` rule; a directory inside a
 module's `src/` is that module when it has a build file, as Codex runs the
 server in the session's directory), the profile the project declares or else
 the one its sources call for (`.vue` decides Vue; Sheriff's Vue profile also
-reads `.ts`/`.js`, so those cannot; `.py` is not analyzed yet), and the test
-command from the build tool. `scripts/e2e.sh` scenarios 8, 9 and 14 exercise
-it.
+reads `.ts`/`.js`, so those cannot; `.py` calls for `PYTHON`), and the test
+command from the build tool. `scripts/e2e.sh` scenarios 8, 9, 14 and 18
+exercise it.
 
 **Every setting has a default and a name, and is changed in a file**
 (`Settings`, its catalog in `src/main/resources/settings.tsv`, a line per
