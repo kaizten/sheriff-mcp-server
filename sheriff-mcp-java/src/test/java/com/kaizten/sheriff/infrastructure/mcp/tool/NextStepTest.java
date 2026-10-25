@@ -39,6 +39,15 @@ class NextStepTest {
     }
 
     @Test
+    @DisplayName("a repair loop run while an idea is tried out names no test command, as it ran none")
+    void aPrototypeRunNamesNoTestCommand() {
+        assertEquals(String.format("%nSHERIFF_PROTOTYPE is 1, so the loop left them alone."),
+                SheriffAutofixTool.testsTrailer(true, "mvn test"));
+        assertEquals(String.format("%nThe project's own tests were run with: mvn test"),
+                SheriffAutofixTool.testsTrailer(false, "mvn test"));
+    }
+
+    @Test
     @DisplayName("tests that reach the thresholds are done, with how well they test the change")
     void measuredTestsAreDone() {
         String step = NextStep.afterMeasuredTests("The tests run 3 of the 3 lines.");
