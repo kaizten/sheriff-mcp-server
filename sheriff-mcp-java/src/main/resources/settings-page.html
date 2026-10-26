@@ -4,110 +4,164 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
-<title>Sheriff's settings</title>
+<title>Sheriff settings</title>
 <style>
 :root {
-  --bg: #f6f7f9; --panel: #ffffff; --text: #1d2430; --muted: #5b6575; --line: #dde1e7;
-  --accent: #2557d6; --accent-text: #ffffff; --ok: #1d7a46; --warn: #9a5b00; --bad: #b3261e;
-  --chip: #eef1f6; --changed: #fff6dc; --focus: #9db8ff;
+  --bg: #ffffff; --subtle: #f6f8fa; --text: #1f2328; --muted: #59636e; --faint: #818b98;
+  --line: #d1d9e0; --line-soft: #e8ecf0; --accent: #0969da; --accent-text: #ffffff;
+  --accent-soft: #ddf4ff; --warn: #9a6700; --warn-soft: #fff8c5; --bad: #d1242f; --ok: #1a7f37;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #12151b; --panel: #1a1f27; --text: #e5e9f0; --muted: #9aa4b5; --line: #2c3340;
-    --accent: #7ea2ff; --accent-text: #0b1020; --ok: #63c58c; --warn: #e5b45a; --bad: #ff8a80;
-    --chip: #232a35; --changed: #2e2a1b; --focus: #3f5fb8;
+    --bg: #0d1117; --subtle: #151b23; --text: #e6edf3; --muted: #9198a1; --faint: #6e7681;
+    --line: #3d444d; --line-soft: #262c34; --accent: #4493f8; --accent-text: #0d1117;
+    --accent-soft: #121d2f; --warn: #d29922; --warn-soft: #272115; --bad: #f85149; --ok: #3fb950;
     color-scheme: dark;
   }
 }
 * { box-sizing: border-box; }
+html { scroll-padding-top: 16px; }
 body { margin: 0; background: var(--bg); color: var(--text);
-  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-main { max-width: 980px; margin: 0 auto; padding: 24px 16px 96px; }
-h1 { font-size: 24px; margin: 0 0 4px; }
-h2 { font-size: 17px; margin: 0; padding: 14px 18px; border-bottom: 1px solid var(--line); }
-code, .name, input, select { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
-.lead { color: var(--muted); margin: 0 0 16px; }
-.files { display: grid; gap: 4px; margin: 0 0 16px; font-size: 13px; color: var(--muted); }
-.files code { color: var(--text); word-break: break-all; }
-.bar { position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
-  padding: 10px 0; background: var(--bg); border-bottom: 1px solid var(--line); margin-bottom: 16px; }
-.scope { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
-.scope button { border: 0; background: var(--panel); color: var(--text); padding: 7px 12px; cursor: pointer; font: inherit; }
-.scope button[aria-pressed="true"] { background: var(--accent); color: var(--accent-text); }
-.bar input[type="search"] { flex: 1 1 200px; min-width: 0; padding: 7px 10px; border: 1px solid var(--line);
-  border-radius: 8px; background: var(--panel); color: var(--text); font-family: inherit; }
-.bar label { display: inline-flex; gap: 6px; align-items: center; color: var(--muted); font-size: 14px; }
-.problems { border: 1px solid var(--bad); border-radius: 10px; padding: 10px 16px; margin-bottom: 16px; background: var(--panel); }
-.problems h2 { border: 0; padding: 0 0 6px; color: var(--bad); }
-.problems ul { margin: 0; padding-left: 20px; }
-section.group { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; margin-bottom: 16px; overflow: hidden; }
-.row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 320px); gap: 8px 20px; padding: 14px 18px;
-  border-bottom: 1px solid var(--line); }
+  font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
+code, input, select { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace; }
+button { font: inherit; color: inherit; }
+.page { max-width: 1040px; margin: 0 auto; padding: 0 24px 120px; }
+header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 32px 0 20px; }
+h1 { font-size: 20px; font-weight: 600; margin: 0; }
+.where { margin: 2px 0 0; color: var(--muted); font-size: 13px; word-break: break-all; }
+.button { height: 32px; padding: 0 14px; border-radius: 6px; border: 1px solid var(--line); background: var(--subtle);
+  cursor: pointer; font-weight: 500; white-space: nowrap; }
+.button:hover { border-color: var(--faint); }
+.button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+.button:disabled { opacity: .5; cursor: default; }
+.scope { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 0 0 20px;
+  border-bottom: 1px solid var(--line-soft); }
+.tabs { display: inline-flex; padding: 3px; border-radius: 8px; background: var(--subtle); border: 1px solid var(--line-soft); }
+.tabs button { border: 0; background: none; height: 28px; padding: 0 12px; border-radius: 6px; cursor: pointer; color: var(--muted); }
+.tabs button[aria-selected="true"] { background: var(--bg); color: var(--text); font-weight: 600;
+  box-shadow: 0 0 0 1px var(--line); }
+.scope p { margin: 0; color: var(--muted); font-size: 13px; }
+.scope code { font-size: 12px; color: var(--text); }
+.layout { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 40px; padding-top: 24px; }
+nav { position: sticky; top: 16px; align-self: start; }
+nav input { width: 100%; height: 32px; padding: 0 10px; border: 1px solid var(--line); border-radius: 6px;
+  background: var(--bg); color: var(--text); font-family: inherit; margin-bottom: 12px; }
+nav a { display: flex; justify-content: space-between; gap: 8px; padding: 5px 8px; border-radius: 6px;
+  color: var(--muted); text-decoration: none; }
+nav a:hover { background: var(--subtle); color: var(--text); }
+nav a span { color: var(--accent); font-size: 12px; font-weight: 600; }
+.order { margin: 16px 8px 0; color: var(--faint); font-size: 12px; }
+.notice { border: 1px solid var(--warn); background: var(--warn-soft); border-radius: 6px; padding: 10px 14px; margin-bottom: 24px; }
+.notice strong { display: block; margin-bottom: 4px; }
+.notice ul { margin: 0; padding-left: 18px; }
+section { margin-bottom: 36px; }
+h2 { font-size: 15px; font-weight: 600; margin: 0 0 4px; }
+.row { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 6px 32px; padding: 14px 0;
+  border-bottom: 1px solid var(--line-soft); }
 .row:last-child { border-bottom: 0; }
-.row.changed { background: var(--changed); }
-.row[hidden] { display: none; }
-.name { font-weight: 600; font-size: 14px; word-break: break-all; }
-.help { margin: 4px 0 0; }
-.accepted { margin: 2px 0 0; font-size: 13px; color: var(--muted); }
-.now { margin: 6px 0 0; font-size: 13px; color: var(--muted); }
-.now b { color: var(--text); font-weight: 600; word-break: break-all; }
-.note { margin: 6px 0 0; font-size: 13px; color: var(--warn); }
-.edit { display: flex; flex-direction: column; gap: 8px; justify-content: center; }
-.edit input, .edit select { width: 100%; padding: 7px 9px; border: 1px solid var(--line); border-radius: 8px;
-  background: var(--bg); color: var(--text); font-size: 14px; }
-.edit input:focus, .edit select:focus, button:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
-.buttons { display: flex; gap: 8px; }
-.buttons button, .done { border: 1px solid var(--line); background: var(--chip); color: var(--text); border-radius: 8px;
-  padding: 6px 12px; cursor: pointer; font: inherit; font-size: 14px; }
-.buttons button.save { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
-button:disabled { opacity: .45; cursor: default; }
-.status { font-size: 13px; min-height: 1em; margin: 0; }
-.status.ok { color: var(--ok); }
-.status.bad { color: var(--bad); }
-.empty { padding: 24px; text-align: center; color: var(--muted); }
-footer { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; margin-top: 24px; color: var(--muted); font-size: 14px; }
-.closed { padding: 48px 16px; text-align: center; }
-@media (max-width: 720px) {
+.row[hidden], section[hidden] { display: none; }
+.row label { font-weight: 600; }
+.badge { margin-left: 6px; padding: 0 6px; border-radius: 10px; font-size: 11px; font-weight: 500;
+  background: var(--accent-soft); color: var(--accent); vertical-align: 1px; }
+.badge.pending { background: var(--warn-soft); color: var(--warn); }
+.desc { margin: 2px 0 0; color: var(--muted); }
+.meta { margin: 4px 0 0; color: var(--faint); font-size: 12px; }
+.meta code { font-size: 12px; }
+.note { margin: 4px 0 0; color: var(--warn); font-size: 12px; }
+.note.quiet { color: var(--faint); }
+.section-note { margin: 0 0 4px; color: var(--muted); font-size: 13px; }
+.section-note[hidden] { display: none; }
+.error { margin: 4px 0 0; color: var(--bad); font-size: 12px; }
+.control { display: flex; flex-direction: column; align-items: stretch; gap: 4px; padding-top: 2px; }
+.field { position: relative; display: flex; align-items: center; }
+.field input, .control select { width: 100%; height: 32px; padding: 0 10px; border: 1px solid var(--line);
+  border-radius: 6px; background: var(--bg); color: var(--text); font-size: 13px; }
+.field .unit { position: absolute; right: 10px; color: var(--faint); font-size: 12px; pointer-events: none; }
+.field input.with-unit { padding-right: 64px; }
+input:focus, select:focus, button:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; }
+input:disabled, select:disabled { background: var(--subtle); color: var(--faint); }
+input.invalid { border-color: var(--bad); }
+.segments { display: flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.segments button { flex: 1 1 0; min-width: 0; height: 30px; padding: 0 8px; border: 0; border-left: 1px solid var(--line);
+  background: var(--bg); cursor: pointer; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.segments button:first-child { border-left: 0; }
+.segments button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.segments button:disabled { cursor: default; color: var(--faint); }
+.reset { align-self: flex-end; border: 0; background: none; padding: 0; color: var(--accent); font-size: 12px; cursor: pointer; }
+.reset:hover { text-decoration: underline; }
+.empty { color: var(--muted); padding: 24px 0; }
+.savebar { position: fixed; left: 0; right: 0; bottom: 0; background: var(--bg); border-top: 1px solid var(--line); }
+.savebar[hidden] { display: none; }
+.savebar .inner { max-width: 1040px; margin: 0 auto; padding: 12px 24px; display: flex; align-items: center; gap: 12px; }
+.savebar p { margin: 0 auto 0 0; color: var(--muted); }
+.toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); max-width: calc(100% - 32px);
+  background: var(--text); color: var(--bg); padding: 10px 16px; border-radius: 6px; font-size: 13px; }
+.toast[hidden] { display: none; }
+.closed { padding: 120px 0; text-align: center; color: var(--muted); }
+@media (max-width: 820px) {
+  .page { padding: 0 16px 120px; }
+  .layout { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  nav { position: static; }
+  nav .links, .order { display: none; }
   .row { grid-template-columns: minmax(0, 1fr); }
+  .savebar .inner { padding: 12px 16px; }
 }
 </style>
 </head>
 <body>
-<main>
-  <h1>Sheriff's settings</h1>
-  <p class="lead">Each setting is read from the first that sets it: an environment variable, this project's file,
-    your own file, then its default. The tools take a change when the next session starts; the hooks, at their next run.</p>
-  <div class="files" id="files"></div>
-  <div class="bar">
-    <div class="scope" role="group" aria-label="File to change">
-      <button type="button" id="scope-user" aria-pressed="true">Your settings</button>
-      <button type="button" id="scope-project" aria-pressed="false">This project's</button>
+<div class="page" id="page">
+  <header>
+    <div>
+      <h1>Sheriff settings</h1>
+      <p class="where" id="where"></p>
     </div>
-    <input type="search" id="filter" placeholder="Find a setting" aria-label="Find a setting">
-    <label><input type="checkbox" id="only-set"> Only those set in the file</label>
+    <button type="button" class="button" id="close">Close</button>
+  </header>
+  <div class="scope">
+    <div class="tabs" role="tablist" aria-label="Where a change is saved">
+      <button type="button" role="tab" id="tab-user" aria-selected="true">Your settings</button>
+      <button type="button" role="tab" id="tab-project" aria-selected="false">This project</button>
+    </div>
+    <p id="scope-note"></p>
   </div>
-  <div id="problems"></div>
-  <div id="groups"><p class="empty">Reading the settings…</p></div>
-  <footer>
-    <span id="footnote">Changes are written at once, checked first: a value a setting does not take is refused.</span>
-    <button type="button" class="done" id="done">Done</button>
-  </footer>
-</main>
+  <div class="layout">
+    <nav aria-label="Sections">
+      <input type="search" id="filter" placeholder="Search" aria-label="Search settings" autocomplete="off">
+      <div class="links" id="links"></div>
+      <p class="order">An environment variable wins over this project's file, which wins over yours.</p>
+    </nav>
+    <main id="main"><p class="empty">Loading…</p></main>
+  </div>
+</div>
+<div class="savebar" id="savebar" hidden>
+  <div class="inner">
+    <p id="pending-count"></p>
+    <button type="button" class="button" id="discard">Discard</button>
+    <button type="button" class="button primary" id="save">Save changes</button>
+  </div>
+</div>
+<div class="toast" id="toast" role="status" hidden></div>
 <script>
 (function () {
   "use strict";
-  var state = { scope: "user", data: null };
+  var data = null;
+  var scope = "user";
+  var pending = {};
+  var errors = {};
   var rows = [];
+  var toastTimer = null;
+  var UNITS = { seconds: "seconds", share: "%" };
+  var SEGMENTED_MOST = 3;
 
-  function element(tag, className, text) {
+  function make(tag, className, text) {
     var node = document.createElement(tag);
     if (className) { node.className = className; }
     if (text !== undefined && text !== null) { node.textContent = text; }
     return node;
   }
 
-  function request(method, path, body) {
+  function call(method, path, body) {
     var options = { method: method, headers: {}, cache: "no-store" };
     if (body !== undefined) {
       options.headers["Content-Type"] = "application/json";
@@ -115,226 +169,384 @@ footer { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify
     }
     return fetch(path, options).then(function (response) {
       return response.json().catch(function () { return {}; }).then(function (json) {
-        if (!response.ok) { throw new Error(json.error || ("The page answered " + response.status + ".")); }
+        if (!response.ok) { throw new Error(json.error || "The page answered " + response.status + "."); }
         return json;
       });
     });
   }
 
-  function control(setting) {
-    var input;
-    if (setting.kind === "flag" || setting.kind === "choice") {
-      input = document.createElement("select");
-      var values = setting.kind === "flag" ? ["0", "1"] : setting.choices;
-      var unset = element("option", null, "default (" + (setting["default"] || "worked out") + ")");
-      unset.value = "";
-      input.appendChild(unset);
-      values.forEach(function (value) {
-        var option = element("option", null, setting.kind === "flag" ? value + (value === "1" ? " (on)" : " (off)") : value);
-        option.value = value;
-        input.appendChild(option);
-      });
-    } else {
-      input = document.createElement("input");
-      var numeric = setting.kind === "seconds" || setting.kind === "count";
-      input.type = numeric ? "number" : setting.kind === "address" ? "url" : "text";
-      if (numeric) { input.min = String(setting.kind === "seconds" ? 1 : setting.minimum); input.step = "1"; }
-      if (setting.kind === "share") { input.inputMode = "numeric"; }
-      input.placeholder = setting["default"] ? setting["default"] : "worked out";
-      input.spellcheck = false;
-      input.autocomplete = "off";
-    }
-    input.setAttribute("aria-label", setting.name);
-    return input;
+  function key(name) { return scope + ":" + name; }
+  function inFile(setting) { return scope === "project" ? setting.inProject : setting.yours; }
+  function allowed(setting) { return scope === "user" || setting.projectMay; }
+  function shown(setting) {
+    var change = pending[key(setting.name)];
+    return change !== undefined ? change : inFile(setting);
+  }
+  function pendingCount() { return Object.keys(pending).length; }
+
+  function toast(text) {
+    var node = document.getElementById("toast");
+    node.textContent = text;
+    node.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { node.hidden = true; }, 5000);
   }
 
-  function written(setting) {
-    return state.scope === "project" ? setting.inProject : setting.yours;
+  function choiceLabel(setting, value) {
+    if (setting.kind === "flag") { return value === "1" ? "On" : "Off"; }
+    return value;
   }
 
-  function sourceText(source) {
-    if (source === "default") { return "its default"; }
-    if (source === "the environment") { return "the environment"; }
-    return source;
+  function defaultLabel(setting) {
+    if (!setting["default"]) { return "Default"; }
+    return "Default (" + choiceLabel(setting, setting["default"]).toLowerCase() + ")";
   }
 
-  function row(setting) {
-    var node = element("div", "row");
-    var about = element("div");
-    about.appendChild(element("div", "name", setting.name));
-    about.appendChild(element("p", "help", setting.help));
-    about.appendChild(element("p", "accepted", setting.accepted));
-    var now = element("p", "now", "In force: ");
-    now.appendChild(element("b", null, setting.value));
-    now.appendChild(document.createTextNode(", from " + sourceText(setting.source) + "."));
-    about.appendChild(now);
-    if (setting.environment) {
-      about.appendChild(element("p", "note", "The environment variable " + setting.name + " is set (to "
-        + setting.environment + "), and it wins over both files while it is."));
-    }
-    var scopeNote = element("p", "note");
-    about.appendChild(scopeNote);
-    var edit = element("div", "edit");
-    var input = control(setting);
-    var buttons = element("div", "buttons");
-    var save = element("button", "save", "Save");
-    save.type = "button";
-    var reset = element("button", null, "Default");
-    reset.type = "button";
-    reset.title = "Take the value out of the file, so the next place or the default decides";
-    buttons.appendChild(save);
-    buttons.appendChild(reset);
-    var status = element("p", "status");
-    status.setAttribute("role", "status");
-    edit.appendChild(input);
-    edit.appendChild(buttons);
-    edit.appendChild(status);
-    node.appendChild(about);
-    node.appendChild(edit);
+  function readable(setting, value) {
+    if (value === "worked out") { return "the default"; }
+    return setting.kind === "flag" ? choiceLabel(setting, value) : value;
+  }
 
-    function refresh() {
-      var allowed = state.scope === "user" || setting.projectMay;
-      var inFile = written(setting);
-      input.value = inFile;
-      if (setting.kind === "flag" || setting.kind === "choice") {
-        if (input.value !== inFile) { input.value = ""; }
-      }
-      input.disabled = !allowed;
-      save.disabled = true;
-      reset.disabled = !allowed || inFile === "";
-      scopeNote.textContent = allowed ? (state.scope === "project" && setting.projectImage
-        ? "A project's file may set only " + setting.projectImage + ", a tag or a digest of it." : "")
-        : "Only your own file sets it: a project that is cloned must not choose it for whoever opens it.";
-      node.classList.toggle("changed", inFile !== "");
-    }
+  function source(setting) {
+    if (setting.source === "default") { return "default"; }
+    if (setting.source === "the environment") { return "environment variable"; }
+    if (setting.source === data.projectFile) { return "this project"; }
+    if (setting.source === data.userFile) { return "your settings"; }
+    return setting.source;
+  }
 
-    function changed() {
-      save.disabled = input.disabled || input.value.trim() === written(setting);
-      status.textContent = "";
-      status.className = "status";
-    }
+  function change(setting, value) {
+    var id = key(setting.name);
+    if (value === inFile(setting)) { delete pending[id]; } else { pending[id] = value; }
+    delete errors[id];
+    refreshBar();
+  }
 
-    function send(value) {
-      save.disabled = true;
-      reset.disabled = true;
-      status.className = "status";
-      status.textContent = "Writing…";
-      request("POST", "settings", { name: setting.name, value: value, project: state.scope === "project" })
-        .then(function (answer) {
-          return load().then(function () {
-            var again = rows.filter(function (entry) { return entry.name === setting.name; })[0];
-            if (again) { again.say(answer.message, true); }
-          });
-        })
-        .catch(function (error) {
-          status.className = "status bad";
-          status.textContent = error.message;
-          save.disabled = false;
-          reset.disabled = written(setting) === "";
-        });
-    }
-
-    input.addEventListener("input", changed);
-    input.addEventListener("change", changed);
-    input.addEventListener("keydown", function (event) {
-      if (event.key === "Enter" && !save.disabled) { send(input.value.trim()); }
+  function segmented(setting, refresh) {
+    var group = make("div", "segments");
+    group.setAttribute("role", "group");
+    group.setAttribute("aria-label", setting.label);
+    var values = [""].concat(setting.kind === "flag" ? ["1", "0"] : setting.choices);
+    var buttons = values.map(function (value) {
+      var button = make("button", null, value === "" ? "Default" : choiceLabel(setting, value));
+      button.type = "button";
+      button.title = value === "" ? defaultLabel(setting) : button.textContent;
+      button.addEventListener("click", function () { change(setting, value); refresh(); });
+      group.appendChild(button);
+      return { value: value, node: button };
     });
-    save.addEventListener("click", function () { send(input.value.trim()); });
-    reset.addEventListener("click", function () { send(""); });
-
     return {
-      name: setting.name,
-      node: node,
-      setting: setting,
-      refresh: refresh,
-      say: function (text, ok) { status.className = "status " + (ok ? "ok" : "bad"); status.textContent = text; }
+      node: group,
+      update: function () {
+        buttons.forEach(function (button) {
+          button.node.setAttribute("aria-pressed", String(button.value === shown(setting)));
+          button.node.disabled = !allowed(setting);
+        });
+      }
     };
   }
 
-  function applyFilter() {
-    var words = document.getElementById("filter").value.trim().toLowerCase();
-    var onlySet = document.getElementById("only-set").checked;
-    document.querySelectorAll("section.group").forEach(function (group) {
-      var shown = 0;
-      group.querySelectorAll(".row").forEach(function (node) {
-        var entry = rows.filter(function (candidate) { return candidate.node === node; })[0];
-        var text = (entry.setting.name + " " + entry.setting.help).toLowerCase();
-        var visible = (!words || text.indexOf(words) >= 0) && (!onlySet || written(entry.setting) !== "");
-        node.hidden = !visible;
-        if (visible) { shown += 1; }
-      });
-      group.hidden = shown === 0;
+  function dropdown(setting, refresh) {
+    var select = make("select");
+    select.id = "setting-" + setting.name;
+    var unset = make("option", null, defaultLabel(setting));
+    unset.value = "";
+    select.appendChild(unset);
+    setting.choices.forEach(function (value) {
+      var option = make("option", null, value);
+      option.value = value;
+      select.appendChild(option);
     });
+    select.addEventListener("change", function () { change(setting, select.value); refresh(); });
+    return {
+      node: select,
+      update: function () {
+        select.value = shown(setting);
+        if (select.value !== shown(setting)) { select.value = ""; }
+        select.disabled = !allowed(setting);
+      }
+    };
+  }
+
+  function textField(setting, refresh) {
+    var wrap = make("div", "field");
+    var input = make("input");
+    input.id = "setting-" + setting.name;
+    var numeric = setting.kind === "seconds" || setting.kind === "count" || setting.kind === "share";
+    input.type = numeric ? "number" : "text";
+    if (numeric) {
+      input.min = String(setting.kind === "seconds" ? 1 : setting.minimum);
+      input.step = "1";
+      if (setting.kind === "share") { input.max = "100"; }
+      input.inputMode = "numeric";
+    }
+    input.spellcheck = false;
+    input.autocomplete = "off";
+    wrap.appendChild(input);
+    if (UNITS[setting.kind]) {
+      input.className = "with-unit";
+      wrap.appendChild(make("span", "unit", UNITS[setting.kind]));
+    }
+    input.addEventListener("input", function () { change(setting, input.value.trim()); refresh(false); });
+    return {
+      node: wrap,
+      update: function (rewrite) {
+        if (rewrite !== false) { input.value = shown(setting); }
+        input.placeholder = setting.value === "worked out" ? "Default" : setting.value;
+        input.disabled = !allowed(setting);
+        input.classList.toggle("invalid", Boolean(errors[key(setting.name)]));
+      }
+    };
+  }
+
+  function row(setting) {
+    var node = make("div", "row");
+    var text = make("div");
+    var title = make("div");
+    var label = make("label", null, setting.label);
+    label.htmlFor = "setting-" + setting.name;
+    var badge = make("span", "badge");
+    title.appendChild(label);
+    title.appendChild(badge);
+    text.appendChild(title);
+    text.appendChild(make("p", "desc", setting.help));
+    var meta = make("p", "meta");
+    text.appendChild(meta);
+    var note = make("p", "note");
+    text.appendChild(note);
+    var error = make("p", "error");
+    error.setAttribute("role", "alert");
+    text.appendChild(error);
+    var control = make("div", "control");
+    var editor;
+    function refresh(rewrite) { update(rewrite); }
+    if (setting.kind === "flag" || (setting.kind === "choice" && setting.choices.length <= SEGMENTED_MOST)) {
+      editor = segmented(setting, refresh);
+    } else if (setting.kind === "choice") {
+      editor = dropdown(setting, refresh);
+    } else {
+      editor = textField(setting, refresh);
+    }
+    control.appendChild(editor.node);
+    var reset = make("button", "reset", "Reset to default");
+    reset.type = "button";
+    reset.addEventListener("click", function () { change(setting, ""); update(); });
+    control.appendChild(reset);
+    node.appendChild(text);
+    node.appendChild(control);
+
+    function update(rewrite) {
+      var id = key(setting.name);
+      var isPending = pending[id] !== undefined;
+      var set = inFile(setting) !== "";
+      badge.hidden = !isPending && !set;
+      badge.className = isPending ? "badge pending" : "badge";
+      badge.textContent = isPending ? "Unsaved" : "Set here";
+      meta.textContent = "";
+      meta.appendChild(make("code", null, setting.name));
+      var effective = " · In effect: " + readable(setting, setting.value)
+        + (setting.source === "default" ? (setting.value === "worked out" ? "" : " (default)")
+          : ", from " + source(setting));
+      meta.appendChild(document.createTextNode(effective));
+      note.className = "note";
+      if (setting.environment) {
+        note.textContent = "The environment variable is set, so it wins over both files while it is.";
+      } else if (!allowed(setting)) {
+        note.className = "note quiet";
+        note.textContent = "Only in your settings.";
+      } else if (scope === "project" && setting.projectImage) {
+        note.textContent = "This project may only set " + setting.projectImage + ", a tag or a digest of it.";
+      } else {
+        note.textContent = "";
+      }
+      note.hidden = note.textContent === "";
+      error.textContent = errors[id] || "";
+      error.hidden = !errors[id];
+      reset.hidden = !allowed(setting) || shown(setting) === "";
+      editor.update(rewrite);
+    }
+
+    return { node: node, setting: setting, update: update };
+  }
+
+  function refreshBar() {
+    var count = pendingCount();
+    document.getElementById("savebar").hidden = count === 0;
+    document.getElementById("pending-count").textContent = count === 1 ? "1 unsaved change" : count + " unsaved changes";
+  }
+
+  function refreshScope() {
+    document.getElementById("tab-user").setAttribute("aria-selected", String(scope === "user"));
+    document.getElementById("tab-project").setAttribute("aria-selected", String(scope === "project"));
+    var note = document.getElementById("scope-note");
+    note.textContent = "";
+    var file = scope === "user" ? data.userFile : data.projectFile;
+    note.appendChild(document.createTextNode(scope === "user"
+      ? "For every project you open. Saved in " : "For everyone who opens this project. Saved in "));
+    note.appendChild(make("code", null, file || "nowhere: no HOME, XDG_CONFIG_HOME or APPDATA"));
+    rows.forEach(function (entry) { entry.update(); });
+    document.querySelectorAll(".section-note").forEach(function (sectionNote) {
+      sectionNote.hidden = scope !== "project" || sectionNote.dataset.userOnly !== "true";
+    });
+    refreshLinks();
+    filter();
+  }
+
+  function refreshLinks() {
+    document.querySelectorAll("nav a").forEach(function (link) {
+      var section = data.sections[Number(link.dataset.index)];
+      var set = section.settings.filter(function (setting) { return inFile(setting) !== ""; }).length;
+      link.lastChild.textContent = set ? String(set) : "";
+    });
+  }
+
+  function filter() {
+    var words = document.getElementById("filter").value.trim().toLowerCase();
+    var any = false;
+    document.querySelectorAll("section").forEach(function (section) {
+      var visible = 0;
+      rows.filter(function (entry) { return entry.node.parentNode === section; }).forEach(function (entry) {
+        var haystack = (entry.setting.label + " " + entry.setting.name + " " + entry.setting.help).toLowerCase();
+        entry.node.hidden = words !== "" && haystack.indexOf(words) < 0;
+        if (!entry.node.hidden) { visible += 1; }
+      });
+      section.hidden = visible === 0;
+      if (visible) { any = true; }
+    });
+    var none = document.getElementById("no-match");
+    if (none) { none.hidden = any; }
   }
 
   function render() {
-    var data = state.data;
-    var files = document.getElementById("files");
-    files.textContent = "";
-    var yours = element("div", null, "Your file: ");
-    yours.appendChild(element("code", null, data.userFile || "none: no HOME, XDG_CONFIG_HOME or APPDATA"));
-    var project = element("div", null, "This project's file: ");
-    project.appendChild(element("code", null, data.projectFile));
-    files.appendChild(yours);
-    files.appendChild(project);
-    var problems = document.getElementById("problems");
-    problems.textContent = "";
-    if (data.problems.length) {
-      var box = element("div", "problems");
-      box.appendChild(element("h2", null, "What is wrong in them, and so not used"));
-      var list = element("ul");
-      data.problems.forEach(function (problem) { list.appendChild(element("li", null, problem)); });
-      box.appendChild(list);
-      problems.appendChild(box);
-    }
-    var groups = document.getElementById("groups");
-    groups.textContent = "";
+    document.getElementById("where").textContent = data.projectFile.replace(/[\\/]\.sheriff\.properties$/, "");
+    var main = document.getElementById("main");
+    var links = document.getElementById("links");
+    main.textContent = "";
+    links.textContent = "";
     rows = [];
-    data.sections.forEach(function (section) {
-      var group = element("section", "group");
-      group.appendChild(element("h2", null, section.title || "Other"));
+    if (data.problems.length) {
+      var notice = make("div", "notice");
+      notice.appendChild(make("strong", null, "Some settings in the files are ignored"));
+      var list = make("ul");
+      data.problems.forEach(function (problem) { list.appendChild(make("li", null, problem)); });
+      notice.appendChild(list);
+      main.appendChild(notice);
+    }
+    data.sections.forEach(function (section, index) {
+      var block = make("section");
+      block.id = "section-" + index;
+      block.appendChild(make("h2", null, section.title || "Other"));
+      var userOnly = section.settings.some(function (setting) { return !setting.projectMay; });
+      var sectionNote = make("p", "section-note", "Some of these are only in your settings: a project that is "
+        + "cloned must not choose who fixes your code, what it runs or where it sends it, for whoever opens it.");
+      sectionNote.dataset.userOnly = String(userOnly);
+      block.appendChild(sectionNote);
       section.settings.forEach(function (setting) {
         var entry = row(setting);
         rows.push(entry);
-        group.appendChild(entry.node);
-        entry.refresh();
+        block.appendChild(entry.node);
       });
-      groups.appendChild(group);
+      main.appendChild(block);
+      var link = make("a", null, section.title || "Other");
+      link.href = "#section-" + index;
+      link.dataset.index = String(index);
+      link.appendChild(make("span"));
+      links.appendChild(link);
     });
-    applyFilter();
+    var none = make("p", "empty", "No setting matches that search.");
+    none.id = "no-match";
+    none.hidden = true;
+    main.appendChild(none);
+    refreshScope();
+    refreshBar();
   }
 
   function load() {
-    return request("GET", "settings").then(function (data) {
-      state.data = data;
+    return call("GET", "settings").then(function (listing) {
+      data = listing;
       render();
     });
   }
 
-  function choose(scope) {
-    state.scope = scope;
-    document.getElementById("scope-user").setAttribute("aria-pressed", String(scope === "user"));
-    document.getElementById("scope-project").setAttribute("aria-pressed", String(scope === "project"));
-    rows.forEach(function (entry) { entry.refresh(); });
-    applyFilter();
+  function save() {
+    var ids = Object.keys(pending);
+    if (!ids.length) { return; }
+    var button = document.getElementById("save");
+    button.disabled = true;
+    var saved = 0;
+    var failed = {};
+    var chain = Promise.resolve();
+    ids.forEach(function (id) {
+      var parts = id.split(":");
+      var value = pending[id];
+      chain = chain.then(function () {
+        return call("POST", "settings", { name: parts[1], value: value, project: parts[0] === "project" })
+          .then(function () { saved += 1; }, function (error) { failed[id] = { value: value, error: error.message }; });
+      });
+    });
+    chain.then(function () {
+      pending = {};
+      errors = {};
+      Object.keys(failed).forEach(function (id) { pending[id] = failed[id].value; errors[id] = failed[id].error; });
+      return load();
+    }).then(function () {
+      button.disabled = false;
+      var failures = Object.keys(failed).length;
+      if (failures) {
+        toast(failures === 1 ? "1 change was not saved: see the setting marked in red."
+          : failures + " changes were not saved: see the settings marked in red.");
+        var first = document.getElementById("setting-" + Object.keys(failed)[0].split(":")[1]);
+        if (first) { first.scrollIntoView({ block: "center" }); }
+      } else {
+        toast(saved === 1 ? "Saved. New sessions use it; the hooks, from their next run."
+          : "Saved " + saved + " changes. New sessions use them; the hooks, from their next run.");
+      }
+    }).catch(function (error) {
+      button.disabled = false;
+      toast(error.message);
+    });
   }
 
-  document.getElementById("scope-user").addEventListener("click", function () { choose("user"); });
-  document.getElementById("scope-project").addEventListener("click", function () { choose("project"); });
-  document.getElementById("filter").addEventListener("input", applyFilter);
-  document.getElementById("only-set").addEventListener("change", applyFilter);
-  document.getElementById("done").addEventListener("click", function () {
-    request("POST", "close", {}).catch(function () { return {}; }).then(function () {
-      var main = document.querySelector("main");
-      main.textContent = "";
-      main.appendChild(element("p", "closed", "Done: the settings are saved, and this page is closed. You can close this tab."));
+  function discard() {
+    pending = {};
+    errors = {};
+    rows.forEach(function (entry) { entry.update(); });
+    refreshBar();
+  }
+
+  function close() {
+    var count = pendingCount();
+    if (count && !window.confirm(count === 1 ? "Discard 1 unsaved change?" : "Discard " + count + " unsaved changes?")) {
+      return;
+    }
+    call("POST", "close", {}).catch(function () { return {}; }).then(function () {
+      document.getElementById("savebar").hidden = true;
+      var page = document.getElementById("page");
+      page.textContent = "";
+      page.appendChild(make("p", "closed", "The settings page is closed. You can close this tab."));
     });
+  }
+
+  document.getElementById("tab-user").addEventListener("click", function () { scope = "user"; refreshScope(); });
+  document.getElementById("tab-project").addEventListener("click", function () { scope = "project"; refreshScope(); });
+  document.getElementById("filter").addEventListener("input", filter);
+  document.getElementById("save").addEventListener("click", save);
+  document.getElementById("discard").addEventListener("click", discard);
+  document.getElementById("close").addEventListener("click", close);
+  document.addEventListener("keydown", function (event) {
+    if ((event.ctrlKey || event.metaKey) && event.key === "s") {
+      event.preventDefault();
+      save();
+    }
+  });
+  window.addEventListener("beforeunload", function (event) {
+    if (pendingCount()) { event.preventDefault(); event.returnValue = ""; }
   });
 
   load().catch(function (error) {
-    var groups = document.getElementById("groups");
-    groups.textContent = "";
-    groups.appendChild(element("p", "empty", error.message));
+    var main = document.getElementById("main");
+    main.textContent = "";
+    main.appendChild(make("p", "empty", error.message));
   });
 })();
 </script>

@@ -21,21 +21,24 @@ import java.util.regex.Pattern;
  *     tag or a digest of it; empty when a project may set any value
  * @param help what it does, in a line
  * @param section the part of the catalog it is listed under, empty for none
+ * @param label its name as a person reads it, on the settings page
  */
 public record Setting(String name, String defaultValue, SettingKind kind, int minimum, List<String> choices,
-        boolean project, String projectImage, String help, String section) {
+        boolean project, String projectImage, String help, String section, String label) {
 
     private static final int NONE = 0;
     private static final int ONE = 1;
+    private static final int LAST = 1;
     private static final int ALL = 100;
     private static final String OFF = "0";
     private static final String FIELD_SEPARATOR = "\t";
-    private static final int FIELDS = 5;
+    private static final int FIELDS = 6;
+    private static final int UNLABELLED_FIELDS = 5;
     private static final int NAME_FIELD = 0;
     private static final int KIND_FIELD = 1;
     private static final int DEFAULT_FIELD = 2;
     private static final int SCOPE_FIELD = 3;
-    private static final int HELP_FIELD = 4;
+    private static final int LABEL_FIELD = 4;
     private static final String KIND_SEPARATOR = ":";
     private static final int KIND_PARTS = 2;
     private static final int NAME_PART = 0;
@@ -85,8 +88,9 @@ public record Setting(String name, String defaultValue, SettingKind kind, int mi
      * A setting as one line of the catalog writes it: its name, its kind
      * ({@code count:1} and {@code choice:a,b} carry their minimum and their
      * values), its default, who may set it ({@code project:<image>} lets a
-     * project set it only to that image, a tag or a digest of it), and what
-     * it does, separated by tabs.
+     * project set it only to that image, a tag or a digest of it), its name
+     * as a person reads it, and what it does, separated by tabs. A line with
+     * no name for people takes its own.
      *
      * @param line the line
      * @return that setting
@@ -94,9 +98,12 @@ public record Setting(String name, String defaultValue, SettingKind kind, int mi
      */
     static Setting parse(String line) {
         String[] fields = line.split(FIELD_SEPARATOR, FIELDS);
-        if (fields.length != FIELDS) {
+        if (fields.length != FIELDS && fields.length != UNLABELLED_FIELDS) {
             throw new IllegalStateException(String.format(NOT_A_LINE, line));
         }
+        boolean labelled = fields.length == FIELDS;
+        String label = labelled ? fields[LABEL_FIELD] : fields[NAME_FIELD];
+        String help = fields[fields.length - LAST];
         String[] kind = fields[KIND_FIELD].split(KIND_SEPARATOR, KIND_PARTS);
         String detail = kind.length == KIND_PARTS ? kind[DETAIL_PART] : NOTHING;
         SettingKind settingKind = SettingKind.valueOf(kind[NAME_PART].toUpperCase(Locale.ROOT));
@@ -105,7 +112,7 @@ public record Setting(String name, String defaultValue, SettingKind kind, int mi
         String[] scope = fields[SCOPE_FIELD].split(SCOPE_SEPARATOR, SCOPE_PARTS);
         String image = scope.length == SCOPE_PARTS ? scope[DETAIL_PART] : NOTHING;
         return new Setting(fields[NAME_FIELD], fields[DEFAULT_FIELD], settingKind, least, choices,
-                PROJECT.equals(scope[NAME_PART]), image, fields[HELP_FIELD], NOTHING);
+                PROJECT.equals(scope[NAME_PART]), image, help, NOTHING, label);
     }
 
     /**
@@ -115,7 +122,7 @@ public record Setting(String name, String defaultValue, SettingKind kind, int mi
      * @return that setting
      */
     Setting inSection(String title) {
-        return new Setting(name, defaultValue, kind, minimum, choices, project, projectImage, help, title);
+        return new Setting(name, defaultValue, kind, minimum, choices, project, projectImage, help, title, label);
     }
 
     /**
@@ -127,7 +134,8 @@ public record Setting(String name, String defaultValue, SettingKind kind, int mi
      * @return that setting
      */
     public Setting named(String otherName) {
-        return new Setting(otherName, defaultValue, kind, minimum, choices, project, projectImage, help, section);
+        return new Setting(otherName, defaultValue, kind, minimum, choices, project, projectImage, help, section,
+                label);
     }
 
     /**

@@ -424,20 +424,25 @@ none, and when it finds one adds at its end, the same way, the settings it
 does not name, so one a newer version brings is listed too; nothing in it is
 touched. Settings a cloned project must not choose for whoever opens it
 (`AI_BACKEND`) are read from the user's file only. Variables were the only way
-before, and Codex passes a server and its hooks almost none. A project's file
-may set `SHERIFF_IMAGE` only to `kaizten/sheriff`, a tag or a digest of it
-(`project:<image>` in the catalog), as a cloned project choosing the image
-would choose what runs on the machine of whoever opens it. `sheriff_config`
+before, and Codex passes a server and its hooks almost none. `SHERIFF_IMAGE`
+is no setting for now (Kaizten's call): a variable alone, for development and
+CI, so a file that sets it is told it does nothing; the catalog's
+`project:<image>` scope, which let a project's file set only Kaizten's image,
+stays in `Setting` for when it comes back. `sheriff_config`
 (and `--config`, `--config NAME=VALUE [--project]`) lists them with their
 source and changes one, checking the value first. `--config-ui`, and
 `sheriff_config` with `page`, serve the same as a page (`SettingsPage`, the
-catalog's `## Title` lines its sections) through `Settings.change`, on
+catalog's `## Title` lines its sections and its fifth field each setting's
+name for people) through `Settings.change`, on
 `127.0.0.1` under a random token, refusing a foreign `Host` or `Origin` and a
 change that is not JSON, as the files name where code is sent and which image
 runs; it is started from a daemon thread, as the JDK's `HttpServer` dispatcher
 otherwise keeps the JVM alive after the session ends (measured), and closes
-with Done, after `SettingsPage.IDLE_LIMIT` unused, or with `Tools.close`. The
-API keys are never settings: a variable alone. A value in a file that its setting does not take, a name that is
+with its Close button, after `SettingsPage.IDLE_LIMIT` unused, or with
+`Tools.close`. `sheriff_config`'s listing and its page answer name the command
+that opens the page (`SettingsPage.openCommand`: the Java and the jar running),
+so a user who asks the assistant how to configure Sheriff is told what to type.
+The API keys are never settings: a variable alone. A value in a file that its setting does not take, a name that is
 no setting, or a user's setting in a project's file is ignored and named
 (`Settings.problems`), by the listing and once a session by the tools'
 answers. The Maven plugin reads the `.sheriff.properties` at the top of its

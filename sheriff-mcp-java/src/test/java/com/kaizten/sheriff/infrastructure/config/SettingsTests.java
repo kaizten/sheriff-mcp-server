@@ -53,14 +53,14 @@ class SettingsTests {
     @Test
     @DisplayName("an environment variable wins, then the project's file, then the user's; the rest stays as it is")
     void settingsAreLayered() throws IOException {
-        user("SHERIFF_STOP_MAX_BLOCKS=7\nSHERIFF_GATE_TTL=60\nSHERIFF_IMAGE=user/image\n");
+        user("SHERIFF_STOP_MAX_BLOCKS=7\nSHERIFF_GATE_TTL=60\nSHERIFF_PROFILE=JAVA_DDD\n");
         Files.writeString(project.resolve(".sheriff.properties"), "profile=JAVA_DDD\nSHERIFF_GATE_TTL=30\n");
         Map<String, String> given = Map.of("XDG_CONFIG_HOME", config.toString(), "APPDATA", config.toString(),
-                "SHERIFF_IMAGE", "env/image", "OTHER", "kept");
+                "SHERIFF_PROFILE", "JAVA_HEXAGONAL", "OTHER", "kept");
 
         Map<String, String> layered = Settings.layered(given, project);
 
-        assertEquals("env/image", layered.get("SHERIFF_IMAGE"));
+        assertEquals("JAVA_HEXAGONAL", layered.get("SHERIFF_PROFILE"));
         assertEquals("30", layered.get("SHERIFF_GATE_TTL"));
         assertEquals("7", layered.get("SHERIFF_STOP_MAX_BLOCKS"));
         assertEquals("kept", layered.get("OTHER"));
@@ -120,14 +120,14 @@ class SettingsTests {
     @DisplayName("a file of the user's that lacks settings gets them at its end, at their defaults, and what it had "
             + "stays as it was; a second start adds nothing")
     void aUsersFileGetsTheSettingsItLacks() throws IOException {
-        user("# mine\nSHERIFF_STOP_MAX_BLOCKS=2\n# SHERIFF_IMAGE=kaizten/sheriff:latest");
+        user("# mine\nSHERIFF_STOP_MAX_BLOCKS=2\n# SHERIFF_PULL=always");
         Settings.ensureUserFile(environment);
         String written = Files.readString(userFile());
-        assertTrue(written.startsWith("# mine\nSHERIFF_STOP_MAX_BLOCKS=2\n# SHERIFF_IMAGE=kaizten/sheriff:latest\n\n# "),
+        assertTrue(written.startsWith("# mine\nSHERIFF_STOP_MAX_BLOCKS=2\n# SHERIFF_PULL=always\n\n# "),
                 written);
         assertTrue(written.contains("\n# SHERIFF_REPAIR_ROUNDS=\n"), written);
         assertEquals(1, written.split("SHERIFF_STOP_MAX_BLOCKS=", -1).length - 1, "a line it has is not added again");
-        assertEquals(1, written.split("SHERIFF_IMAGE=", -1).length - 1, "nor one it has commented out");
+        assertEquals(1, written.split("SHERIFF_PULL=", -1).length - 1, "nor one it has commented out");
         assertEquals("2", Settings.layered(environment, project).get("SHERIFF_STOP_MAX_BLOCKS"));
         Settings.ensureUserFile(environment);
         assertEquals(written, Files.readString(userFile()));
@@ -163,8 +163,8 @@ class SettingsTests {
     @DisplayName("a project's setting goes into its own .sheriff.properties, beside what it declares already")
     void aProjectSettingGoesIntoItsFile() throws IOException {
         Files.writeString(project.resolve(".sheriff.properties"), "profile=JAVA_HEXAGONAL");
-        Settings.change(environment, project, "SHERIFF_IMAGE", "kaizten/sheriff@sha256:abc", true);
-        assertEquals("profile=JAVA_HEXAGONAL\nSHERIFF_IMAGE=kaizten/sheriff@sha256:abc\n",
+        Settings.change(environment, project, "SHERIFF_PULL", "check", true);
+        assertEquals("profile=JAVA_HEXAGONAL\nSHERIFF_PULL=check\n",
                 Files.readString(project.resolve(".sheriff.properties")));
     }
 
@@ -179,12 +179,12 @@ class SettingsTests {
         assertThrows(IllegalArgumentException.class,
                 () -> Settings.change(environment, project, "SHERIFF_COVERAGE", "120", false));
         assertThrows(IllegalArgumentException.class,
-                () -> Settings.change(environment, project, "SHERIFF_IMAGE", "a b", false));
+                () -> Settings.change(environment, project, "SHERIFF_PROFILE", "a b", false));
         assertThrows(IllegalArgumentException.class,
                 () -> Settings.change(environment, project, "SHERIFF_MUTATORS", "all; rm", false));
         assertTrue(assertThrows(IllegalArgumentException.class,
                 () -> Settings.change(environment, project, "SHERIFF_NOPE", "1", false)).getMessage()
-                .contains("SHERIFF_IMAGE, SHERIFF_PULL"));
+                .contains("SHERIFF_PULL, SHERIFF_PROFILE"));
         assertFalse(Files.exists(userFile()), "nothing refused is written");
     }
 
@@ -208,7 +208,7 @@ class SettingsTests {
 
         assertTrue(report.contains("SHERIFF_PULL = never (the environment)"), report);
         assertTrue(report.contains("SHERIFF_STOP_MAX_BLOCKS = 7 (" + userFile() + ")"), report);
-        assertTrue(report.contains("SHERIFF_IMAGE = kaizten/sheriff:latest (default)"), report);
+        assertTrue(report.contains("SHERIFF_GATE_TTL = 900 (default)"), report);
         assertTrue(report.contains("SHERIFF_MAX_ITERATIONS = worked out (default)"), report);
     }
 
@@ -261,7 +261,7 @@ class SettingsTests {
         Map<String, String> given = Map.of("XDG_CONFIG_HOME", config.toString(), "APPDATA", config.toString(),
                 "SHERIFF_TIMEOUT", "soon");
         assertEquals(List.of(), Settings.problems(environment, project));
-        Files.writeString(project.resolve(".sheriff.properties"), "SHERIFF_IMAGE=\\u12\n");
+        Files.writeString(project.resolve(".sheriff.properties"), "SHERIFF_PULL=\\u12\n");
 
         List<String> problems = Settings.problems(given, project);
 
@@ -453,25 +453,22 @@ class SettingsTests {
     }
 
     @Test
-    @DisplayName("a project's file may set Sheriff's image, a tag or a digest of it, but no other image, which "
-            + "only the user's own file may choose")
-    void aProjectChoosesOnlySheriffsImage() throws IOException {
+    @DisplayName("Sheriff's image is no setting: a file that sets it is told it does nothing, it cannot be changed "
+            + "here, and only the environment still names it")
+    void theImageIsNoSetting() throws IOException {
         Path file = project.resolve(".sheriff.properties");
         user("SHERIFF_IMAGE=registry.local/sheriff:mine\n");
-        Files.writeString(file, "SHERIFF_IMAGE=evil/miner:latest\n");
+        Files.writeString(file, "SHERIFF_IMAGE=kaizten/sheriff@sha256:abc\n");
 
-        assertEquals("registry.local/sheriff:mine", Settings.layered(environment, project).get("SHERIFF_IMAGE"));
-        assertEquals(List.of("In " + file + ", SHERIFF_IMAGE takes only kaizten/sheriff in a project's file, or a "
-                + "tag or a digest of it (kaizten/sheriff@sha256:...), not 'evil/miner:latest': a project that is "
-                + "cloned must not choose which image runs on the machine of whoever opens it. Set another image in "
-                + "your own file. It is ignored."), Settings.problems(environment, project));
-        assertTrue(Settings.report(environment, project).contains("SHERIFF_IMAGE = registry.local/sheriff:mine ("
-                + userFile() + ")"));
+        assertFalse(Settings.layered(environment, project).containsKey("SHERIFF_IMAGE"));
+        assertEquals("kaizten/sheriff:dev", Settings.layered(Map.of("SHERIFF_IMAGE", "kaizten/sheriff:dev"), project)
+                .get("SHERIFF_IMAGE"), "a variable is passed on as it is, for development and CI");
+        assertEquals(List.of("In " + file + ", SHERIFF_IMAGE is not a setting, so it does nothing.",
+                "In " + userFile() + ", SHERIFF_IMAGE is not a setting, so it does nothing."),
+                Settings.problems(environment, project));
         assertThrows(IllegalArgumentException.class, () -> Settings.change(environment, project, "SHERIFF_IMAGE",
-                "evil/miner:latest", true));
-        Settings.change(environment, project, "SHERIFF_IMAGE", "kaizten/sheriff@sha256:abc", true);
-        assertEquals("kaizten/sheriff@sha256:abc", Settings.layered(environment, project).get("SHERIFF_IMAGE"));
-        assertTrue(Settings.problems(environment, project).isEmpty());
+                "kaizten/sheriff@sha256:abc", false));
+        assertFalse(Settings.report(environment, project).contains("SHERIFF_IMAGE ="));
     }
 
     @Test
@@ -500,9 +497,9 @@ class SettingsTests {
         Settings.change(environment, project, "SHERIFF_TIMEOUT", "", false);
         assertNull(Settings.layered(environment, project).get("SHERIFF_TIMEOUT"));
         assertEquals("60", Settings.layered(environment, project).get("SHERIFF_GATE_TTL"));
-        Settings.change(environment, project, "SHERIFF_IMAGE", "kaizten/sheriff:$1", false);
-        Settings.change(environment, project, "SHERIFF_IMAGE", "kaizten/sheriff:$2", false);
-        assertEquals("kaizten/sheriff:$2", Settings.layered(environment, project).get("SHERIFF_IMAGE"));
+        Settings.change(environment, project, "SHERIFF_PROFILE", "JAVA$1", false);
+        Settings.change(environment, project, "SHERIFF_PROFILE", "JAVA$2", false);
+        assertEquals("JAVA$2", Settings.layered(environment, project).get("SHERIFF_PROFILE"));
     }
 
     @Test
@@ -554,8 +551,8 @@ class SettingsTests {
     @Test
     @DisplayName("a value with a $ is written as it is, over the line it replaces")
     void aDollarIsNoGroupReference() throws IOException {
-        Settings.change(environment, project, "SHERIFF_IMAGE", "registry/$1:latest", false);
-        assertTrue(Files.readString(userFile()).contains("\nSHERIFF_IMAGE=registry/$1:latest\n"));
+        Settings.change(environment, project, "ANTHROPIC_MODEL", "model-$1", false);
+        assertTrue(Files.readString(userFile()).contains("\nANTHROPIC_MODEL=model-$1\n"));
     }
 
     @Test

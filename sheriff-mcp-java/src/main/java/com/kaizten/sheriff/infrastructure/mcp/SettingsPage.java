@@ -13,6 +13,8 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.URI;
+import java.net.URISyntaxException;
+import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.security.MessageDigest;
@@ -24,6 +26,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -47,7 +50,7 @@ import java.util.function.Predicate;
  * web page open in the same browser must neither read them nor change them.
  * A request whose {@code Host} is not this machine is refused, so a name
  * that resolves here cannot reach it either, and a change must come as JSON,
- * which a plain form on another site cannot send. It closes when its Done
+ * which a plain form on another site cannot send. It closes when its Close
  * button is pressed, when it has been unused for its time limit, or with the
  * process that started it.
  */
@@ -121,6 +124,7 @@ public final class SettingsPage implements AutoCloseable {
     private static final String SOURCE_FIELD = "source";
     private static final String DEFAULT_FIELD = "default";
     private static final String HELP_FIELD = "help";
+    private static final String LABEL_FIELD = "label";
     private static final String ACCEPTED_FIELD = "accepted";
     private static final String KIND_FIELD = "kind";
     private static final String CHOICES_FIELD = "choices";
@@ -144,6 +148,12 @@ public final class SettingsPage implements AutoCloseable {
     private static final String OS_NAME = "os.name";
     private static final String MAC = "mac";
     private static final ObjectMapper JSON = new ObjectMapper();
+    private static final String OPEN_COMMAND = "%s -jar %s --config-ui";
+    private static final String JAVA = "java";
+    private static final String JAR_SUFFIX = ".jar";
+    private static final String DEFAULT_JAR = "sheriff-mcp.jar";
+    private static final String QUOTE = "'";
+    private static final String ESCAPED_QUOTE = "'\\''";
 
     private final Map<String, String> environment;
     private final Path project;
@@ -254,7 +264,7 @@ public final class SettingsPage implements AutoCloseable {
     }
 
     /**
-     * Waits until the page is closed: by its Done button, by its time
+     * Waits until the page is closed: by its Close button, by its time
      * limit, or by {@link #close()}.
      *
      * @throws InterruptedException when the wait is interrupted
@@ -287,6 +297,63 @@ public final class SettingsPage implements AutoCloseable {
      */
     public static Predicate<URI> browser() {
         return address -> started(browserCommand(address, Platform.windows(), System.getProperty(OS_NAME, NOTHING)));
+    }
+
+    /**
+     * The command that opens this page from a terminal on this machine: the
+     * Java that runs this jar, by its absolute path, and this jar, so that a
+     * user who asks the assistant how to change the settings can copy it.
+     *
+     * @return that command, quoted for the shells of this system
+     */
+    public static String openCommand() {
+        return openCommand(codeSource(SettingsPage.class.getProtectionDomain().getCodeSource().getLocation()),
+                ProcessHandle.current().info().command(), Platform.windows());
+    }
+
+    /**
+     * The command that opens this page, for a given jar and Java.
+     *
+     * <p>On Windows it names {@code java} as it is, since PowerShell runs a
+     * quoted path only after {@code &}, which cmd does not take; the jar is
+     * quoted the way every Windows shell reads.
+     *
+     * @param jar where this code was loaded from: a jar, or a folder of
+     *     classes, which names no jar and so gives its usual name
+     * @param java the Java running it, when the system says
+     * @param windows whether the system is Windows
+     * @return that command
+     */
+    static String openCommand(Optional<Path> jar, Optional<String> java, boolean windows) {
+        String jarArgument = jar.filter(path -> path.toString().endsWith(JAR_SUFFIX))
+                .map(path -> quoted(path.toAbsolutePath().toString(), windows)).orElse(DEFAULT_JAR);
+        String javaCommand = windows ? JAVA : java.map(path -> quoted(path, false)).orElse(JAVA);
+        return String.format(OPEN_COMMAND, javaCommand, jarArgument);
+    }
+
+    /**
+     * The jar or folder a location of code names.
+     *
+     * @param location where code was loaded from, as its class loader says
+     * @return that jar or folder, or empty when the location is no file's
+     */
+    static Optional<Path> codeSource(URL location) {
+        try {
+            return Optional.of(Path.of(location.toURI()));
+        } catch (URISyntaxException | RuntimeException exception) {
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * A path quoted for the shells of a system.
+     *
+     * @param text the path
+     * @param windows whether the system is Windows
+     * @return it, quoted
+     */
+    private static String quoted(String text, boolean windows) {
+        return windows ? Platform.quotedForAnyWindowsShell(text) : QUOTE + text.replace(QUOTE, ESCAPED_QUOTE) + QUOTE;
     }
 
     /**
@@ -331,7 +398,7 @@ public final class SettingsPage implements AutoCloseable {
     }
 
     /**
-     * Answers one request: the page, the settings as JSON, a change, or Done.
+     * Answers one request: the page, the settings as JSON, a change, or Close.
      *
      * @param exchange the request and its answer
      * @throws IOException when the answer cannot be written
@@ -486,6 +553,7 @@ public final class SettingsPage implements AutoCloseable {
         entry.put(VALUE_FIELD, value.value());
         entry.put(SOURCE_FIELD, value.source());
         entry.put(DEFAULT_FIELD, setting.defaultValue());
+        entry.put(LABEL_FIELD, setting.label());
         entry.put(HELP_FIELD, setting.help());
         entry.put(ACCEPTED_FIELD, setting.accepted());
         entry.put(KIND_FIELD, setting.kind().name().toLowerCase(Locale.ROOT));

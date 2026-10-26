@@ -1,51 +1,51 @@
 # The settings a user can change, one per line, its fields separated by tabs:
 # name (its environment variable), kind (seconds, count:<least>, share, flag,
-# choice:<a,b,c>, word, mutators), default (empty when it is worked out),
-# who may set it (project: a project's .sheriff.properties too; project:<image>:
-# a project's file too, but only to that image, a tag or a digest of it; user:
-# only the user's own file), and what it does, as sheriff_config and the user's
-# file say. A line "## Title" starts a section, which the settings page shows
-# the settings under it in.
+# choice:<a,b,c>, word, mutators, command, address), default (empty when it is
+# worked out), who may set it (project: a project's .sheriff.properties too;
+# project:<image>: a project's file too, but only to that image, a tag or a
+# digest of it; user: only the user's own file), its name on the settings
+# page, and what it does, as sheriff_config and the user's file say. A line
+# "## Title" starts a section, which the settings page lists the settings
+# below it under.
 
 ## Sheriff
-SHERIFF_IMAGE	word	kaizten/sheriff:latest	project:kaizten/sheriff	Sheriff's image. A digest, kaizten/sheriff@sha256:..., keeps one build, as Sheriff is published only as latest. A project's file may set only kaizten/sheriff; another image, only your own file.
-SHERIFF_PULL	choice:always,check,never	always	project	always pulls a newer image when the server starts, check only says one is published, never does not ask.
-SHERIFF_PROFILE	word		project	The rule profile, over the project's declaration, for the components written in its language. Empty: the declared one, else the one the sources call for.
-SHERIFF_TIMEOUT	seconds	300	project	Seconds one run of Sheriff gets (900 through WSL's Docker).
-SHERIFF_REPAIR_ROUNDS	count:1		project	Rounds of Sheriff's own fixers in a repair, each measured by a new analysis. Empty: until a round repairs nothing.
-## The hooks
-SHERIFF_FAIL_FAST	flag	0	project	1 makes the hooks stop Sheriff at the first error.
-SHERIFF_GATE_TTL	seconds	900	project	Seconds the hooks reuse a verdict before running Sheriff again.
-SHERIFF_STOP_MAX_BLOCKS	count:1	5	project	Times in a row the Stop hook sends a turn back while errors remain.
-SHERIFF_STOP_MAX_STALLS	count:0	1	project	Stops in a row with nothing changed that the Stop hook still sends back. 0 lets the first through, as a false positive needs.
-## Tests, and how well they test the change
-SHERIFF_PROTOTYPE	flag	0	project	1 is for trying an idea out: a component is done when Sheriff finds no errors, with no tests asked for, run or measured, by the tools, the Stop hook or the repair loop. Set it back to 0 before the work is kept.
-SHERIFF_STOP_RUNS_TESTS	flag	0	project	1 makes the Stop hook require green tests, and measure how well they test the turn's change.
-SHERIFF_TEST_TIMEOUT	seconds	600	project	Seconds the project's tests get when the MCP tools run them (sheriff_fix with verify); VERIFICATION_TIMEOUT is the hooks' and the repair loop's.
-VERIFICATION_TIMEOUT	seconds	300	project	Seconds the project's tests get in the hooks and the repair loop (sheriff_autofix); SHERIFF_TEST_TIMEOUT is the MCP tools'.
-SHERIFF_COVERAGE	share	100	project	Share of the lines a change wrote that its tests must run. A pom.xml's sheriff.coverage, or coverage in a project's .sheriff.properties, wins over the files.
-SHERIFF_BRANCHES	share	100	project	Share of the branches of those lines' conditions its tests must take. A pom.xml's sheriff.branches, or branches in a project's .sheriff.properties, wins over the files.
-SHERIFF_MUTATION	share	80	project	Share of PIT's mutants of those lines its tests must kill. A pom.xml's sheriff.mutation, or mutation in a project's .sheriff.properties, wins over the files.
-SHERIFF_MUTATORS	mutators	STRONGER,REMOVE_CONDITIONALS,EXPERIMENTAL_ARGUMENT_PROPAGATION	project	PIT's mutators, or groups (DEFAULTS, STRONGER, ALL). A pom.xml's sheriff.mutators, or mutators in a project's .sheriff.properties, wins over the files.
-SHERIFF_COVERAGE_TIMEOUT	seconds	600	project	Seconds the tests get under JaCoCo.
-SHERIFF_MUTATION_TIMEOUT	seconds	1800	project	Seconds PIT gets.
-## The repair loop (sheriff_autofix)
-SHERIFF_MAX_ITERATIONS	count:1		project	Passes of the repair loop. Empty: sized from the errors, and grown while they drop.
-SHERIFF_MAX_FILES_PER_BATCH	count:1	5	project	Files the repair loop gives a model at once.
-SHERIFF_MAX_RULES_IN_PROMPT	count:1		project	Rules of a profile the repair loop puts in one prompt. Empty: the loop's own limit.
-SHERIFF_AGENT_GIT_SAFETY	flag	1	user	1 makes the repair loop work on a branch of its own, commit each pass and stop when a model edits a file outside its batch; 0 edits the working tree as it is, with none of that.
-AI_BACKEND	choice:claude_cli,codex_cli,antigravity_cli,anthropic_api,openai_api,local	claude_cli	user	Who answers in the repair loop.
-SHERIFF_AGENT_CLAUDE_TIMEOUT	seconds	600	user	Seconds one pass of claude gets in the repair loop (AI_BACKEND=claude_cli).
-CODEX_COMMAND	command	codex exec --sandbox workspace-write	user	The command that runs codex in the repair loop, without the prompt (AI_BACKEND=codex_cli).
-SHERIFF_AGENT_CODEX_TIMEOUT	seconds	600	user	Seconds one pass of codex gets in the repair loop (AI_BACKEND=codex_cli).
-ANTIGRAVITY_COMMAND	command	agy --mode accept-edits	user	The command that runs agy in the repair loop, without the prompt; --model claude-sonnet-5-5-high, from agy models, picks the model (AI_BACKEND=antigravity_cli).
-SHERIFF_AGENT_ANTIGRAVITY_TIMEOUT	seconds	600	user	Seconds one pass of agy gets in the repair loop (AI_BACKEND=antigravity_cli).
-## The API backends of the repair loop
-ANTHROPIC_MODEL	word	claude-opus-5-5	user	The model anthropic_api asks. Its key is read only from ANTHROPIC_API_KEY, never from a file.
-ANTHROPIC_BASE_URL	address		user	Where anthropic_api sends its requests. Empty: Anthropic's own API.
-ANTHROPIC_MAX_TOKENS	count:1	16000	user	The most tokens one answer of anthropic_api may take.
-ANTHROPIC_MAX_TOOL_ITERATIONS	count:1	20	user	Times one pass of anthropic_api may read or write a file before it is cut.
-OPENAI_MODEL	word		user	The model openai_api or local asks. Empty: gpt-4o-mini for openai_api, qwen2.5-coder for local. Its key is read only from OPENAI_API_KEY, never from a file.
-OPENAI_BASE_URL	address		user	Where openai_api or local sends its requests, such as an LM Studio or vLLM server. Empty: https://api.openai.com/v1 for openai_api, Ollama's http://localhost:11434/v1 for local.
-OPENAI_MAX_TOKENS	count:1	8000	user	The most tokens one answer of openai_api or local may take; a model that thinks before answering needs more.
-OPENAI_MAX_TOOL_ITERATIONS	count:1	20	user	Times one pass of openai_api or local may read or write a file before it is cut.
+SHERIFF_PULL	choice:always,check,never	always	project	Image updates	What happens when a newer build of Sheriff's image is published. always: the server downloads it in the background when it starts and uses it once it is there, so the newest rules apply. check: it only says that a newer one exists, once a session, and keeps using the one you have. never: it does not even ask Docker Hub, for working offline.
+SHERIFF_PROFILE	word		project	Rule profile	The rule profile the code is checked against, such as JAVA, JAVA_HEXAGONAL or TYPESCRIPT, over what the project declares; it applies only to the components written in that profile's language. Empty, the usual choice: the profile the project declares, or else the one its sources call for.
+SHERIFF_TIMEOUT	seconds	300	project	Analysis time limit	How long one Sheriff analysis may run before it is stopped. Raise it when big components stop on the time limit (900 is the default through WSL's Docker); lower it to learn sooner that an analysis hangs.
+SHERIFF_REPAIR_ROUNDS	count:1		project	Repair rounds	How many rounds of Sheriff's own automatic fixers a repair runs, each checked by a new analysis. Empty: rounds go on while each one repairs something, which always ends. A number makes repairs quicker but can leave more errors to fix by hand.
+## Hooks
+SHERIFF_FAIL_FAST	flag	0	project	Stop at the first error	Whether the hooks stop Sheriff at the first error. On: each check is quicker, but the assistant sees one error at a time. Off: every error is found and shown at once. Repairs always look for all of them.
+SHERIFF_GATE_TTL	seconds	900	project	Reuse a verdict for	How long the hooks trust a result Sheriff already gave for files that have not changed, before analyzing them again. Higher: fewer analyses and quicker edits. Lower: fresher results, with more analyses.
+SHERIFF_STOP_MAX_BLOCKS	count:1	5	project	Times a turn is sent back	How many times in a row the hook at the end of a turn sends the assistant back to work while errors remain, before it lets the turn end anyway. Higher: the assistant insists longer on finishing the work. Lower: you get control back sooner, possibly with errors left.
+SHERIFF_STOP_MAX_STALLS	count:0	1	project	Unchanged stops sent back	How many times in a row that hook still sends the assistant back when nothing changed since the last time. 0 lets the turn end at the first stop with no change, which a false positive of the checker that nothing can fix needs; higher values insist more.
+## Tests and coverage
+SHERIFF_PROTOTYPE	flag	0	project	Prototype mode	Prototype mode, for trying an idea out. On: a component counts as done once Sheriff finds no errors; no tests are asked for, run or measured, by the tools, the hooks or the repair loop. Off: tests and their coverage are required too. Turn it off before the work is kept.
+SHERIFF_STOP_RUNS_TESTS	flag	0	project	Require green tests to end a turn	Whether a turn may end only with the project's tests passing. On: the hook at the end of a turn runs the tests and measures how well they test what the turn changed, so a turn takes longer to end. Off: that hook checks only the standards.
+SHERIFF_TEST_TIMEOUT	seconds	600	project	Test time limit for the tools	How long the project's tests may run when the tools run them (sheriff_fix with verify) before they are stopped. Raise it for a slow test suite.
+VERIFICATION_TIMEOUT	seconds	300	project	Test time limit for the hooks and the loop	How long the project's tests may run in the hooks and in the repair loop (sheriff_autofix) before they are stopped. Raise it for a slow test suite.
+SHERIFF_COVERAGE	share	100	project	Lines covered	The share of the lines a change wrote that its tests must run (JaCoCo). Lower it to accept tests that leave some of those lines unrun. A pom.xml's sheriff.coverage, or coverage in a project's .sheriff.properties, wins over this.
+SHERIFF_BRANCHES	share	100	project	Branches covered	The share of the branches of the conditions a change wrote that its tests must take: both ways of every if. Lower it to accept tests that try only some outcomes. A pom.xml's sheriff.branches, or branches in a project's .sheriff.properties, wins over this.
+SHERIFF_MUTATION	share	80	project	Mutants killed	The share of PIT's mutants of the lines a change wrote that its tests must kill: small changes to the code that a good test notices and fails on. Higher asks for stronger tests; lower accepts tests that miss more. A pom.xml's sheriff.mutation, or mutation in a project's .sheriff.properties, wins over this.
+SHERIFF_MUTATORS	mutators	STRONGER,REMOVE_CONDITIONALS,EXPERIMENTAL_ARGUMENT_PROPAGATION	project	PIT mutators	Which kinds of mutants PIT makes: mutators or groups (DEFAULTS, STRONGER, ALL), separated by commas. More mutators ask for stronger tests and take longer; ALL makes many mutants that no test can kill. A pom.xml's sheriff.mutators, or mutators in a project's .sheriff.properties, wins over this.
+SHERIFF_COVERAGE_TIMEOUT	seconds	600	project	Coverage time limit	How long the tests may run while their coverage is measured, before the measure is stopped.
+SHERIFF_MUTATION_TIMEOUT	seconds	1800	project	Mutation testing time limit	How long PIT may run while it tries the mutants, before it is stopped. Mutation testing is the slowest measure: raise it for big changes.
+## Repair loop
+SHERIFF_MAX_ITERATIONS	count:1		project	Passes	How many passes the repair loop (sheriff_autofix) makes at most, each giving a model a batch of files to fix. Empty: sized from the errors, and grown while they drop. A number caps what one run can cost.
+SHERIFF_MAX_FILES_PER_BATCH	count:1	5	project	Files per pass	How many files the repair loop gives a model in one pass. Fewer: more focused answers, but more passes. More: fewer passes, but longer prompts, which a model can handle worse.
+SHERIFF_MAX_RULES_IN_PROMPT	count:1		project	Rules per prompt	How many of the profile's rules go into each prompt of the repair loop. Fewer: shorter and cheaper prompts, but the model knows less of the rules the code must meet. Empty: the loop's own limit.
+SHERIFF_AGENT_GIT_SAFETY	flag	1	user	Work on a branch of its own	Whether the repair loop works through git. On: it works on a branch of its own, commits each pass, and stops when a model edits a file outside its batch. Off: it edits your working tree directly, with no branch, commits or check.
+AI_BACKEND	choice:claude_cli,codex_cli,antigravity_cli,anthropic_api,openai_api,local	claude_cli	user	Who fixes the code	Who fixes the code in the repair loop. claude_cli, codex_cli and antigravity_cli use Claude Code, Codex or Antigravity with your login, with no key. anthropic_api and openai_api call those APIs, billed, with ANTHROPIC_API_KEY or OPENAI_API_KEY. local uses a model served on your machine, such as Ollama.
+SHERIFF_AGENT_CLAUDE_TIMEOUT	seconds	600	user	Claude Code time limit per pass	How long one pass of Claude Code may take in the repair loop before it is stopped (AI_BACKEND=claude_cli).
+CODEX_COMMAND	command	codex exec --sandbox workspace-write	user	Codex command	The command the repair loop runs Codex with, without the prompt (AI_BACKEND=codex_cli). Add --model to choose its model.
+SHERIFF_AGENT_CODEX_TIMEOUT	seconds	600	user	Codex time limit per pass	How long one pass of Codex may take in the repair loop before it is stopped (AI_BACKEND=codex_cli).
+ANTIGRAVITY_COMMAND	command	agy --mode accept-edits	user	Antigravity command	The command the repair loop runs Antigravity with, without the prompt (AI_BACKEND=antigravity_cli). Add --model and a name agy models lists to choose its model, such as --model claude-sonnet-5-5-high.
+SHERIFF_AGENT_ANTIGRAVITY_TIMEOUT	seconds	600	user	Antigravity time limit per pass	How long one pass of Antigravity may take in the repair loop before it is stopped (AI_BACKEND=antigravity_cli).
+## Repair loop APIs
+ANTHROPIC_MODEL	word	claude-opus-5-5	user	Anthropic model	The Claude model anthropic_api asks. Its key is read only from the ANTHROPIC_API_KEY variable, never from a file.
+ANTHROPIC_BASE_URL	address		user	Anthropic endpoint	Where anthropic_api sends its requests, for a proxy or a gateway. Empty: Anthropic's own API.
+ANTHROPIC_MAX_TOKENS	count:1	16000	user	Anthropic tokens per answer	The most tokens one answer of anthropic_api may take. Too few cut a file off while it is being written; more cost more only when an answer needs them.
+ANTHROPIC_MAX_TOOL_ITERATIONS	count:1	20	user	Anthropic file operations per pass	How many times one pass of anthropic_api may read or write a file before it is cut. Higher lets a model do more in one pass, and spend more.
+OPENAI_MODEL	word		user	OpenAI-compatible model	The model openai_api or local asks. Empty: gpt-4o-mini for openai_api, qwen2.5-coder for local. The key is read only from the OPENAI_API_KEY variable, never from a file.
+OPENAI_BASE_URL	address		user	OpenAI-compatible endpoint	Where openai_api or local sends its requests, such as an LM Studio or vLLM server. Empty: https://api.openai.com/v1 for openai_api, Ollama's http://localhost:11434/v1 for local.
+OPENAI_MAX_TOKENS	count:1	8000	user	OpenAI-compatible tokens per answer	The most tokens one answer of openai_api or local may take. A model that thinks before it answers needs more; too few cut a file off while it is being written.
+OPENAI_MAX_TOOL_ITERATIONS	count:1	20	user	OpenAI-compatible file operations per pass	How many times one pass of openai_api or local may read or write a file before it is cut. Higher lets a model do more in one pass, and spend more.

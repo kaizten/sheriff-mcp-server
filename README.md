@@ -422,8 +422,8 @@ moves it. `mvn sheriff:fix` is bound
 to no phase, because it rewrites source; it analyzes again after repairing and
 fails if errors remain, one module at a time even in a parallel build. Both
 leave Sheriff's JSON in `target/sheriff/` and skip modules with no `src/`.
-Parameters: `sheriff.profile` (the project's declaration, else `JAVA`), `sheriff.image`, `sheriff.timeout`
-(the project's `SHERIFF_IMAGE` and `SHERIFF_TIMEOUT`, else `kaizten/sheriff:latest` and `300`),
+Parameters: `sheriff.profile` (the project's declaration, else `JAVA`), `sheriff.image` (`kaizten/sheriff:latest`),
+`sheriff.timeout` (the project's `SHERIFF_TIMEOUT`, else `300`),
 `sheriff.failOnError` (`true`), `sheriff.failOnRemaining` (`true`), `sheriff.skip`. The other settings come
 from the `.sheriff.properties` at the top of the build too, as the MCP server reads it; never from your own
 file, so a build does not depend on who runs it.
@@ -583,19 +583,22 @@ starts, commented out the same way; nothing already in it is touched. A project'
 `.sheriff.properties` can set the same names for everyone who opens it (all
 but who answers in the repair loop and how: `AI_BACKEND`, `SHERIFF_AGENT_*`,
 `CODEX_COMMAND`, `ANTIGRAVITY_COMMAND` and the APIs' `ANTHROPIC_*` and
-`OPENAI_*`, which a cloned project must not choose; and `SHERIFF_IMAGE` only as `kaizten/sheriff`,
-a tag or a digest of it, as a cloned project must not choose which image runs), and an environment variable of the same name wins over both
+`OPENAI_*`, which a cloned project must not choose), and an environment variable of the same name wins over both
 files.
 
 **The easiest way is a page in your browser**: `java -jar sheriff-mcp.jar
 --config-ui` opens it (the installers name the line), and so does asking the
 assistant for Sheriff's settings page (`sheriff_config` with `page`, which
-answers with its address). It lists every setting under its section, with what
-it does, the values it takes, the value in force and where that comes from, and
-changes one in your file or, with *This project's*, in the project's, refusing
-a value the tools could not use, as every other way does. It is served on
+answers with its address). Asked how to change the settings, the assistant also
+gets, in `sheriff_config`'s answer, the exact command that opens the page from a
+terminal on that machine. The page lists every setting by its name under its
+section, with what it does, what more or less of it changes, what each option
+means, the value in force and where that comes from. Changes are made in your
+settings or, with *This project*, in the project's file, and saved together;
+a value the tools could not use is refused there, with its reason, as every
+other way does. It is served on
 `127.0.0.1` only, under a random token no other page can guess, refuses a
-request whose `Host` or `Origin` is not that address, and closes with its Done
+request whose `Host` or `Origin` is not that address, and closes with its Close
 button, after 30 minutes unused, or with the session that opened it. Or ask the
 assistant: `sheriff_config` lists them and changes one. `java -jar
 sheriff-mcp.jar --config` prints the same list, and `--config NAME=VALUE` (with
@@ -605,6 +608,8 @@ ignored, so the next file or the default decides; the listing ends with what
 is wrong, and so does the tools' first answer of a session. The tools read the settings when a session starts, the
 hooks on every run. The names are those of the table below, which also holds
 the variables no file sets (`SHERIFF_REPO`, `SHERIFF_DOCKER`, the API keys).
+Sheriff's image is always `kaizten/sheriff:latest`, kept up to date as
+`SHERIFF_PULL` says: it is no setting.
 
 **A project built on an architecture says so once**, and every tool (the MCP
 server, the hooks, `--check` and the Maven plugin) reads it:
@@ -662,7 +667,6 @@ which no tool reports.
 | `TARGET_REPO` | from the working directory | The same, for the agent's CLI: the directory that holds the module |
 | `SHERIFF_COMPONENT` | the project, or its only component (the agent's CLI with `TARGET_REPO` set: `sheriff-mcp-java`) | Component when a call names none |
 | `SHERIFF_PROFILE` / `SHERIFF_TEST_TYPE` | declared, else from the sources / `JAVA` | Rule profile (server / agent), overriding the project's declaration for the components written in its language |
-| `SHERIFF_IMAGE` | `kaizten/sheriff:latest` | A digest (`kaizten/sheriff@sha256:...`, as `task.json` records it) keeps the rules from changing until you change it. A project's `.sheriff.properties` may set only `kaizten/sheriff`, a tag or a digest of it; another image, only your own file |
 | `SHERIFF_PULL` | `always` | `always` pulls a newer image when the server, `--check`, the agent or a Maven goal starts: newer means the digest Docker Hub publishes for the tag differs from the one the image here was pulled by, as Sheriff is only published as `latest`, with no versions. `check` only reports it, once per session; `never` does not even ask Docker Hub |
 | `SHERIFF_TIMEOUT` | `300` (`900` through WSL's Docker) | Seconds per run; the container is removed after. Through WSL (`SHERIFF_DOCKER=wsl`) the default is 900, and Codex is given 1800 s a call instead of 600: a `sheriff_fix` of PetClinic took 511 s there |
 | `SHERIFF_DOCKER` | unset | Windows only: `wsl` (or `wsl:<distro>`) runs every `docker` as `wsl.exe -e docker`, for the engine inside WSL with no Docker Desktop. `--docker-wsl` (`-DockerWsl`) sets it for the user and in each assistant's registration |

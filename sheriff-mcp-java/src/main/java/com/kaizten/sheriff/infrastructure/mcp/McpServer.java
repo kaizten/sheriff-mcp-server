@@ -61,12 +61,13 @@ public final class McpServer {
     private static final String CONFIG_FLAG = "--config";
     private static final String CONFIG_PAGE_FLAG = "--config-ui";
     private static final String PAGE_OPEN = "Sheriff's settings are at %s%nIt opens in your browser; if it does not, "
-            + "open that address on this machine. Press Done there, or Ctrl+C here, when you are finished; it closes "
+            + "open that address on this machine. Press Close there, or Ctrl+C here, when you are finished; it closes "
             + "by itself after %d minutes unused.%n";
     private static final String NO_PAGE = "The settings page could not be opened (%s); java -jar sheriff-mcp.jar "
             + "--config NAME=VALUE changes a setting too.%n";
     private static final String CHANGE_SETTINGS = "%n%nTo change one, edit that file, or run java -jar sheriff-mcp.jar "
-            + "--config NAME=VALUE (--project for this project only; an empty VALUE puts the default back).%n";
+            + "--config NAME=VALUE (--project for this project only; an empty VALUE puts the default back), or "
+            + "change them in a page in the browser with --config-ui.%n";
     private static final String PROJECT_FLAG = "--project";
     private static final String CHANGED_LINE = "%s%n";
     private static final String CONFIG_USAGE = "--config takes at most one NAME=VALUE; java -jar sheriff-mcp.jar "
