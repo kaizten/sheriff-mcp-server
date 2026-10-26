@@ -148,6 +148,11 @@ public final class SettingsPage implements AutoCloseable {
     private static final String OS_NAME = "os.name";
     private static final String MAC = "mac";
     private static final ObjectMapper JSON = new ObjectMapper();
+    private static final String TRANSLATIONS_FIELD = "translations";
+    private static final String SPANISH = "es";
+    private static final String SPANISH_RESOURCE = "/settings-page-es.tsv";
+    private static final List<SettingsTranslation> TRANSLATIONS = List.of(
+            SettingsTranslation.read(SPANISH, SPANISH_RESOURCE));
     private static final String OPEN_COMMAND = "%s -jar %s --config-ui";
     private static final String JAVA = "java";
     private static final String JAR_SUFFIX = ".jar";
@@ -531,7 +536,8 @@ public final class SettingsPage implements AutoCloseable {
             sections.computeIfAbsent(value.setting().section(), title -> new ArrayList<>()).add(entry(value));
         }
         List<Map<String, Object>> titled = new ArrayList<>();
-        sections.forEach((title, settings) -> titled.add(Map.of(TITLE_FIELD, title, SETTINGS_FIELD, settings)));
+        sections.forEach((title, settings) -> titled.add(Map.of(TITLE_FIELD, title, SETTINGS_FIELD, settings,
+                TRANSLATIONS_FIELD, sectionTranslations(title, TRANSLATIONS))));
         Map<String, Object> listing = new LinkedHashMap<>();
         listing.put(USER_FILE_FIELD, Settings.userFile(environment).map(Path::toString).orElse(NOTHING));
         listing.put(PROJECT_FILE_FIELD, Settings.projectFile(project).toString());
@@ -564,7 +570,58 @@ public final class SettingsPage implements AutoCloseable {
         entry.put(YOURS_FIELD, value.inUserFile());
         entry.put(IN_PROJECT_FIELD, value.inProjectFile());
         entry.put(ENVIRONMENT_FIELD, environment.getOrDefault(setting.name(), NOTHING).strip());
+        entry.put(TRANSLATIONS_FIELD, settingTranslations(setting, TRANSLATIONS));
         return entry;
+    }
+
+    /**
+     * A section's title in each language the page speaks besides the
+     * catalog's, where its translation has one.
+     *
+     * @param title the section's title in the catalog
+     * @param translations the languages to look in
+     * @return its title by language
+     */
+    static Map<String, String> sectionTranslations(String title, List<SettingsTranslation> translations) {
+        Map<String, String> titles = new LinkedHashMap<>();
+        for (SettingsTranslation translation : translations) {
+            String translated = translation.sections().get(title);
+            if (translated != null) {
+                titles.put(translation.language(), translated);
+            }
+        }
+        return titles;
+    }
+
+    /**
+     * A setting's name for people and what it does, in each language the
+     * page speaks besides the catalog's, where its translation has them.
+     *
+     * @param setting the setting
+     * @param translations the languages to look in
+     * @return both, by language
+     */
+    static Map<String, Map<String, String>> settingTranslations(Setting setting,
+            List<SettingsTranslation> translations) {
+        Map<String, Map<String, String>> words = new LinkedHashMap<>();
+        for (SettingsTranslation translation : translations) {
+            String label = translation.labels().get(setting.name());
+            String help = translation.helps().get(setting.name());
+            if (label != null && help != null) {
+                words.put(translation.language(), Map.of(LABEL_FIELD, label, HELP_FIELD, help));
+            }
+        }
+        return words;
+    }
+
+    /**
+     * The languages the page speaks besides the catalog's, each with its
+     * words.
+     *
+     * @return those translations
+     */
+    static List<SettingsTranslation> translations() {
+        return TRANSLATIONS;
     }
 
     /**

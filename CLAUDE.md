@@ -433,7 +433,9 @@ stays in `Setting` for when it comes back. `sheriff_config`
 source and changes one, checking the value first. `--config-ui`, and
 `sheriff_config` with `page`, serve the same as a page (`SettingsPage`, the
 catalog's `## Title` lines its sections and its fifth field each setting's
-name for people) through `Settings.change`, on
+name for people, in English and in Spanish from `settings-page-es.tsv`, which
+`SettingsTranslationTest` holds to the catalog's settings and sections) through
+`Settings.change`, on
 `127.0.0.1` under a random token, refusing a foreign `Host` or `Origin` and a
 change that is not JSON, as the files name where code is sent and which image
 runs; it is started from a daemon thread, as the JDK's `HttpServer` dispatcher

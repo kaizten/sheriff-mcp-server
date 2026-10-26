@@ -138,6 +138,9 @@ class SettingsPageTest {
         assertFalse(find(listing, "AI_BACKEND").path("projectMay").asBoolean());
         assertFalse(listing.toString().contains("\"SHERIFF_IMAGE\""), "Sheriff's image is no setting for now");
         assertEquals("Reuse a verdict for", ttl.path("label").asText());
+        assertEquals("Reutilizar un resultado durante", ttl.path("translations").path("es").path("label").asText());
+        assertTrue(ttl.path("translations").path("es").path("help").asText().startsWith("Cuánto tiempo se fían"));
+        assertEquals("Tests y cobertura", listing.path("sections").path(2).path("translations").path("es").asText());
         assertTrue(listing.path("problems").toString().contains("SHERIFF_NOPE is not a setting"));
     }
 
