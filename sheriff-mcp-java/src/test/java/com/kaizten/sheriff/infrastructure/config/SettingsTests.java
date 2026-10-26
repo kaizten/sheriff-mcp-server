@@ -343,10 +343,74 @@ class SettingsTests {
     }
 
     @Test
+    @DisplayName("every setting of the catalog is under a section, and every variable the repair loop reads for "
+            + "its backends is a setting a project cannot choose")
+    void everySettingHasASection() {
+        assertTrue(Settings.ALL.stream().noneMatch(setting -> setting.section().isEmpty()));
+        for (String name : List.of("ANTHROPIC_MODEL", "ANTHROPIC_BASE_URL", "ANTHROPIC_MAX_TOKENS",
+                "ANTHROPIC_MAX_TOOL_ITERATIONS", "OPENAI_MODEL", "OPENAI_BASE_URL", "OPENAI_MAX_TOKENS",
+                "OPENAI_MAX_TOOL_ITERATIONS", "CODEX_COMMAND", "ANTIGRAVITY_COMMAND", "SHERIFF_AGENT_GIT_SAFETY")) {
+            assertFalse(Settings.named(name).orElseThrow().project(), name);
+        }
+        assertTrue(Settings.named("SHERIFF_MAX_RULES_IN_PROMPT").orElseThrow().project());
+        assertTrue(Settings.named("ANTHROPIC_API_KEY").isEmpty(), "a key is never written into a file");
+        assertTrue(Settings.named("OPENAI_API_KEY").isEmpty(), "a key is never written into a file");
+    }
+
+    @Test
+    @DisplayName("the repair loop's backends are set from the user's file, and a cloned project's file sets none")
+    void theBackendsAreSetInTheUserFile() throws IOException {
+        user("ANTHROPIC_MODEL=claude-sonnet-5-5\nOPENAI_BASE_URL=http://localhost:1234/v1\n"
+                + "CODEX_COMMAND=codex exec --sandbox workspace-write --model o\nSHERIFF_AGENT_GIT_SAFETY=0\n");
+        Files.writeString(project.resolve(".sheriff.properties"), "ANTHROPIC_BASE_URL=https://elsewhere.example\n"
+                + "SHERIFF_MAX_RULES_IN_PROMPT=12\n");
+        Map<String, String> given = new java.util.HashMap<>(environment);
+        given.put("CLAUDE_PROJECT_DIR", project.toString());
+
+        Configuration configuration = new Configuration(given, folder);
+
+        assertEquals("claude-sonnet-5-5", configuration.apiModel());
+        assertEquals("http://localhost:1234/v1", configuration.openAiBaseUrl());
+        assertEquals(List.of("codex", "exec", "--sandbox", "workspace-write", "--model", "o"),
+                configuration.codexCommand());
+        assertFalse(configuration.loopSettings().useGitSafety());
+        assertEquals("", configuration.apiBaseUrl(), "a project does not choose where code is sent");
+        assertEquals(12, configuration.maxRulesInPrompt());
+        assertTrue(Settings.problems(environment, project).stream()
+                .anyMatch(problem -> problem.contains("ANTHROPIC_BASE_URL is ignored")));
+    }
+
+    @Test
+    @DisplayName("each setting's value says where it comes from and what each file sets it to")
+    void eachValueSaysWhereItComesFrom() throws IOException {
+        user("SHERIFF_GATE_TTL=60\nSHERIFF_TIMEOUT= 400 \n");
+        Files.writeString(project.resolve(".sheriff.properties"), "SHERIFF_GATE_TTL=30\nAI_BACKEND=local\n");
+        Map<String, String> given = Map.of("XDG_CONFIG_HOME", config.toString(), "APPDATA", config.toString(),
+                "SHERIFF_PULL", "never");
+
+        Map<String, SettingValue> values = new java.util.HashMap<>();
+        Settings.values(given, project).forEach(value -> values.put(value.setting().name(), value));
+
+        assertEquals(Settings.ALL.size(), values.size());
+        assertEquals(new SettingValue(Settings.named("SHERIFF_GATE_TTL").orElseThrow(), "30",
+                project.resolve(".sheriff.properties").toString(), "60", "30"), values.get("SHERIFF_GATE_TTL"));
+        assertEquals("400", values.get("SHERIFF_TIMEOUT").value());
+        assertEquals(userFile().toString(), values.get("SHERIFF_TIMEOUT").source());
+        assertEquals("never", values.get("SHERIFF_PULL").value());
+        assertEquals("the environment", values.get("SHERIFF_PULL").source());
+        assertEquals("claude_cli", values.get("AI_BACKEND").value(), "a project's file does not choose it");
+        assertEquals("local", values.get("AI_BACKEND").inProjectFile());
+        assertEquals("worked out", values.get("SHERIFF_PROFILE").value());
+        assertEquals("default", values.get("SHERIFF_PROFILE").source());
+    }
+
+    @Test
     @DisplayName("a catalog skips its blank lines and comments, and a missing one says which")
     void aCatalogIsReadLineByLine() {
         assertEquals(List.of("A_FLAG", "B_SECONDS"),
                 Settings.catalog("/settings-sample.tsv").stream().map(Setting::name).toList());
+        assertEquals(List.of("First part", "Second part"),
+                Settings.catalog("/settings-sample.tsv").stream().map(Setting::section).toList());
         IllegalStateException missing = assertThrows(IllegalStateException.class,
                 () -> Settings.catalog("/missing.tsv"));
         assertEquals("The settings catalog /missing.tsv is not in this jar.", missing.getMessage());

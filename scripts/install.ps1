@@ -514,6 +514,7 @@ if ($setUp.Count -gt 0) {
 # line that says what the install amounts to.
 Write-Host ""
 if ($setUp.Count -gt 0) {
+    Write-Host "Its settings, in a page in your browser: $javaCommand -jar `"$jar`" --config-ui"
     Write-Host "Sheriff is set up for $(Join-Names $setUp)."
 } elseif ($found.Count -eq 0) {
     Write-Host "No assistant was found (Claude Code, Codex or Antigravity), so Sheriff is installed only as"

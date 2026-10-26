@@ -181,7 +181,7 @@ class ConfigurationTests {
     @Test
     @DisplayName("the default model is the current one, not whatever was current when this was written")
     void apiDefaults() {
-        assertEquals("claude-opus-5", with(Map.of()).apiModel());
+        assertEquals("claude-opus-5-5", with(Map.of()).apiModel());
         assertEquals("", with(Map.of()).apiKey());
         assertEquals(16000L, with(Map.of()).apiMaxTokens());
         assertEquals("", with(Map.of()).apiBaseUrl());

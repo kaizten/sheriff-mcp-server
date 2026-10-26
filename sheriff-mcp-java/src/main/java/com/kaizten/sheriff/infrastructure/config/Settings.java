@@ -41,6 +41,7 @@ public final class Settings {
 
     private static final String CATALOG = "/settings.tsv";
     private static final String COMMENT_START = "#";
+    private static final String SECTION_START = "## ";
     private static final String LINE_BREAK = "\\R";
     private static final String NO_CATALOG = "The settings catalog %s is not in this jar.";
 
@@ -125,11 +126,12 @@ public final class Settings {
     }
 
     /**
-     * Reads a catalog of settings this jar carries: a line per setting, and
-     * blank lines and comments, which start with {@code #}, between them.
+     * Reads a catalog of settings this jar carries: a line per setting, a
+     * line {@code ## Title} before the settings of each section, and blank
+     * lines and comments, which start with {@code #}, between them.
      *
      * @param resource the catalog, as a resource of this jar
-     * @return every setting, in its order
+     * @return every setting, in its order, each with its section
      * @throws IllegalStateException when the catalog is missing or a line of
      *     it is not a setting
      */
@@ -139,10 +141,16 @@ public final class Settings {
             throw new IllegalStateException(String.format(NO_CATALOG, resource));
         }
         try (Scanner lines = new Scanner(input, StandardCharsets.UTF_8)) {
-            return lines.useDelimiter(LINE_BREAK).tokens()
-                    .filter(line -> !line.isBlank() && !line.startsWith(COMMENT_START))
-                    .map(Setting::parse)
-                    .toList();
+            List<Setting> settings = new ArrayList<>();
+            String section = NOTHING;
+            for (String line : lines.useDelimiter(LINE_BREAK).tokens().toList()) {
+                if (line.startsWith(SECTION_START)) {
+                    section = line.substring(SECTION_START.length()).strip();
+                } else if (!line.isBlank() && !line.startsWith(COMMENT_START)) {
+                    settings.add(Setting.parse(line).inSection(section));
+                }
+            }
+            return List.copyOf(settings);
         }
     }
 
@@ -353,19 +361,19 @@ public final class Settings {
     }
 
     /**
-     * Every setting with its value now and where that comes from.
+     * Every setting with its value now and where that comes from, and what
+     * each file sets it to.
      *
      * @param environment the environment the tools were started with
      * @param project the project's folder
-     * @return the report, a line per setting
+     * @return a value per setting, in the catalog's order
      */
-    public static String report(Map<String, String> environment, Path project) {
+    public static List<SettingValue> values(Map<String, String> environment, Path project) {
         Path projectFile = projectFile(project);
         Optional<Path> userFile = userFile(environment);
         Map<String, String> fromProject = read(projectFile);
         Map<String, String> fromUser = userFile.map(Settings::read).orElse(Map.of());
-        StringBuilder text = new StringBuilder(String.format(REPORT_HEADER, projectFile,
-                userFile.map(Path::toString).orElse(NO_USER_FILE)));
+        List<SettingValue> values = new ArrayList<>();
         for (Setting setting : ALL) {
             Optional<String> fromProjectFile = usableInProject(fromProject, setting);
             Optional<Map.Entry<String, String>> found = Optional.ofNullable(environment.get(setting.name()))
@@ -375,8 +383,27 @@ public final class Settings {
                     .or(() -> usable(fromUser, setting).map(value -> Map.entry(value,
                             userFile.map(Path::toString).orElse(SOURCE_DEFAULT))));
             String shownDefault = setting.defaultValue().isEmpty() ? WORKED_OUT : setting.defaultValue();
-            text.append(String.format(REPORT_LINE, setting.name(), found.map(Map.Entry::getKey).orElse(shownDefault),
-                    found.map(Map.Entry::getValue).orElse(SOURCE_DEFAULT), setting.help()));
+            values.add(new SettingValue(setting, found.map(Map.Entry::getKey).orElse(shownDefault),
+                    found.map(Map.Entry::getValue).orElse(SOURCE_DEFAULT),
+                    fromUser.getOrDefault(setting.name(), NOTHING).strip(),
+                    fromProject.getOrDefault(setting.name(), NOTHING).strip()));
+        }
+        return values;
+    }
+
+    /**
+     * Every setting with its value now and where that comes from.
+     *
+     * @param environment the environment the tools were started with
+     * @param project the project's folder
+     * @return the report, a line per setting
+     */
+    public static String report(Map<String, String> environment, Path project) {
+        StringBuilder text = new StringBuilder(String.format(REPORT_HEADER, projectFile(project),
+                userFile(environment).map(Path::toString).orElse(NO_USER_FILE)));
+        for (SettingValue value : values(environment, project)) {
+            text.append(String.format(REPORT_LINE, value.setting().name(), value.value(), value.source(),
+                    value.setting().help()));
         }
         List<String> problems = problems(environment, project);
         if (!problems.isEmpty()) {

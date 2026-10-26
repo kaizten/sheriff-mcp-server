@@ -20,9 +20,10 @@ import java.util.regex.Pattern;
  * @param projectImage the one image repository a project may set it to, a
  *     tag or a digest of it; empty when a project may set any value
  * @param help what it does, in a line
+ * @param section the part of the catalog it is listed under, empty for none
  */
 public record Setting(String name, String defaultValue, SettingKind kind, int minimum, List<String> choices,
-        boolean project, String projectImage, String help) {
+        boolean project, String projectImage, String help, String section) {
 
     private static final int NONE = 0;
     private static final int ONE = 1;
@@ -71,6 +72,14 @@ public record Setting(String name, String defaultValue, SettingKind kind, int mi
     private static final String WHITESPACE = "(?s).*[\\s\\\\].*";
     private static final String MUTATOR_NAMES = "[A-Z0-9_]+(,[A-Z0-9_]+)*";
     private static final Pattern MUTATOR_LIST = Pattern.compile(MUTATOR_NAMES);
+    private static final String LINE_BREAK_OR_BACKSLASH = "(?s).*[\\r\\n\\\\].*";
+    private static final String NOT_A_COMMAND = "%s takes a command on one line, with no backslashes (write a "
+            + "path with /), not '%s'.";
+    private static final String TAKES_COMMAND = "Takes a command on one line, its words separated by spaces, with no "
+            + "backslashes.";
+    private static final String WEB_ADDRESS = "https?://[^\\s\\\\]+";
+    private static final String NOT_AN_ADDRESS = "%s takes an address that starts with http:// or https://, not '%s'.";
+    private static final String TAKES_ADDRESS = "Takes an address that starts with http:// or https://.";
 
     /**
      * A setting as one line of the catalog writes it: its name, its kind
@@ -96,7 +105,17 @@ public record Setting(String name, String defaultValue, SettingKind kind, int mi
         String[] scope = fields[SCOPE_FIELD].split(SCOPE_SEPARATOR, SCOPE_PARTS);
         String image = scope.length == SCOPE_PARTS ? scope[DETAIL_PART] : NOTHING;
         return new Setting(fields[NAME_FIELD], fields[DEFAULT_FIELD], settingKind, least, choices,
-                PROJECT.equals(scope[NAME_PART]), image, fields[HELP_FIELD]);
+                PROJECT.equals(scope[NAME_PART]), image, fields[HELP_FIELD], NOTHING);
+    }
+
+    /**
+     * The same setting, listed under a part of the catalog.
+     *
+     * @param title the part's title
+     * @return that setting
+     */
+    Setting inSection(String title) {
+        return new Setting(name, defaultValue, kind, minimum, choices, project, projectImage, help, title);
     }
 
     /**
@@ -108,7 +127,7 @@ public record Setting(String name, String defaultValue, SettingKind kind, int mi
      * @return that setting
      */
     public Setting named(String otherName) {
-        return new Setting(otherName, defaultValue, kind, minimum, choices, project, projectImage, help);
+        return new Setting(otherName, defaultValue, kind, minimum, choices, project, projectImage, help, section);
     }
 
     /**
@@ -148,6 +167,10 @@ public record Setting(String name, String defaultValue, SettingKind kind, int mi
                     : Optional.empty();
             case MUTATORS -> MUTATOR_LIST.matcher(value.replace(SPACE, NOTHING)).matches() ? Optional.empty()
                     : Optional.of(String.format(NOT_MUTATORS, name, value));
+            case COMMAND -> value.matches(LINE_BREAK_OR_BACKSLASH)
+                    ? Optional.of(String.format(NOT_A_COMMAND, name, value)) : Optional.empty();
+            case ADDRESS -> value.matches(WEB_ADDRESS) ? Optional.empty()
+                    : Optional.of(String.format(NOT_AN_ADDRESS, name, value));
         };
     }
 
@@ -166,6 +189,8 @@ public record Setting(String name, String defaultValue, SettingKind kind, int mi
             case CHOICE -> String.format(TAKES_CHOICE, String.join(CHOICE_SEPARATOR, choices));
             case WORD -> TAKES_WORD;
             case MUTATORS -> TAKES_MUTATORS;
+            case COMMAND -> TAKES_COMMAND;
+            case ADDRESS -> TAKES_ADDRESS;
         };
         return values + TAKES_EMPTY;
     }

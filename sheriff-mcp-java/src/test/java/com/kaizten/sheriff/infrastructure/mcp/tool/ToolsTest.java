@@ -1120,6 +1120,80 @@ final class ToolsTest {
         assertTrue(tools.answersAtOnce("sheriff_config"), "it runs neither Sheriff nor the tests");
     }
 
+    @Test
+    @DisplayName("sheriff_config with page opens one settings page a session, answers with its address, and the "
+            + "page closes with the tools")
+    void sheriffConfigOpensThePage() throws Exception {
+        mavenComponent("app");
+        Map<String, String> environment = Map.of("SHERIFF_REPO", repository.toString(), "XDG_STATE_HOME",
+                state.toString(), "XDG_CONFIG_HOME", state.toString(), "APPDATA", state.toString());
+        Tools tools = new Tools(new McpConfig(environment), null, List::of);
+
+        String first = tools.call("sheriff_config", Map.of("page", true)).text();
+        String again = tools.call("sheriff_config", Map.of("page", "true")).text();
+        java.util.regex.Matcher address = java.util.regex.Pattern.compile("http://127\\.0\\.0\\.1:\\d+/[0-9a-f]+/")
+                .matcher(first);
+
+        assertTrue(address.find(), first);
+        assertTrue(again.contains(address.group()), "the same page, not a second one: " + again);
+        assertTrue(first.contains("Give the user this address"), first);
+        java.net.http.HttpClient http = java.net.http.HttpClient.newHttpClient();
+        java.net.URI before = java.net.URI.create(address.group() + "settings");
+        assertEquals(200, http.send(java.net.http.HttpRequest.newBuilder(before).build(),
+                java.net.http.HttpResponse.BodyHandlers.ofString()).statusCode());
+        assertEquals(200, http.send(java.net.http.HttpRequest.newBuilder(java.net.URI.create(address.group() + "close"))
+                .header("Content-Type", "application/json").POST(java.net.http.HttpRequest.BodyPublishers.ofString("{}"))
+                .build(), java.net.http.HttpResponse.BodyHandlers.ofString()).statusCode());
+        Thread.sleep(200);
+        String reopened = tools.call("sheriff_config", Map.of("page", true)).text();
+        assertFalse(reopened.contains(address.group()), "a page closed with Done is opened anew: " + reopened);
+        java.util.regex.Matcher second = java.util.regex.Pattern.compile("http://127\\.0\\.0\\.1:\\d+/[0-9a-f]+/")
+                .matcher(reopened);
+        assertTrue(second.find());
+        java.net.URI listing = java.net.URI.create(second.group() + "settings");
+        tools.close();
+        assertThrowsIo(() -> http.send(java.net.http.HttpRequest.newBuilder(listing).build(),
+                java.net.http.HttpResponse.BodyHandlers.ofString()));
+        assertTrue(tools.call("sheriff_config", Map.of()).text().startsWith("Settings, each from"),
+                "without page it lists them as before");
+    }
+
+    /**
+     * Checks that a request fails, as one to a page that is closed does.
+     *
+     * @param request the request
+     */
+    private static void assertThrowsIo(org.junit.jupiter.api.function.Executable request) {
+        org.junit.jupiter.api.Assertions.assertThrows(IOException.class, request);
+    }
+
+    @Test
+    @DisplayName("a settings page that cannot be opened is a failure of sheriff_config, saying why")
+    void sheriffConfigWithoutAPort() {
+        Map<String, String> environment = Map.of("SHERIFF_REPO", repository.toString(), "XDG_STATE_HOME",
+                state.toString());
+        ToolContext context = new ToolContext(new McpConfig(environment), null, null, null, null, null, null, null,
+                null, null, null, null);
+        SheriffConfigTool tool = new SheriffConfigTool(context, (given, project, idle) -> {
+            throw new IOException("no port");
+        });
+        java.io.UncheckedIOException refused = org.junit.jupiter.api.Assertions.assertThrows(
+                java.io.UncheckedIOException.class, () -> tool.definition().handler().handle(Map.of("page", true)));
+        assertEquals("no port", refused.getCause().getMessage());
+        tool.close();
+    }
+
+    @Test
+    @DisplayName("closing the tools with no settings page open closes nothing else")
+    void closingWithoutAPage() {
+        Map<String, String> environment = Map.of("SHERIFF_REPO", repository.toString(), "XDG_STATE_HOME",
+                state.toString());
+        Tools tools = new Tools(new McpConfig(environment), null, List::of);
+        tools.close();
+        tools.close();
+        assertTrue(tools.answersAtOnce("sheriff_config"));
+    }
+
     /**
      * A component of Java with no build tool, in a repository, whose source
      * changed since its first commit.

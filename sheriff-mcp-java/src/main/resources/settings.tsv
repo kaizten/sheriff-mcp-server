@@ -4,16 +4,21 @@
 # who may set it (project: a project's .sheriff.properties too; project:<image>:
 # a project's file too, but only to that image, a tag or a digest of it; user:
 # only the user's own file), and what it does, as sheriff_config and the user's
-# file say.
+# file say. A line "## Title" starts a section, which the settings page shows
+# the settings under it in.
+
+## Sheriff
 SHERIFF_IMAGE	word	kaizten/sheriff:latest	project:kaizten/sheriff	Sheriff's image. A digest, kaizten/sheriff@sha256:..., keeps one build, as Sheriff is published only as latest. A project's file may set only kaizten/sheriff; another image, only your own file.
 SHERIFF_PULL	choice:always,check,never	always	project	always pulls a newer image when the server starts, check only says one is published, never does not ask.
 SHERIFF_PROFILE	word		project	The rule profile, over the project's declaration, for the components written in its language. Empty: the declared one, else the one the sources call for.
 SHERIFF_TIMEOUT	seconds	300	project	Seconds one run of Sheriff gets (900 through WSL's Docker).
 SHERIFF_REPAIR_ROUNDS	count:1		project	Rounds of Sheriff's own fixers in a repair, each measured by a new analysis. Empty: until a round repairs nothing.
+## The hooks
 SHERIFF_FAIL_FAST	flag	0	project	1 makes the hooks stop Sheriff at the first error.
 SHERIFF_GATE_TTL	seconds	900	project	Seconds the hooks reuse a verdict before running Sheriff again.
 SHERIFF_STOP_MAX_BLOCKS	count:1	5	project	Times in a row the Stop hook sends a turn back while errors remain.
 SHERIFF_STOP_MAX_STALLS	count:0	1	project	Stops in a row with nothing changed that the Stop hook still sends back. 0 lets the first through, as a false positive needs.
+## Tests, and how well they test the change
 SHERIFF_PROTOTYPE	flag	0	project	1 is for trying an idea out: a component is done when Sheriff finds no errors, with no tests asked for, run or measured, by the tools, the Stop hook or the repair loop. Set it back to 0 before the work is kept.
 SHERIFF_STOP_RUNS_TESTS	flag	0	project	1 makes the Stop hook require green tests, and measure how well they test the turn's change.
 SHERIFF_TEST_TIMEOUT	seconds	600	project	Seconds the project's tests get when the MCP tools run them (sheriff_fix with verify); VERIFICATION_TIMEOUT is the hooks' and the repair loop's.
@@ -24,9 +29,23 @@ SHERIFF_MUTATION	share	80	project	Share of PIT's mutants of those lines its test
 SHERIFF_MUTATORS	mutators	STRONGER,REMOVE_CONDITIONALS,EXPERIMENTAL_ARGUMENT_PROPAGATION	project	PIT's mutators, or groups (DEFAULTS, STRONGER, ALL). A pom.xml's sheriff.mutators, or mutators in a project's .sheriff.properties, wins over the files.
 SHERIFF_COVERAGE_TIMEOUT	seconds	600	project	Seconds the tests get under JaCoCo.
 SHERIFF_MUTATION_TIMEOUT	seconds	1800	project	Seconds PIT gets.
+## The repair loop (sheriff_autofix)
 SHERIFF_MAX_ITERATIONS	count:1		project	Passes of the repair loop. Empty: sized from the errors, and grown while they drop.
 SHERIFF_MAX_FILES_PER_BATCH	count:1	5	project	Files the repair loop gives a model at once.
+SHERIFF_MAX_RULES_IN_PROMPT	count:1		project	Rules of a profile the repair loop puts in one prompt. Empty: the loop's own limit.
+SHERIFF_AGENT_GIT_SAFETY	flag	1	user	1 makes the repair loop work on a branch of its own, commit each pass and stop when a model edits a file outside its batch; 0 edits the working tree as it is, with none of that.
 AI_BACKEND	choice:claude_cli,codex_cli,antigravity_cli,anthropic_api,openai_api,local	claude_cli	user	Who answers in the repair loop.
 SHERIFF_AGENT_CLAUDE_TIMEOUT	seconds	600	user	Seconds one pass of claude gets in the repair loop (AI_BACKEND=claude_cli).
+CODEX_COMMAND	command	codex exec --sandbox workspace-write	user	The command that runs codex in the repair loop, without the prompt (AI_BACKEND=codex_cli).
 SHERIFF_AGENT_CODEX_TIMEOUT	seconds	600	user	Seconds one pass of codex gets in the repair loop (AI_BACKEND=codex_cli).
+ANTIGRAVITY_COMMAND	command	agy --mode accept-edits	user	The command that runs agy in the repair loop, without the prompt; --model claude-sonnet-5-5-high, from agy models, picks the model (AI_BACKEND=antigravity_cli).
 SHERIFF_AGENT_ANTIGRAVITY_TIMEOUT	seconds	600	user	Seconds one pass of agy gets in the repair loop (AI_BACKEND=antigravity_cli).
+## The API backends of the repair loop
+ANTHROPIC_MODEL	word	claude-opus-5-5	user	The model anthropic_api asks. Its key is read only from ANTHROPIC_API_KEY, never from a file.
+ANTHROPIC_BASE_URL	address		user	Where anthropic_api sends its requests. Empty: Anthropic's own API.
+ANTHROPIC_MAX_TOKENS	count:1	16000	user	The most tokens one answer of anthropic_api may take.
+ANTHROPIC_MAX_TOOL_ITERATIONS	count:1	20	user	Times one pass of anthropic_api may read or write a file before it is cut.
+OPENAI_MODEL	word		user	The model openai_api or local asks. Empty: gpt-4o-mini for openai_api, qwen2.5-coder for local. Its key is read only from OPENAI_API_KEY, never from a file.
+OPENAI_BASE_URL	address		user	Where openai_api or local sends its requests, such as an LM Studio or vLLM server. Empty: https://api.openai.com/v1 for openai_api, Ollama's http://localhost:11434/v1 for local.
+OPENAI_MAX_TOKENS	count:1	8000	user	The most tokens one answer of openai_api or local may take; a model that thinks before answering needs more.
+OPENAI_MAX_TOOL_ITERATIONS	count:1	20	user	Times one pass of openai_api or local may read or write a file before it is cut.

@@ -429,7 +429,15 @@ may set `SHERIFF_IMAGE` only to `kaizten/sheriff`, a tag or a digest of it
 (`project:<image>` in the catalog), as a cloned project choosing the image
 would choose what runs on the machine of whoever opens it. `sheriff_config`
 (and `--config`, `--config NAME=VALUE [--project]`) lists them with their
-source and changes one, checking the value first. A value in a file that its setting does not take, a name that is
+source and changes one, checking the value first. `--config-ui`, and
+`sheriff_config` with `page`, serve the same as a page (`SettingsPage`, the
+catalog's `## Title` lines its sections) through `Settings.change`, on
+`127.0.0.1` under a random token, refusing a foreign `Host` or `Origin` and a
+change that is not JSON, as the files name where code is sent and which image
+runs; it is started from a daemon thread, as the JDK's `HttpServer` dispatcher
+otherwise keeps the JVM alive after the session ends (measured), and closes
+with Done, after `SettingsPage.IDLE_LIMIT` unused, or with `Tools.close`. The
+API keys are never settings: a variable alone. A value in a file that its setting does not take, a name that is
 no setting, or a user's setting in a project's file is ignored and named
 (`Settings.problems`), by the listing and once a session by the tools'
 answers. The Maven plugin reads the `.sheriff.properties` at the top of its

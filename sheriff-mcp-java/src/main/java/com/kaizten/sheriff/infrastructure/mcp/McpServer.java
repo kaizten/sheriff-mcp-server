@@ -19,16 +19,19 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.PrintStream;
+import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.IntConsumer;
+import java.util.function.Predicate;
 
 /**
  * Entry point of the one jar: wires the configuration, the Sheriff runner and
@@ -56,6 +59,12 @@ public final class McpServer {
     private static final String HOOK_TURN_FLAG = "--hook-turn";
     private static final String CALL_FLAG = "--call";
     private static final String CONFIG_FLAG = "--config";
+    private static final String CONFIG_PAGE_FLAG = "--config-ui";
+    private static final String PAGE_OPEN = "Sheriff's settings are at %s%nIt opens in your browser; if it does not, "
+            + "open that address on this machine. Press Done there, or Ctrl+C here, when you are finished; it closes "
+            + "by itself after %d minutes unused.%n";
+    private static final String NO_PAGE = "The settings page could not be opened (%s); java -jar sheriff-mcp.jar "
+            + "--config NAME=VALUE changes a setting too.%n";
     private static final String CHANGE_SETTINGS = "%n%nTo change one, edit that file, or run java -jar sheriff-mcp.jar "
             + "--config NAME=VALUE (--project for this project only; an empty VALUE puts the default back).%n";
     private static final String PROJECT_FLAG = "--project";
@@ -91,8 +100,8 @@ public final class McpServer {
     private static final String UNKNOWN_OPTION = "Unknown option '%s': java -jar sheriff-mcp.jar --help lists them.%n";
     private static final int UNKNOWN_OPTION_EXIT = 2;
     private static final List<String> OWN_OPTIONS = List.of(TOOLS_FLAG, CHECK_FLAG, HELP_FLAG, SHORT_HELP_FLAG,
-            VERSION_FLAG, HOOK_GATE_FLAG, HOOK_STOP_FLAG, HOOK_TURN_FLAG, CALL_FLAG, CONFIG_FLAG, INSTRUCTIONS_FLAG,
-            PROJECT_FLAG, INSTALL_HOOKS_FLAG, UNINSTALL_HOOKS_FLAG, USER_SCOPE_FLAG, INSTALL_CODEX_FLAG, UNINSTALL_CODEX_FLAG,
+            VERSION_FLAG, HOOK_GATE_FLAG, HOOK_STOP_FLAG, HOOK_TURN_FLAG, CALL_FLAG, CONFIG_FLAG, CONFIG_PAGE_FLAG,
+            INSTRUCTIONS_FLAG, PROJECT_FLAG, INSTALL_HOOKS_FLAG, UNINSTALL_HOOKS_FLAG, USER_SCOPE_FLAG, INSTALL_CODEX_FLAG, UNINSTALL_CODEX_FLAG,
             INSTALL_ANTIGRAVITY_FLAG, UNINSTALL_ANTIGRAVITY_FLAG, FAIL_FAST_FLAG, NO_HOOKS_FLAG, PULL_ALWAYS_FLAG);
     private static final String JAVA_VARIABLE = "SHERIFF_JAVA";
     private static final String NOT_A_JAVA =
@@ -121,6 +130,10 @@ public final class McpServer {
                                                    project's .sheriff.properties; an empty VALUE puts the
                                                    default back. SHERIFF_PROTOTYPE=1 tries an idea out:
                                                    no tests asked for, run or measured
+              java -jar sheriff-mcp.jar --config-ui
+                                                   the same in a page in your browser: every setting
+                                                   under its section, what it takes, and a field to
+                                                   change it in your file or this project's
               java -jar sheriff-mcp.jar --install-hooks [--user]
                                                    guard this project with the two Claude Code
                                                    hooks, in .claude/settings.json, or with --user
@@ -432,7 +445,27 @@ public final class McpServer {
      * @return {@code true} when it answered, and nothing else is to run
      */
     static boolean answeredSettings(McpConfig config, List<String> options, PrintStream out, IntConsumer exit) {
+        return answeredSettings(config, options, out, exit, SettingsPage.browser());
+    }
+
+    /**
+     * Answers {@code --config} as {@link #settingsCommand} does, and
+     * {@code --config-ui} as {@link #settingsPage} does, showing the page
+     * with a given browser.
+     *
+     * @param config the configuration, with the environment it was given
+     * @param options the command line
+     * @param out where the answer goes
+     * @param exit what ends the process with a code
+     * @param browser what shows the page's address in the browser
+     * @return {@code true} when it answered, and nothing else is to run
+     */
+    static boolean answeredSettings(McpConfig config, List<String> options, PrintStream out, IntConsumer exit,
+            Predicate<URI> browser) {
         int code = settingsCommand(config, options, out, System.err);
+        if (code == NOT_SETTINGS && options.contains(CONFIG_PAGE_FLAG)) {
+            code = settingsPage(config, out, browser, SettingsPage.IDLE_LIMIT, SettingsPage::open);
+        }
         if (code != NOT_SETTINGS && code != CALL_ANSWERED) {
             exit.accept(code);
         }
@@ -479,6 +512,34 @@ public final class McpServer {
         } catch (IllegalArgumentException refused) {
             errors.printf(CONFIG_REFUSED, refused.getMessage());
             return CALL_FAILED;
+        }
+    }
+
+    /**
+     * Answers {@code --config-ui}: opens the settings page, shows it in the
+     * browser, and waits until it is closed.
+     *
+     * @param config the configuration, with the environment it was given
+     * @param out where the page's address goes
+     * @param browser what shows an address in the browser
+     * @param idleLimit how long the page waits unused before it closes
+     * @param opener what opens the page
+     * @return 0 once the page is closed, 2 when it could not be opened
+     */
+    static int settingsPage(McpConfig config, PrintStream out, Predicate<URI> browser, Duration idleLimit,
+            SettingsPageOpener opener) {
+        try (SettingsPage page = opener.open(config.givenEnvironment(), config.settingsProject(), idleLimit)) {
+            out.printf(PAGE_OPEN, page.address(), idleLimit.toMinutes());
+            out.flush();
+            browser.test(page.address());
+            page.awaitClosed();
+            return CALL_ANSWERED;
+        } catch (IOException exception) {
+            System.err.printf(NO_PAGE, exception.getMessage());
+            return CALL_FAILED;
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            return CALL_ANSWERED;
         }
     }
 

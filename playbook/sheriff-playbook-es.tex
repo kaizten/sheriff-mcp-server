@@ -271,13 +271,14 @@ Undo with: java -jar sheriff-mcp.jar --uninstall-antigravity
 Restart open agy sessions to pick it up.
 The MCP server starts: OK, it answers as sheriff.
 
+Its settings, in a page in your browser: "/usr/bin/java" -jar "/home/ana/.local/share/sheriff-agent/sheriff-mcp.jar" --config-ui
 Sheriff is set up for Claude Code, Codex and Antigravity.
 \end{answer}
 
 Dice qué Java usará, qué versión ha instalado y dónde y, para cada asistente, qué hooks ha
 activado, qué herramientas pueden ejecutarse sin pedir permiso y cómo deshacer
-cada cosa; después, que el servidor arranca, y en su última línea, qué
-asistentes ha configurado. Solo configura
+cada cosa; después, que el servidor arranca, cómo abrir la página de ajustes y, en su
+última línea, qué asistentes ha configurado. Solo configura
 los que la máquina ya tiene, y nunca instala ninguno: un asistente que no está
 recibe una línea que dice cómo configurarlo cuando lo esté. Como pide,
 \textbf{reinicia las sesiones de Claude Code y de Codex que tuvieras abiertas}.
@@ -891,9 +892,18 @@ ajustes, \code{~/.config/sheriff-mcp/}\allowbreak\code{sheriff.properties}
 en su valor por defecto y comentados, y encima de cada uno los valores que
 admite. Un ajuste que traiga una versión nueva se
 añade al final la próxima vez que arranque el servidor, igual; lo que hayas
-cambiado se queda como está. Hay tres formas de cambiar uno:
+cambiado se queda como está. Hay varias formas de cambiar uno:
 
 \begin{itemize}
+  \item \textbf{En una página del navegador}, la más cómoda:
+        \code{java -jar ~/.local/share/sheriff-agent/}\allowbreak\code{sheriff-mcp.jar --config-ui}
+        la abre, o pídesela al asistente: \ask{ábreme la página de ajustes de
+        Sheriff}. Muestra cada ajuste en su sección, qué hace, qué valores
+        admite, el que vale ahora y de dónde sale, y lo cambia en tu fichero o,
+        con \emph{This project's}, en el del proyecto, comprobándolo antes.
+        Solo responde en tu máquina, en una dirección que ninguna otra página
+        puede adivinar, y se cierra con \emph{Done}, tras 30 minutos sin usarla
+        o al terminar la sesión.
   \item \textbf{Pídeselo al asistente}, que llama a \code{sheriff_config}:
         \ask{fija la imagen de Sheriff en la que tengo ahora}, \ask{deja pasar
         una parada sin cambios}. Comprueba el valor antes de escribirlo.
@@ -914,6 +924,14 @@ ejecución. Para ver cada uno, su valor y de dónde sale:
 
 \begin{command}{bash}
 java -jar ~/.local/share/sheriff-agent/sheriff-mcp.jar --config
+\end{command}
+
+Lo que dice \code{--config-ui} al abrirla (copiado de una ejecución real):
+
+\begin{command}[basicstyle=\ttfamily\footnotesize]{respuesta}
+Sheriff's settings are at http://127.0.0.1:36275/60cbc3e9d38afa3a3fd5200bcddb6131a312d8220f53eb71/
+It opens in your browser; if it does not, open that address on this machine. Press Done
+there, or Ctrl+C here, when you are finished; it closes by itself after 30 minutes unused.
 \end{command}
 
 Lo que responde un cambio (copiado de una ejecución real):
@@ -1075,6 +1093,15 @@ del \code{pom.xml} (\code{sheriff.coverage}, \code{sheriff.branches},
   ficheros se le dan al modelo de cada vez. Menos ficheros, respuestas más
   centradas y más pasadas.}
 
+\setting{SHERIFF_MAX_RULES_IN_PROMPT}{vacío: el límite del bucle}{reglas, 1 o
+  más}{Cuántas reglas del perfil se ponen en cada prompt. Menos reglas, prompts
+  más cortos y más baratos.}
+
+\setting{SHERIFF_AGENT_GIT_SAFETY}{\code{1}}{\code{0} o \code{1}}{Con \code{1},
+  el bucle trabaja en su propia rama, hace un commit por pasada y se corta si el
+  modelo toca un fichero fuera de su lote. Con \code{0} edita el árbol tal cual,
+  sin nada de eso. Solo de tu fichero.}
+
 \setting{AI_BACKEND}{\code{claude_cli}}{\code{claude_cli}, \code{codex_cli},
   \code{antigravity_cli}, \code{anthropic_api}, \code{openai_api} o
   \code{local}}{Quién arregla el código en el bucle: Claude Code, Codex o
@@ -1087,16 +1114,61 @@ del \code{pom.xml} (\code{sheriff.coverage}, \code{sheriff.branches},
   puede tardar una pasada de \code{claude} en el bucle. También solo de tu
   fichero.}
 
+\setting{CODEX_COMMAND}{\code{codex exec --sandbox workspace-write}}{un
+  comando en una línea, sin barras invertidas}{Cómo se lanza \code{codex} en el
+  bucle, sin el prompt: por ejemplo, para añadirle \code{--model}. Solo de tu
+  fichero.}
+
 \setting{SHERIFF_AGENT_CODEX_TIMEOUT}{\code{600}}{segundos, 1 o más}{Lo mismo
   para \code{codex}. Solo de tu fichero.}
+
+\setting{ANTIGRAVITY_COMMAND}{\code{agy --mode accept-edits}}{un comando en una
+  línea, sin barras invertidas}{Cómo se lanza \code{agy} en el bucle, sin el
+  prompt; \code{--model claude-sonnet-5-5-high} (de \code{agy models}) elige el
+  modelo. Solo de tu fichero.}
 
 \setting{SHERIFF_AGENT_ANTIGRAVITY_TIMEOUT}{\code{600}}{segundos, 1 o más}{Lo
   mismo para \code{agy}. Solo de tu fichero.}
 
-\subsubsection*{Solo con variables de entorno} Dos cosas no van en ningún
+\subsubsection*{Las API del bucle} Solo con \code{AI_BACKEND} en
+\code{anthropic_api}, \code{openai_api} o \code{local}. Todas solo de tu
+fichero: un proyecto clonado no elige a dónde se manda tu código ni qué
+modelo pagas.
+
+\setting{ANTHROPIC_MODEL}{\code{claude-opus-5-5}}{un nombre de modelo, sin
+  espacios}{El modelo al que pregunta \code{anthropic_api}.}
+
+\setting{ANTHROPIC_BASE_URL}{vacío: la API de Anthropic}{una dirección
+  \code{http://} o \code{https://}}{A dónde manda sus peticiones
+  \code{anthropic_api}.}
+
+\setting{ANTHROPIC_MAX_TOKENS}{\code{16000}}{tokens, 1 o más}{Lo más que puede
+  ocupar una respuesta.}
+
+\setting{ANTHROPIC_MAX_TOOL_ITERATIONS}{\code{20}}{veces, 1 o más}{Cuántas
+  veces puede leer o escribir un fichero una pasada antes de cortarla.}
+
+\setting{OPENAI_MODEL}{vacío: \code{gpt-4o-mini} en \code{openai_api},
+  \code{qwen2.5-coder} en \code{local}}{un nombre de modelo, sin espacios}{El
+  modelo al que preguntan \code{openai_api} y \code{local}.}
+
+\setting{OPENAI_BASE_URL}{vacío: la API de OpenAI en \code{openai_api}, el
+  Ollama de \code{http://localhost:11434/v1} en \code{local}}{una dirección
+  \code{http://} o \code{https://}}{A dónde mandan sus peticiones: por
+  ejemplo, un servidor de LM Studio o vLLM.}
+
+\setting{OPENAI_MAX_TOKENS}{\code{8000}}{tokens, 1 o más}{Lo más que puede
+  ocupar una respuesta; un modelo que piensa antes de responder necesita más.}
+
+\setting{OPENAI_MAX_TOOL_ITERATIONS}{\code{20}}{veces, 1 o más}{Cuántas veces
+  puede leer o escribir un fichero una pasada antes de cortarla.}
+
+\subsubsection*{Solo con variables de entorno} Tres cosas no van en ningún
 fichero: \code{SHERIFF_DOCKER}, que en Windows usa el Docker de WSL (lo pone
-\code{--docker-wsl}), y \code{VERIFICATION_TEST_CMD}, el comando de tests si el
-que se deduce de tu herramienta de build no es el correcto.
+\code{--docker-wsl}); \code{VERIFICATION_TEST_CMD}, el comando de tests si el
+que se deduce de tu herramienta de build no es el correcto, y las claves de las
+API, \code{ANTHROPIC_API_KEY} y \code{OPENAI_API_KEY}, que nunca se escriben en
+un fichero.
 
 % ---------------------------------------------------------------------------
 \section{Codex}
@@ -1201,10 +1273,11 @@ AI_BACKEND=antigravity_cli java -jar ~/.local/share/sheriff-agent/sheriff-mcp.ja
 El bucle es el mismo que con Claude: una rama propia, primero las reparaciones
 automáticas de Sheriff, un commit por pasada y los tests del proyecto al final.
 \needspace{6\baselineskip}
-Para elegir el modelo (la lista sale de \code{agy models}):
+Para elegir el modelo (la lista sale de \code{agy models}), cambia
+\code{ANTIGRAVITY_COMMAND} en la página de ajustes o en la línea de comandos:
 
 \begin{command}{bash}
-export ANTIGRAVITY_COMMAND="agy --mode accept-edits --model claude-sonnet-5-5-high"
+java -jar ~/.local/share/sheriff-agent/sheriff-mcp.jar --config "ANTIGRAVITY_COMMAND=agy --mode accept-edits --model claude-sonnet-5-5-high"
 \end{command}
 
 En el bucle, Antigravity está acotado:
@@ -1456,6 +1529,7 @@ docker rmi kaizten/sheriff:latest
   \item \ask{revisa los estándares del módulo api}
   \item \ask{repara el componente entero con sheriff\_autofix}
   \item \ask{¿cómo va la tarea?}
+  \item \ask{ábreme la página de ajustes de Sheriff}
   \item \ask{\ldots{} sin tocar los errores que ya había}
 \end{itemize}
 
@@ -1495,6 +1569,7 @@ install.sh | bash\par}
 \textcolor{pbmuted}{J=\textasciitilde/.local/share/sheriff-agent/sheriff-mcp.jar}\\[3pt]
 java -jar \$J -{}-version\\
 java -jar \$J -{}-check\\
+java -jar \$J -{}-config-ui\\
 java -jar \$J -{}-call sheriff\_test\\
 java -jar \$J -{}-agent\\
 AI\_BACKEND=antigravity\_cli java -jar \$J -{}-agent\\
