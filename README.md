@@ -594,7 +594,9 @@ gets, in `sheriff_config`'s answer, the exact command that opens the page from a
 terminal on that machine. The page lists every setting by its name under its
 section, with what it does, what more or less of it changes, what each option
 means, the value in force and where that comes from. Changes are made in your
-settings or, with *This project*, in the project's file, and saved together;
+settings or, with *This project*, in the project's file, and saved together.
+It speaks English and Spanish: it opens in the browser's language and keeps the
+one you choose in its header;
 a value the tools could not use is refused there, with its reason, as every
 other way does. It is served on
 `127.0.0.1` only, under a random token no other page can guess, refuses a

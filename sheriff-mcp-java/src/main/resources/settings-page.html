@@ -27,7 +27,11 @@ body { margin: 0; background: var(--bg); color: var(--text);
 code, input, select { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace; }
 button { font: inherit; color: inherit; }
 .page { max-width: 1040px; margin: 0 auto; padding: 0 24px 120px; }
-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 32px 0 20px; }
+header { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 32px 0 20px; }
+header > div:first-child { flex: 1 1 320px; min-width: 0; }
+.actions { display: flex; flex: none; align-items: center; gap: 12px; }
+.tabs button[aria-pressed="true"] { background: var(--bg); color: var(--text); font-weight: 600;
+  box-shadow: 0 0 0 1px var(--line); }
 h1 { font-size: 20px; font-weight: 600; margin: 0; }
 .where { margin: 2px 0 0; color: var(--muted); font-size: 13px; word-break: break-all; }
 .button { height: 32px; padding: 0 14px; border-radius: 6px; border: 1px solid var(--line); background: var(--subtle);
@@ -95,7 +99,7 @@ input.invalid { border-color: var(--bad); }
 .savebar[hidden] { display: none; }
 .savebar .inner { max-width: 1040px; margin: 0 auto; padding: 12px 24px; display: flex; align-items: center; gap: 12px; }
 .savebar p { margin: 0 auto 0 0; color: var(--muted); }
-.toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); max-width: calc(100% - 32px);
+.toast { position: fixed; left: 50%; bottom: 80px; transform: translateX(-50%); max-width: calc(100% - 32px);
   background: var(--text); color: var(--bg); padding: 10px 16px; border-radius: 6px; font-size: 13px; }
 .toast[hidden] { display: none; }
 .closed { padding: 120px 0; text-align: center; color: var(--muted); }
@@ -113,38 +117,111 @@ input.invalid { border-color: var(--bad); }
 <div class="page" id="page">
   <header>
     <div>
-      <h1>Sheriff settings</h1>
+      <h1 data-text="title">Sheriff settings</h1>
       <p class="where" id="where"></p>
     </div>
-    <button type="button" class="button" id="close">Close</button>
+    <div class="actions">
+      <div class="tabs" role="group" data-label="language" aria-label="Language">
+        <button type="button" id="lang-en" lang="en" aria-pressed="true">English</button>
+        <button type="button" id="lang-es" lang="es" aria-pressed="false">Español</button>
+      </div>
+      <button type="button" class="button" id="close" data-text="close">Close</button>
+    </div>
   </header>
   <div class="scope">
-    <div class="tabs" role="tablist" aria-label="Where a change is saved">
-      <button type="button" role="tab" id="tab-user" aria-selected="true">Your settings</button>
-      <button type="button" role="tab" id="tab-project" aria-selected="false">This project</button>
+    <div class="tabs" role="tablist" data-label="scope" aria-label="Where a change is saved">
+      <button type="button" role="tab" id="tab-user" aria-selected="true" data-text="yours">Your settings</button>
+      <button type="button" role="tab" id="tab-project" aria-selected="false" data-text="project">This project</button>
     </div>
     <p id="scope-note"></p>
   </div>
   <div class="layout">
-    <nav aria-label="Sections">
-      <input type="search" id="filter" placeholder="Search" aria-label="Search settings" autocomplete="off">
+    <nav data-label="sections" aria-label="Sections">
+      <input type="search" id="filter" data-placeholder="search" data-label="searchLabel" placeholder="Search"
+        aria-label="Search settings" autocomplete="off">
       <div class="links" id="links"></div>
-      <p class="order">An environment variable wins over this project's file, which wins over yours.</p>
+      <p class="order" data-text="order">An environment variable wins over this project's file, which wins over yours.</p>
     </nav>
-    <main id="main"><p class="empty">Loading…</p></main>
+    <main id="main"><p class="empty" data-text="loading">Loading…</p></main>
   </div>
 </div>
 <div class="savebar" id="savebar" hidden>
   <div class="inner">
     <p id="pending-count"></p>
-    <button type="button" class="button" id="discard">Discard</button>
-    <button type="button" class="button primary" id="save">Save changes</button>
+    <button type="button" class="button" id="discard" data-text="discard">Discard</button>
+    <button type="button" class="button primary" id="save" data-text="save">Save changes</button>
   </div>
 </div>
 <div class="toast" id="toast" role="status" hidden></div>
 <script>
 (function () {
   "use strict";
+  var WORDS = {
+    en: {
+      title: "Sheriff settings", close: "Close", language: "Language", yours: "Your settings", project: "This project",
+      scope: "Where a change is saved", sections: "Sections", search: "Search", searchLabel: "Search settings",
+      order: "An environment variable wins over this project's file, which wins over yours.", loading: "Loading…",
+      discard: "Discard", save: "Save changes", other: "Other", defaultChoice: "Default", on: "On", off: "Off",
+      theDefault: "the default", inEffect: "In effect: ", byDefault: " (default)", from: ", from ",
+      fromDefault: "default", fromEnvironment: "environment variable", fromProject: "this project",
+      fromYours: "your settings", seconds: "seconds", setHere: "Set here", unsaved: "Unsaved",
+      reset: "Reset to default", environmentNote: "The environment variable is set, so it wins over both files while it is.",
+      onlyYours: "Only in your settings.", projectImage: "This project may only set {0}, a tag or a digest of it.",
+      userScope: "For every project you open. Saved in ", projectScope: "For everyone who opens this project. Saved in ",
+      nowhere: "nowhere: no HOME, XDG_CONFIG_HOME or APPDATA",
+      sectionNote: "Some of these are only in your settings: a project that is cloned must not choose who fixes your "
+        + "code, what it runs or where it sends it, for whoever opens it.",
+      ignored: "Some settings in the files are ignored", noMatch: "No setting matches that search.",
+      pendingOne: "1 unsaved change", pendingMany: "{0} unsaved changes",
+      failedOne: "1 change was not saved: see the setting marked in red.",
+      failedMany: "{0} changes were not saved: see the settings marked in red.",
+      savedOne: "Saved. New sessions use it; the hooks, from their next run.",
+      savedMany: "Saved {0} changes. New sessions use them; the hooks, from their next run.",
+      discardOne: "Discard 1 unsaved change?", discardMany: "Discard {0} unsaved changes?",
+      closed: "The settings page is closed. You can close this tab.", answered: "The page answered {0}."
+    },
+    es: {
+      title: "Ajustes de Sheriff", close: "Cerrar", language: "Idioma", yours: "Tus ajustes", project: "Este proyecto",
+      scope: "Dónde se guarda un cambio", sections: "Secciones", search: "Buscar", searchLabel: "Buscar ajustes",
+      order: "Una variable de entorno gana al fichero de este proyecto, que gana al tuyo.", loading: "Cargando…",
+      discard: "Descartar", save: "Guardar cambios", other: "Otros", defaultChoice: "Por defecto", on: "Sí", off: "No",
+      theDefault: "el valor por defecto", inEffect: "En vigor: ", byDefault: " (por defecto)", from: ", de ",
+      fromDefault: "por defecto", fromEnvironment: "la variable de entorno", fromProject: "este proyecto",
+      fromYours: "tus ajustes", seconds: "segundos", setHere: "Cambiado aquí", unsaved: "Sin guardar",
+      reset: "Volver al valor por defecto",
+      environmentNote: "La variable de entorno está puesta, así que gana a los dos ficheros mientras lo esté.",
+      onlyYours: "Solo en tus ajustes.", projectImage: "Este proyecto solo puede poner {0}, una etiqueta o un digest suyo.",
+      userScope: "Para todos los proyectos que abras. Se guarda en ",
+      projectScope: "Para todos los que abran este proyecto. Se guarda en ",
+      nowhere: "ningún sitio: no hay HOME, XDG_CONFIG_HOME ni APPDATA",
+      sectionNote: "Algunos de estos solo están en tus ajustes: un proyecto clonado no debe elegir, por quien lo "
+        + "abra, quién arregla su código, qué ejecuta ni a dónde lo envía.",
+      ignored: "Algunos ajustes de los ficheros se ignoran", noMatch: "Ningún ajuste coincide con esa búsqueda.",
+      pendingOne: "1 cambio sin guardar", pendingMany: "{0} cambios sin guardar",
+      failedOne: "1 cambio no se ha guardado: mira el ajuste marcado en rojo.",
+      failedMany: "{0} cambios no se han guardado: mira los ajustes marcados en rojo.",
+      savedOne: "Guardado. Las sesiones nuevas lo usan; los hooks, desde su próxima ejecución.",
+      savedMany: "Guardados {0} cambios. Las sesiones nuevas los usan; los hooks, desde su próxima ejecución.",
+      discardOne: "¿Descartar 1 cambio sin guardar?", discardMany: "¿Descartar {0} cambios sin guardar?",
+      closed: "La página de ajustes está cerrada. Ya puedes cerrar esta pestaña.",
+      answered: "La página respondió {0}.",
+      refused: "No se admite «{0}»: {1}",
+      takes: {
+        seconds: "admite un número entero de segundos, 1 o más.",
+        count: "admite un número entero, {0} o más.",
+        share: "admite un porcentaje de 0 a 100, con o sin %.",
+        flag: "admite 0 o 1.",
+        choice: "admite {0}.",
+        word: "admite un valor sin espacios ni barras invertidas.",
+        mutators: "admite mutadores o grupos de PIT en mayúsculas, separados por comas.",
+        command: "admite un comando en una línea, sin barras invertidas (escribe las rutas con /).",
+        address: "admite una dirección que empiece por http:// o https://."
+      }
+    }
+  };
+  var LANGUAGES = ["en", "es"];
+  var STORED_LANGUAGE = "sheriff-settings-language";
+  var language = chosenLanguage();
   var data = null;
   var scope = "user";
   var pending = {};
@@ -152,7 +229,30 @@ input.invalid { border-color: var(--bad); }
   var rows = [];
   var toastTimer = null;
   var UNITS = { seconds: "seconds", share: "%" };
-  var SEGMENTED_MOST = 3;
+
+  function chosenLanguage() {
+    try {
+      var stored = window.localStorage.getItem(STORED_LANGUAGE);
+      if (LANGUAGES.indexOf(stored) >= 0) { return stored; }
+    } catch (error) {
+      stored = null;
+    }
+    var wanted = (navigator.languages || [navigator.language || "en"]).map(function (tag) {
+      return String(tag).slice(0, 2).toLowerCase();
+    });
+    for (var index = 0; index < wanted.length; index += 1) {
+      if (LANGUAGES.indexOf(wanted[index]) >= 0) { return wanted[index]; }
+    }
+    return "en";
+  }
+
+  function say(name) {
+    var text = WORDS[language][name];
+    var values = Array.prototype.slice.call(arguments, 1);
+    return text.replace(/\{(\d)\}/g, function (all, index) { return values[Number(index)]; });
+  }
+
+  function count(one, many, number) { return number === 1 ? say(one) : say(many, number); }
 
   function make(tag, className, text) {
     var node = document.createElement(tag);
@@ -169,10 +269,22 @@ input.invalid { border-color: var(--bad); }
     }
     return fetch(path, options).then(function (response) {
       return response.json().catch(function () { return {}; }).then(function (json) {
-        if (!response.ok) { throw new Error(json.error || "The page answered " + response.status + "."); }
+        if (!response.ok) { throw new Error(json.error || say("answered", response.status)); }
         return json;
       });
     });
+  }
+
+  function translated(item, field) {
+    var words = item.translations && item.translations[language];
+    if (typeof words === "string") { return words; }
+    return words && words[field] ? words[field] : item[field];
+  }
+  function labelOf(setting) { return translated(setting, "label"); }
+  function helpOf(setting) { return translated(setting, "help"); }
+  function titleOf(section) {
+    var title = section.translations && section.translations[language];
+    return title || section.title || say("other");
   }
 
   function key(name) { return scope + ":" + name; }
@@ -193,26 +305,35 @@ input.invalid { border-color: var(--bad); }
   }
 
   function choiceLabel(setting, value) {
-    if (setting.kind === "flag") { return value === "1" ? "On" : "Off"; }
+    if (setting.kind === "flag") { return value === "1" ? say("on") : say("off"); }
     return value;
   }
 
   function defaultLabel(setting) {
-    if (!setting["default"]) { return "Default"; }
-    return "Default (" + choiceLabel(setting, setting["default"]).toLowerCase() + ")";
+    if (!setting["default"]) { return say("defaultChoice"); }
+    return say("defaultChoice") + " (" + choiceLabel(setting, setting["default"]).toLowerCase() + ")";
   }
 
   function readable(setting, value) {
-    if (value === "worked out") { return "the default"; }
+    if (value === "worked out") { return say("theDefault"); }
     return setting.kind === "flag" ? choiceLabel(setting, value) : value;
   }
 
   function source(setting) {
-    if (setting.source === "default") { return "default"; }
-    if (setting.source === "the environment") { return "environment variable"; }
-    if (setting.source === data.projectFile) { return "this project"; }
-    if (setting.source === data.userFile) { return "your settings"; }
+    if (setting.source === "default") { return say("fromDefault"); }
+    if (setting.source === "the environment") { return say("fromEnvironment"); }
+    if (setting.source === data.projectFile) { return say("fromProject"); }
+    if (setting.source === data.userFile) { return say("fromYours"); }
     return setting.source;
+  }
+
+  function refusal(setting, error) {
+    var takes = WORDS[language].takes;
+    if (!takes || error.message.indexOf(setting.name + " takes ") !== 0 || !takes[setting.kind]) {
+      return error.message;
+    }
+    var detail = setting.kind === "count" ? String(setting.minimum) : setting.choices.join(", ");
+    return say("refused", error.value, takes[setting.kind].replace("{0}", detail));
   }
 
   function change(setting, value) {
@@ -225,10 +346,9 @@ input.invalid { border-color: var(--bad); }
   function segmented(setting, refresh) {
     var group = make("div", "segments");
     group.setAttribute("role", "group");
-    group.setAttribute("aria-label", setting.label);
-    var values = [""].concat(setting.kind === "flag" ? ["1", "0"] : setting.choices);
-    var buttons = values.map(function (value) {
-      var button = make("button", null, value === "" ? "Default" : choiceLabel(setting, value));
+    group.setAttribute("aria-label", labelOf(setting));
+    var buttons = ["", "1", "0"].map(function (value) {
+      var button = make("button", null, value === "" ? say("defaultChoice") : choiceLabel(setting, value));
       button.type = "button";
       button.title = value === "" ? defaultLabel(setting) : button.textContent;
       button.addEventListener("click", function () { change(setting, value); refresh(); });
@@ -285,14 +405,14 @@ input.invalid { border-color: var(--bad); }
     wrap.appendChild(input);
     if (UNITS[setting.kind]) {
       input.className = "with-unit";
-      wrap.appendChild(make("span", "unit", UNITS[setting.kind]));
+      wrap.appendChild(make("span", "unit", UNITS[setting.kind] === "%" ? "%" : say(UNITS[setting.kind])));
     }
     input.addEventListener("input", function () { change(setting, input.value.trim()); refresh(false); });
     return {
       node: wrap,
       update: function (rewrite) {
         if (rewrite !== false) { input.value = shown(setting); }
-        input.placeholder = setting.value === "worked out" ? "Default" : setting.value;
+        input.placeholder = setting.value === "worked out" ? say("defaultChoice") : setting.value;
         input.disabled = !allowed(setting);
         input.classList.toggle("invalid", Boolean(errors[key(setting.name)]));
       }
@@ -303,13 +423,13 @@ input.invalid { border-color: var(--bad); }
     var node = make("div", "row");
     var text = make("div");
     var title = make("div");
-    var label = make("label", null, setting.label);
+    var label = make("label", null, labelOf(setting));
     label.htmlFor = "setting-" + setting.name;
     var badge = make("span", "badge");
     title.appendChild(label);
     title.appendChild(badge);
     text.appendChild(title);
-    text.appendChild(make("p", "desc", setting.help));
+    text.appendChild(make("p", "desc", helpOf(setting)));
     var meta = make("p", "meta");
     text.appendChild(meta);
     var note = make("p", "note");
@@ -320,7 +440,7 @@ input.invalid { border-color: var(--bad); }
     var control = make("div", "control");
     var editor;
     function refresh(rewrite) { update(rewrite); }
-    if (setting.kind === "flag" || (setting.kind === "choice" && setting.choices.length <= SEGMENTED_MOST)) {
+    if (setting.kind === "flag") {
       editor = segmented(setting, refresh);
     } else if (setting.kind === "choice") {
       editor = dropdown(setting, refresh);
@@ -328,7 +448,7 @@ input.invalid { border-color: var(--bad); }
       editor = textField(setting, refresh);
     }
     control.appendChild(editor.node);
-    var reset = make("button", "reset", "Reset to default");
+    var reset = make("button", "reset", say("reset"));
     reset.type = "button";
     reset.addEventListener("click", function () { change(setting, ""); update(); });
     control.appendChild(reset);
@@ -341,26 +461,26 @@ input.invalid { border-color: var(--bad); }
       var set = inFile(setting) !== "";
       badge.hidden = !isPending && !set;
       badge.className = isPending ? "badge pending" : "badge";
-      badge.textContent = isPending ? "Unsaved" : "Set here";
+      badge.textContent = isPending ? say("unsaved") : say("setHere");
       meta.textContent = "";
       meta.appendChild(make("code", null, setting.name));
-      var effective = " · In effect: " + readable(setting, setting.value)
-        + (setting.source === "default" ? (setting.value === "worked out" ? "" : " (default)")
-          : ", from " + source(setting));
+      var effective = " · " + say("inEffect") + readable(setting, setting.value)
+        + (setting.source === "default" ? (setting.value === "worked out" ? "" : say("byDefault"))
+          : say("from") + source(setting));
       meta.appendChild(document.createTextNode(effective));
       note.className = "note";
       if (setting.environment) {
-        note.textContent = "The environment variable is set, so it wins over both files while it is.";
+        note.textContent = say("environmentNote");
       } else if (!allowed(setting)) {
         note.className = "note quiet";
-        note.textContent = "Only in your settings.";
+        note.textContent = say("onlyYours");
       } else if (scope === "project" && setting.projectImage) {
-        note.textContent = "This project may only set " + setting.projectImage + ", a tag or a digest of it.";
+        note.textContent = say("projectImage", setting.projectImage);
       } else {
         note.textContent = "";
       }
       note.hidden = note.textContent === "";
-      error.textContent = errors[id] || "";
+      error.textContent = errors[id] ? refusal(setting, errors[id]) : "";
       error.hidden = !errors[id];
       reset.hidden = !allowed(setting) || shown(setting) === "";
       editor.update(rewrite);
@@ -370,9 +490,9 @@ input.invalid { border-color: var(--bad); }
   }
 
   function refreshBar() {
-    var count = pendingCount();
-    document.getElementById("savebar").hidden = count === 0;
-    document.getElementById("pending-count").textContent = count === 1 ? "1 unsaved change" : count + " unsaved changes";
+    var number = pendingCount();
+    document.getElementById("savebar").hidden = number === 0;
+    document.getElementById("pending-count").textContent = count("pendingOne", "pendingMany", number);
   }
 
   function refreshScope() {
@@ -381,9 +501,8 @@ input.invalid { border-color: var(--bad); }
     var note = document.getElementById("scope-note");
     note.textContent = "";
     var file = scope === "user" ? data.userFile : data.projectFile;
-    note.appendChild(document.createTextNode(scope === "user"
-      ? "For every project you open. Saved in " : "For everyone who opens this project. Saved in "));
-    note.appendChild(make("code", null, file || "nowhere: no HOME, XDG_CONFIG_HOME or APPDATA"));
+    note.appendChild(document.createTextNode(scope === "user" ? say("userScope") : say("projectScope")));
+    note.appendChild(make("code", null, file || say("nowhere")));
     rows.forEach(function (entry) { entry.update(); });
     document.querySelectorAll(".section-note").forEach(function (sectionNote) {
       sectionNote.hidden = scope !== "project" || sectionNote.dataset.userOnly !== "true";
@@ -406,7 +525,7 @@ input.invalid { border-color: var(--bad); }
     document.querySelectorAll("section").forEach(function (section) {
       var visible = 0;
       rows.filter(function (entry) { return entry.node.parentNode === section; }).forEach(function (entry) {
-        var haystack = (entry.setting.label + " " + entry.setting.name + " " + entry.setting.help).toLowerCase();
+        var haystack = (labelOf(entry.setting) + " " + entry.setting.name + " " + helpOf(entry.setting)).toLowerCase();
         entry.node.hidden = words !== "" && haystack.indexOf(words) < 0;
         if (!entry.node.hidden) { visible += 1; }
       });
@@ -415,6 +534,32 @@ input.invalid { border-color: var(--bad); }
     });
     var none = document.getElementById("no-match");
     if (none) { none.hidden = any; }
+  }
+
+  function translatePage() {
+    document.documentElement.lang = language;
+    document.title = say("title");
+    document.querySelectorAll("[data-text]").forEach(function (node) { node.textContent = say(node.dataset.text); });
+    document.querySelectorAll("[data-label]").forEach(function (node) {
+      node.setAttribute("aria-label", say(node.dataset.label));
+    });
+    document.querySelectorAll("[data-placeholder]").forEach(function (node) {
+      node.placeholder = say(node.dataset.placeholder);
+    });
+    LANGUAGES.forEach(function (each) {
+      document.getElementById("lang-" + each).setAttribute("aria-pressed", String(each === language));
+    });
+  }
+
+  function choose(chosen) {
+    language = chosen;
+    try {
+      window.localStorage.setItem(STORED_LANGUAGE, chosen);
+    } catch (error) {
+      chosen = language;
+    }
+    translatePage();
+    if (data) { render(); }
   }
 
   function render() {
@@ -426,19 +571,22 @@ input.invalid { border-color: var(--bad); }
     rows = [];
     if (data.problems.length) {
       var notice = make("div", "notice");
-      notice.appendChild(make("strong", null, "Some settings in the files are ignored"));
+      notice.appendChild(make("strong", null, say("ignored")));
       var list = make("ul");
-      data.problems.forEach(function (problem) { list.appendChild(make("li", null, problem)); });
+      data.problems.forEach(function (problem) {
+        var item = make("li", null, problem);
+        item.lang = "en";
+        list.appendChild(item);
+      });
       notice.appendChild(list);
       main.appendChild(notice);
     }
     data.sections.forEach(function (section, index) {
       var block = make("section");
       block.id = "section-" + index;
-      block.appendChild(make("h2", null, section.title || "Other"));
+      block.appendChild(make("h2", null, titleOf(section)));
       var userOnly = section.settings.some(function (setting) { return !setting.projectMay; });
-      var sectionNote = make("p", "section-note", "Some of these are only in your settings: a project that is "
-        + "cloned must not choose who fixes your code, what it runs or where it sends it, for whoever opens it.");
+      var sectionNote = make("p", "section-note", say("sectionNote"));
       sectionNote.dataset.userOnly = String(userOnly);
       block.appendChild(sectionNote);
       section.settings.forEach(function (setting) {
@@ -447,13 +595,13 @@ input.invalid { border-color: var(--bad); }
         block.appendChild(entry.node);
       });
       main.appendChild(block);
-      var link = make("a", null, section.title || "Other");
+      var link = make("a", null, titleOf(section));
       link.href = "#section-" + index;
       link.dataset.index = String(index);
       link.appendChild(make("span"));
       links.appendChild(link);
     });
-    var none = make("p", "empty", "No setting matches that search.");
+    var none = make("p", "empty", say("noMatch"));
     none.id = "no-match";
     none.hidden = true;
     main.appendChild(none);
@@ -481,25 +629,25 @@ input.invalid { border-color: var(--bad); }
       var value = pending[id];
       chain = chain.then(function () {
         return call("POST", "settings", { name: parts[1], value: value, project: parts[0] === "project" })
-          .then(function () { saved += 1; }, function (error) { failed[id] = { value: value, error: error.message }; });
+          .then(function () { saved += 1; }, function (error) {
+            failed[id] = { value: value, message: error.message };
+          });
       });
     });
     chain.then(function () {
       pending = {};
       errors = {};
-      Object.keys(failed).forEach(function (id) { pending[id] = failed[id].value; errors[id] = failed[id].error; });
+      Object.keys(failed).forEach(function (id) { pending[id] = failed[id].value; errors[id] = failed[id]; });
       return load();
     }).then(function () {
       button.disabled = false;
       var failures = Object.keys(failed).length;
       if (failures) {
-        toast(failures === 1 ? "1 change was not saved: see the setting marked in red."
-          : failures + " changes were not saved: see the settings marked in red.");
+        toast(count("failedOne", "failedMany", failures));
         var first = document.getElementById("setting-" + Object.keys(failed)[0].split(":")[1]);
         if (first) { first.scrollIntoView({ block: "center" }); }
       } else {
-        toast(saved === 1 ? "Saved. New sessions use it; the hooks, from their next run."
-          : "Saved " + saved + " changes. New sessions use them; the hooks, from their next run.");
+        toast(count("savedOne", "savedMany", saved));
       }
     }).catch(function (error) {
       button.disabled = false;
@@ -515,18 +663,21 @@ input.invalid { border-color: var(--bad); }
   }
 
   function close() {
-    var count = pendingCount();
-    if (count && !window.confirm(count === 1 ? "Discard 1 unsaved change?" : "Discard " + count + " unsaved changes?")) {
+    var number = pendingCount();
+    if (number && !window.confirm(count("discardOne", "discardMany", number))) {
       return;
     }
     call("POST", "close", {}).catch(function () { return {}; }).then(function () {
       document.getElementById("savebar").hidden = true;
       var page = document.getElementById("page");
       page.textContent = "";
-      page.appendChild(make("p", "closed", "The settings page is closed. You can close this tab."));
+      page.appendChild(make("p", "closed", say("closed")));
     });
   }
 
+  LANGUAGES.forEach(function (each) {
+    document.getElementById("lang-" + each).addEventListener("click", function () { choose(each); });
+  });
   document.getElementById("tab-user").addEventListener("click", function () { scope = "user"; refreshScope(); });
   document.getElementById("tab-project").addEventListener("click", function () { scope = "project"; refreshScope(); });
   document.getElementById("filter").addEventListener("input", filter);
@@ -543,6 +694,7 @@ input.invalid { border-color: var(--bad); }
     if (pendingCount()) { event.preventDefault(); event.returnValue = ""; }
   });
 
+  translatePage();
   load().catch(function (error) {
     var main = document.getElementById("main");
     main.textContent = "";
