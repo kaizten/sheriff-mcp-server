@@ -43,8 +43,11 @@ jobs:
       - name: TeX
         if: steps.built.outputs.cache-hit != 'true'
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends $(scripts/playbook.sh --tex-packages)
+          # A mirror that stops answering is given up on and tried again, not waited on
+          # until the job runs out of time.
+          apt="-o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30"
+          sudo apt-get $apt update
+          sudo apt-get $apt install -y --no-install-recommends $(scripts/playbook.sh --tex-packages)
       - name: Spanish and English
         if: steps.built.outputs.cache-hit != 'true'
         run: scripts/playbook.sh
