@@ -286,6 +286,42 @@ final class McpServerTest {
     }
 
     @Test
+    @DisplayName("the server's tools look for a newer version of themselves as the settings say, and say so once")
+    void theServersToolsAnnounceUpdates() throws Exception {
+        Files.createDirectories(workspace.resolve("app/src"));
+        McpConfig config = new McpConfig(Map.of("XDG_CACHE_HOME", workspace.toString(), "XDG_STATE_HOME",
+                workspace.toString(), "SHERIFF_UPDATES", "notify", "SHERIFF_PULL", "never"), workspace.resolve("app"));
+        java.util.List<String> asked = new java.util.ArrayList<>();
+        ReleaseSource releases = new ReleaseSource() {
+            @Override
+            public Optional<String> latest() {
+                asked.add("latest");
+                return Optional.of("999.0.0");
+            }
+
+            @Override
+            public byte[] download(String version, String file) throws IOException {
+                throw new IOException("not here");
+            }
+        };
+        ProvisionedCatalog catalog = new ProvisionedCatalog(new java.util.concurrent.CompletableFuture<>(),
+                java.time.Duration.ofMillis(1));
+        try (com.kaizten.sheriff.infrastructure.mcp.tool.Tools tools = McpServer.serverTools(config, null, catalog,
+                com.kaizten.sheriff.infrastructure.docker.ImageProvisioning.alreadyReady(),
+                workspace.resolve("sheriff-mcp.jar"), releases)) {
+            for (int wait = 0; wait < 50 && asked.isEmpty(); wait++) {
+                Thread.sleep(100);
+            }
+            Thread.sleep(200);
+            String first = tools.call("sheriff_task", Map.of()).text();
+            String second = tools.call("sheriff_task", Map.of()).text();
+            assertEquals(java.util.List.of("latest"), asked, "it looked once, in the background");
+            assertTrue(first.contains("Sheriff tools 999.0.0 is published"), first);
+            assertFalse(second.contains("999.0.0"), second);
+        }
+    }
+
+    @Test
     @DisplayName("--config-ui with a page that closes by itself ends too, and an interrupted wait ends quietly")
     void theSettingsPageEndsWhenItClosesItself() {
         McpConfig config = new McpConfig(Map.of(), workspace);

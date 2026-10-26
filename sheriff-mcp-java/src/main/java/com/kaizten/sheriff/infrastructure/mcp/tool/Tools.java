@@ -77,6 +77,8 @@ public final class Tools implements AutoCloseable {
     private final McpConfig configuration;
     private final RuleCatalog catalog;
     private final AtomicBoolean noticeGiven = new AtomicBoolean();
+    private final AtomicBoolean updateNoticeGiven = new AtomicBoolean();
+    private volatile Supplier<Optional<String>> updates = Optional::empty;
     private final AtomicBoolean settingsNoticeGiven = new AtomicBoolean();
 
     /**
@@ -291,7 +293,7 @@ public final class Tools implements AutoCloseable {
         }
         try {
             return ToolOutcome.ok(NextStep.last(tool.handler().handle(safeArguments) + noticeOnce()
-                    + settingsNoticeOnce(name)));
+                    + updateNoticeOnce() + settingsNoticeOnce(name)));
         } catch (TaskFailure failure) {
             Task task = failure.task();
             return ToolOutcome.failure(NextStep.afterFailure(reasonFor((RuntimeException) failure.getCause())
@@ -354,6 +356,32 @@ public final class Tools implements AutoCloseable {
     private String noticeOnce() {
         Optional<String> notice = image.notice();
         if (notice.isEmpty() || !noticeGiven.compareAndSet(false, true)) {
+            return EMPTY;
+        }
+        return String.format(NOTICE_FORMAT, notice.get());
+    }
+
+    /**
+     * Has the answers say, once a session, what was found about a newer
+     * version of these tools.
+     *
+     * @param notice what to say, once there is something
+     * @return these tools
+     */
+    public Tools announcing(Supplier<Optional<String>> notice) {
+        this.updates = notice;
+        return this;
+    }
+
+    /**
+     * The note that a newer version of these tools is published, or that
+     * they updated themselves, the first time there is one to give.
+     *
+     * @return the note, on its own paragraph, or empty
+     */
+    private String updateNoticeOnce() {
+        Optional<String> notice = updates.get();
+        if (notice.isEmpty() || !updateNoticeGiven.compareAndSet(false, true)) {
             return EMPTY;
         }
         return String.format(NOTICE_FORMAT, notice.get());

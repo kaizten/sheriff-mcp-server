@@ -272,7 +272,7 @@ public final class McpServer {
         }
         ImageProvisioning image = imageFor(config, processes).inBackground();
         ProvisionedCatalog catalog = ProvisionedCatalog.forServer(config, processes, image.ready());
-        Tools tools = new Tools(config, runner, catalog, () -> pathOr(catalog, config), image);
+        Tools tools = serverTools(config, runner, catalog, image, ownJar(), new GitHubReleases(GitHubReleases.REPOSITORY));
         JsonRpcServer server = new JsonRpcServer(tools::definitions, tools::call, tools::answersAtOnce,
                 config.serverName(), instructions());
         Runtime.getRuntime().addShutdownHook(new Thread(tools::interruptUnfinished, SHUTDOWN_THREAD));
@@ -433,6 +433,24 @@ public final class McpServer {
     private static Path pathOr(ProvisionedCatalog catalog, McpConfig config) {
         Path found = catalog.path();
         return found == null ? config.rulesCatalog() : found;
+    }
+
+    /**
+     * The tools the server answers with, looking in the background for a
+     * newer version of themselves, which their answers then say once.
+     *
+     * @param config the server's configuration
+     * @param runner what runs Sheriff
+     * @param catalog the rules, provisioned
+     * @param image Sheriff's image, provisioned
+     * @param jar this jar
+     * @param releases where the releases of these tools are
+     * @return those tools
+     */
+    static Tools serverTools(McpConfig config, SheriffRunner runner, ProvisionedCatalog catalog,
+            ImageProvisioning image, Path jar, ReleaseSource releases) {
+        ServerUpdates updates = ServerUpdates.forServer(config, jar, releases).inBackground();
+        return new Tools(config, runner, catalog, () -> pathOr(catalog, config), image).announcing(updates::notice);
     }
 
     /**

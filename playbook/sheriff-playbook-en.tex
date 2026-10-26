@@ -959,6 +959,18 @@ code is updated. The image is always Kaizten's latest; it is no setting.
   and downloads nothing: for you to choose when. \code{never} does not even ask
   Docker Hub: for working with no network.}
 
+\subsubsection*{These tools} How you learn of a new version.
+
+\setting{SHERIFF_UPDATES}{\code{notify}}{\code{auto}, \code{notify} or
+  \code{never}}{What happens when a newer version of these tools is
+  published, looked for at most once a day when the server starts.
+  \code{notify}: the first answer of a session says so, and the assistant
+  gives you the command that updates them (the install line or, in a clone of
+  the repository, \code{git pull && scripts/install.sh}). \code{auto}: the
+  server downloads the new jar, checks it against its release's checksum and
+  puts it in place of the installed one; open sessions use it once
+  restarted. \code{never}: it does not look. From your file only.}
+
 \subsubsection*{The analysis} With which rules, and for how long.
 
 \setting{SHERIFF_PROFILE}{empty: the one the project declares or, with none,
@@ -1449,7 +1461,10 @@ runs a tool from the terminal with the same answer the server gives.}
 \label{sec:uninstall}
 
 \textbf{To update}, run the install line again: it downloads the latest release
-and writes the configuration again. Then restart the open sessions. On
+and writes the configuration again. You need not keep watch: the tools say
+when a new version is published, or update themselves with
+\code{SHERIFF_UPDATES=auto} (section~\ref{sec:settings}); the line is still
+needed when a version changes what the installer writes for the assistants. Then restart the open sessions. On
 Windows that is not optional: when a session had the server running, the
 installer warns \code{A Sheriff server was running from the jar this
 replaced}, and in that session Sheriff's tools fail until you restart it. Run it

@@ -635,6 +635,23 @@ tag. During that pull the image here is used and the answers say a newer
 one is coming; a pull that fails leaves it in use and says why.
 `SHERIFF_PULL=check` only reports it, `never` does not ask Docker Hub.
 
+**These tools look for their own updates too** (`ServerUpdates`,
+`SHERIFF_UPDATES`, from the user's file only): at most once a day
+(`latest-release.properties` in the user's cache), in the background from the
+server's start, through the public `releases/latest` redirect
+(`GitHubReleases`: no API, so no rate limit and no token, and never a
+prerelease). `notify`, the default, has the first answer of a session say so
+with the install line and `git pull && scripts/install.sh`; `auto` downloads
+the release's jar, checks it against its `.sha256`, and moves it over the
+installed one in one move, for the sessions that start after; `never` does not
+look. Only a jar outside a build's `target/` is replaced. On Linux a running
+server keeps answering after its jar is replaced that way, new classes
+included, and a new process starts the new jar (measured); on Windows, where a
+running server holds its jar, the move is refused and the answer says the
+update failed and how to run it. A jar alone does not redo what the installer
+writes for the assistants, so even an update made here names the install line.
+The one line no test runs is where `McpServer.main` starts it.
+
 The MCP server writes the protocol to the stream it claims at startup and
 points `System.out` at stderr: anything in the core that prints must never
 reach the JSON-RPC channel. `--agent` is dispatched before that, so the

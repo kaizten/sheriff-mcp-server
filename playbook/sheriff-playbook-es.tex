@@ -965,6 +965,18 @@ ajuste.
   hay una nueva, una vez por sesión, y no descarga nada: para decidir tú cuándo.
   \code{never} ni siquiera pregunta a Docker Hub: para trabajar sin red.}
 
+\subsubsection*{Estas herramientas} Cómo te enteras de una versión nueva.
+
+\setting{SHERIFF_UPDATES}{\code{notify}}{\code{auto}, \code{notify} o
+  \code{never}}{Qué pasa cuando se publica una versión nueva de estas
+  herramientas; se mira como mucho una vez al día, al arrancar el servidor.
+  \code{notify}: la primera respuesta de la sesión lo dice, y el asistente te
+  da el comando para actualizar (la línea de instalación o, en un clon del
+  repositorio, \code{git pull && scripts/install.sh}). \code{auto}: el servidor
+  descarga el jar nuevo, lo comprueba con el checksum de su release y lo pone
+  en lugar del instalado; las sesiones abiertas lo usan al reiniciarlas.
+  \code{never}: no mira. Solo de tu fichero.}
+
 \subsubsection*{El análisis} Con qué reglas y cuánto tiempo.
 
 \setting{SHERIFF_PROFILE}{vacío: el que declara el proyecto o, si no declara
@@ -1463,7 +1475,11 @@ herramienta desde la terminal con la misma respuesta que da el servidor.}
 \label{sec:desinstalar}
 
 \textbf{Para actualizar}, repite la línea de instalación: descarga la última
-versión y vuelve a escribir la configuración. Después, reinicia las sesiones
+versión y vuelve a escribir la configuración. No hace falta estar pendiente:
+las herramientas avisan solas cuando hay una versión nueva, o se actualizan
+solas con \code{SHERIFF_UPDATES=auto} (sección~\ref{sec:ajustes}); la línea
+sigue haciendo falta cuando una versión cambia lo que el instalador escribe
+para los asistentes. Después, reinicia las sesiones
 abiertas. En Windows no es opcional: si una sesión tenía el servidor en marcha,
 el instalador avisa con \code{A Sheriff server was running from the jar this
 replaced}, y en esa sesión las herramientas de Sheriff fallan hasta que la
