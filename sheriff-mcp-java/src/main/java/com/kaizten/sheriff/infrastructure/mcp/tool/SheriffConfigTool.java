@@ -32,7 +32,8 @@ final class SheriffConfigTool implements AutoCloseable {
             + "user's settings file (or the project's, with project true); with page true, opens a page on this "
             + "machine where the user sees and changes every setting, and answers with its address. Use it when the "
             + "user asks how Sheriff is configured, where its settings are, or to change how Sheriff or its hooks "
-            + "behave; page only when the user asks for a page or an interface to change them in.";
+            + "behave; page only when the user asks for a page or an interface to change them in. Its answers name "
+            + "the command that opens that page from a terminal.";
     private static final String TITLE = "Read or change Sheriff's settings";
     private static final ToolAnnotations ANNOTATIONS = ToolAnnotations.changingSettings(TITLE);
     private static final String SETTING_ARGUMENT = "setting";
@@ -47,13 +48,15 @@ final class SheriffConfigTool implements AutoCloseable {
     private static final String PAGE_HELP = "true to open the settings page in the user's browser on this machine "
             + "and answer with its address, instead of listing them.";
     private static final String PAGE_OPEN = "Sheriff's settings page is at %s%n%nGive the user this address to open "
-            + "in a browser on this machine. It lists every setting under its section, what it takes and where "
+            + "in a browser on this machine. It lists every setting under its section, what it does and where "
             + "its value comes from, and changes one in the user's file or the project's. It closes when the user "
-            + "presses Done, after %d minutes unused, or when this session ends. The tools take a change when the "
-            + "next session starts; the hooks, from their next run.";
+            + "presses Close, after %d minutes unused, or when this session ends. The tools take a change when the "
+            + "next session starts; the hooks, from their next run.%n%nTo open it again from a terminal on this "
+            + "machine: %s";
     private static final String YES = "true";
     private static final String HOW_TO_CHANGE = "%n%nTo change one, call %s with setting and value, and project "
-            + "true for this project only; an empty value puts the default back.";
+            + "true for this project only; an empty value puts the default back. To change them in a page in the "
+            + "browser, call %s with page true, or run this in a terminal on this machine:%n  %s";
     private static final String NO_VALUE = "Give the value to set %s to, or an empty one to put its default back.";
 
     private final ToolContext context;
@@ -103,12 +106,13 @@ final class SheriffConfigTool implements AutoCloseable {
      */
     private String handle(Map<String, Object> arguments) {
         if (YES.equalsIgnoreCase(ToolContext.textArgument(arguments, PAGE_ARGUMENT))) {
-            return String.format(PAGE_OPEN, openPage().address(), SettingsPage.IDLE_LIMIT.toMinutes());
+            return String.format(PAGE_OPEN, openPage().address(), SettingsPage.IDLE_LIMIT.toMinutes(),
+                    SettingsPage.openCommand());
         }
         String setting = ToolContext.textArgument(arguments, SETTING_ARGUMENT);
         if (setting.isEmpty()) {
             return Settings.report(context.config().givenEnvironment(), context.config().settingsProject())
-                    + String.format(HOW_TO_CHANGE, context.configTool());
+                    + String.format(HOW_TO_CHANGE, context.configTool(), context.configTool(), SettingsPage.openCommand());
         }
         if (!arguments.containsKey(VALUE_ARGUMENT)) {
             throw new IllegalArgumentException(String.format(NO_VALUE, setting));

@@ -1110,7 +1110,9 @@ final class ToolsTest {
         ToolOutcome refused = tools.call("sheriff_config", Map.of("setting", "SHERIFF_PULL", "value", "sometimes"));
 
         assertTrue(listing.contains("SHERIFF_STOP_MAX_STALLS = 1 (default)"), listing);
-        assertTrue(listing.endsWith("an empty value puts the default back."), listing);
+        assertTrue(listing.contains("an empty value puts the default back. To change them in a page in the browser, "
+                + "call sheriff_config with page true, or run this in a terminal on this machine:"), listing);
+        assertTrue(listing.endsWith(" --config-ui"), listing);
         assertFalse(changed.isError(), changed.text());
         assertTrue(Files.readString(state.resolve("sheriff-mcp/sheriff.properties"))
                 .contains("\nSHERIFF_STOP_MAX_STALLS=0\n"));
@@ -1137,6 +1139,8 @@ final class ToolsTest {
         assertTrue(address.find(), first);
         assertTrue(again.contains(address.group()), "the same page, not a second one: " + again);
         assertTrue(first.contains("Give the user this address"), first);
+        assertTrue(first.contains("To open it again from a terminal on this machine: "), first);
+        assertTrue(first.endsWith(" --config-ui"), first);
         java.net.http.HttpClient http = java.net.http.HttpClient.newHttpClient();
         java.net.URI before = java.net.URI.create(address.group() + "settings");
         assertEquals(200, http.send(java.net.http.HttpRequest.newBuilder(before).build(),
@@ -1146,7 +1150,7 @@ final class ToolsTest {
                 .build(), java.net.http.HttpResponse.BodyHandlers.ofString()).statusCode());
         Thread.sleep(200);
         String reopened = tools.call("sheriff_config", Map.of("page", true)).text();
-        assertFalse(reopened.contains(address.group()), "a page closed with Done is opened anew: " + reopened);
+        assertFalse(reopened.contains(address.group()), "a page closed with its button is opened anew: " + reopened);
         java.util.regex.Matcher second = java.util.regex.Pattern.compile("http://127\\.0\\.0\\.1:\\d+/[0-9a-f]+/")
                 .matcher(reopened);
         assertTrue(second.find());

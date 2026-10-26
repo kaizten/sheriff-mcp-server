@@ -20,6 +20,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -102,7 +103,7 @@ class SettingsPageTest {
         HttpResponse<String> served = get("");
 
         assertEquals(200, served.statusCode());
-        assertTrue(served.body().contains("<title>Sheriff's settings</title>"));
+        assertTrue(served.body().contains("<title>Sheriff settings</title>"));
         assertEquals("text/html; charset=utf-8", served.headers().firstValue("Content-Type").orElseThrow());
         assertEquals("no-store", served.headers().firstValue("Cache-Control").orElseThrow());
         assertEquals("DENY", served.headers().firstValue("X-Frame-Options").orElseThrow());
@@ -135,7 +136,8 @@ class SettingsPageTest {
         assertTrue(ttl.path("accepted").asText().startsWith("Takes a whole number of seconds"));
         assertEquals(1, find(listing, "SHERIFF_STOP_MAX_BLOCKS").path("minimum").asInt());
         assertFalse(find(listing, "AI_BACKEND").path("projectMay").asBoolean());
-        assertEquals("kaizten/sheriff", find(listing, "SHERIFF_IMAGE").path("projectImage").asText());
+        assertFalse(listing.toString().contains("\"SHERIFF_IMAGE\""), "Sheriff's image is no setting for now");
+        assertEquals("Reuse a verdict for", ttl.path("label").asText());
         assertTrue(listing.path("problems").toString().contains("SHERIFF_NOPE is not a setting"));
     }
 
@@ -237,7 +239,7 @@ class SettingsPageTest {
     }
 
     @Test
-    @DisplayName("Done closes the page, a second close does nothing, and its time limit unused closes it too")
+    @DisplayName("Close closes the page, a second close does nothing, and its time limit unused closes it too")
     void thePageCloses() throws Exception {
         assertEquals(200, post("close", AS_JSON, "{}").statusCode());
         page.awaitClosed();
@@ -286,6 +288,38 @@ class SettingsPageTest {
                 "Linux"));
         assertFalse(SettingsPage.started(List.of(folder.resolve("no-such-program").toString())));
         assertTrue(SettingsPage.browser() != null, "the real one is only built here: running it opens a browser");
+    }
+
+    @Test
+    @DisplayName("the command that opens the page names this jar and the Java running it, quoted for each system's "
+            + "shells, and the jar's usual name when the code is not in a jar")
+    void theCommandThatOpensThePage() {
+        Optional<Path> jar = Optional.of(Path.of("/opt/it's here/sheriff-mcp.jar"));
+        assertEquals("'/usr/bin/java' -jar '/opt/it'\\''s here/sheriff-mcp.jar' --config-ui",
+                SettingsPage.openCommand(jar, Optional.of("/usr/bin/java"), false));
+        assertEquals("java -jar '/opt/it'\\''s here/sheriff-mcp.jar' --config-ui",
+                SettingsPage.openCommand(jar, Optional.empty(), false));
+        assertEquals("'/j' -jar sheriff-mcp.jar --config-ui",
+                SettingsPage.openCommand(Optional.of(Path.of("/work/target/classes")), Optional.of("/j"), false));
+        assertEquals("java -jar sheriff-mcp.jar --config-ui", SettingsPage.openCommand(Optional.empty(),
+                Optional.empty(), false));
+        Path quoted = Path.of("/x/it's/sheriff-mcp.jar");
+        assertEquals("java -jar " + com.kaizten.sheriff.infrastructure.process.Platform.quotedForAnyWindowsShell(
+                quoted.toAbsolutePath().toString()) + " --config-ui",
+                SettingsPage.openCommand(Optional.of(quoted), Optional.of("/j"), true),
+                "on Windows java is named as it is, and the jar quoted as every Windows shell reads");
+        assertTrue(SettingsPage.openCommand().endsWith(" --config-ui"));
+    }
+
+    @Test
+    @DisplayName("the code's location is the file it names, and nothing when it names no file")
+    void theCodesLocation() throws Exception {
+        assertEquals(Optional.of(Path.of("/opt/sheriff-mcp.jar")),
+                SettingsPage.codeSource(new java.net.URL("file:/opt/sheriff-mcp.jar")));
+        assertEquals(Optional.empty(), SettingsPage.codeSource(new java.net.URL("http://example.com/x.jar")),
+                "a location that is no file");
+        assertEquals(Optional.empty(), SettingsPage.codeSource(new java.net.URL("file:/a b/x.jar")),
+                "a location that is not a URI");
     }
 
     @Test

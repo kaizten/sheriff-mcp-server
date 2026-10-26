@@ -897,10 +897,12 @@ There are several ways to change one:
         values it takes, the one in force and where that comes from, and
         changes it in your file or, with \emph{This project's}, in the
         project's, checking it first. It answers only on your machine, at an
-        address no other page can guess, and closes with \emph{Done}, after 30
-        minutes unused, or when the session ends.
+        address no other page can guess, and closes with \emph{Close}, after 30
+        minutes unused, or when the session ends. Asked how to change the
+        settings, the assistant also tells you the exact command that opens
+        the page from a terminal on your machine.
   \item \textbf{Ask the assistant}, which calls \code{sheriff_config}:
-        \ask{pin Sheriff's image to the build I have now}, \ask{let a stop with
+        \ask{turn prototype mode on}, \ask{let a stop with
         nothing changed through}. It checks the value before writing it.
   \item \textbf{From the command line}:
         \code{java -jar ~/.local/share/sheriff-agent/sheriff-mcp.jar --config SHERIFF_PROTOTYPE=1},
@@ -924,8 +926,8 @@ java -jar ~/.local/share/sheriff-agent/sheriff-mcp.jar --config
 What \code{--config-ui} says when it opens it (copied from a real run):
 
 \begin{command}[basicstyle=\ttfamily\footnotesize]{answer}
-Sheriff's settings are at http://127.0.0.1:36275/60cbc3e9d38afa3a3fd5200bcddb6131a312d8220f53eb71/
-It opens in your browser; if it does not, open that address on this machine. Press Done
+Sheriff's settings are at http://127.0.0.1:43785/5afd512762f9f2703c428d3b9ab525114a6dc983f731799c/
+It opens in your browser; if it does not, open that address on this machine. Press Close
 there, or Ctrl+C here, when you are finished; it closes by itself after 30 minutes unused.
 \end{command}
 
@@ -944,18 +946,8 @@ setting left empty is the same as one not set: its
 default applies. All of them are below, grouped by what they control; seconds
 and counts are whole numbers.
 
-\subsubsection*{Sheriff's image} Which build of Sheriff analyzes your code, and
-when it is updated.
-
-\setting{SHERIFF_IMAGE}{\code{kaizten/sheriff:latest}}{a Docker image, with no
-  spaces}{The image the analysis runs with. Kaizten publishes Sheriff only as
-  \code{latest}, with no versions, so every new build can bring new rules. To
-  keep the rules from changing (during a delivery, say), pin the one you have
-  by its digest, \code{kaizten/sheriff@sha256:...}: any task's \code{task.json}
-  records it, or ask the assistant. While it is pinned it is never updated.
-  A project's \code{.sheriff.properties} may only pin \code{kaizten/sheriff},
-  a tag or a digest of it: a cloned project does not choose which image runs
-  on your machine. Another image goes in your own file.}
+\subsubsection*{Sheriff's image} When the build of Sheriff that analyzes your
+code is updated. The image is always Kaizten's latest; it is no setting.
 
 \setting{SHERIFF_PULL}{\code{always}}{\code{always}, \code{check} or
   \code{never}}{What happens at start when Docker Hub has a newer build of the
@@ -1439,8 +1431,7 @@ takes a few seconds.}
 \faq{Do new rules arrive by themselves?}{Yes. Kaizten publishes Sheriff only
 as \code{latest}, with no versions, so each time it starts the server compares
 the digest Docker Hub publishes with that of your image, and pulls it when they
-differ. To be told instead, set \code{SHERIFF_PULL=check}; to keep one image,
-pin it with \code{SHERIFF_IMAGE}.}
+differ. To be told instead, set \code{SHERIFF_PULL=check}.}
 
 \faq{What if Docker is not running?}{There is no analysis. The tools say so,
 the assistant goes on with the work and runs the tests, and the hooks let you

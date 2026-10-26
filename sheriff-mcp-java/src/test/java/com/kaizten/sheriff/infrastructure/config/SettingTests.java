@@ -19,14 +19,16 @@ class SettingTests {
     @DisplayName("a line of the catalog gives the name, the kind with its minimum or choices, the default, who may "
             + "set it and its help")
     void aLineOfTheCatalogIsASetting() {
-        assertEquals(new Setting("A_COUNT", "5", SettingKind.COUNT, 3, List.of(), true, "", "Help.", ""),
+        assertEquals(new Setting("A_COUNT", "5", SettingKind.COUNT, 3, List.of(), true, "", "Help.", "", "A_COUNT"),
                 Setting.parse("A_COUNT\tcount:3\t5\tproject\tHelp."));
-        assertEquals(new Setting("A_CHOICE", "x", SettingKind.CHOICE, 0, List.of("x", "y"), false, "", "Pick.", ""),
+        assertEquals(new Setting("A_CHOICE", "x", SettingKind.CHOICE, 0, List.of("x", "y"), false, "", "Pick.", "", "A_CHOICE"),
                 Setting.parse("A_CHOICE\tchoice:x,y\tx\tuser\tPick."));
-        assertEquals(new Setting("A_WORD", "", SettingKind.WORD, 0, List.of(), true, "", "Worked out.", ""),
+        assertEquals(new Setting("A_WORD", "", SettingKind.WORD, 0, List.of(), true, "", "Worked out.", "", "A_WORD"),
                 Setting.parse("A_WORD\tword\t\tproject\tWorked out."));
-        assertEquals(new Setting("AN_IMAGE", "", SettingKind.WORD, 0, List.of(), true, "kaizten/sheriff", "Image.", ""),
+        assertEquals(new Setting("AN_IMAGE", "", SettingKind.WORD, 0, List.of(), true, "kaizten/sheriff", "Image.", "", "AN_IMAGE"),
                 Setting.parse("AN_IMAGE\tword\t\tproject:kaizten/sheriff\tImage."));
+        assertEquals(new Setting("A_FLAG", "0", SettingKind.FLAG, 0, List.of(), true, "", "On or off.", "",
+                "A switch"), Setting.parse("A_FLAG\tflag\t0\tproject\tA switch\tOn or off."));
     }
 
     @Test

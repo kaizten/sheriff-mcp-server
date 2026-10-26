@@ -154,8 +154,9 @@ class CheckMojoTests {
         }
 
         @Test
-        @DisplayName("left unset, the image and the timeout are the project's settings, read from the top of the "
-                + "build, and else Sheriff's own defaults; the command line wins over both")
+        @DisplayName("left unset, the timeout is the project's setting, read from the top of the build, and else "
+                + "Sheriff's own default, and the image is Sheriff's latest, as a project's file sets no image; the "
+                + "command line wins over both")
         void theImageAndTimeoutFollowTheProjectsSettings(@TempDir Path root) throws Exception {
             CheckMojo mojo = mojoAnswering(moduleWithSources(root), oneError());
             mojo.image = null;
@@ -168,7 +169,7 @@ class CheckMojoTests {
                     "SHERIFF_IMAGE=kaizten/sheriff@sha256:abc\nSHERIFF_TIMEOUT=120\nSHERIFF_REPAIR_ROUNDS=2\n");
             assertEquals(root, mojo.settingsProject());
             Map<String, String> environment = mojo.environment();
-            assertEquals("kaizten/sheriff@sha256:abc", environment.get("SHERIFF_IMAGE"));
+            assertEquals(null, environment.get("SHERIFF_IMAGE"), "a project's file does not choose the image");
             assertEquals("120", environment.get("SHERIFF_TIMEOUT"));
             assertEquals("2", environment.get("SHERIFF_REPAIR_ROUNDS"));
             mojo.image = "kaizten/sheriff:latest";

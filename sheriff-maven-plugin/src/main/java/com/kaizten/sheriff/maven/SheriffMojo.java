@@ -144,8 +144,7 @@ public abstract class SheriffMojo extends AbstractMojo {
     protected String profile;
 
     /**
-     * The Sheriff image to run; left unset, the project's
-     * {@code SHERIFF_IMAGE}, else {@code kaizten/sheriff:latest}.
+     * The Sheriff image to run; left unset, {@code kaizten/sheriff:latest}.
      */
     @Parameter(property = "sheriff.image")
     protected String image;
