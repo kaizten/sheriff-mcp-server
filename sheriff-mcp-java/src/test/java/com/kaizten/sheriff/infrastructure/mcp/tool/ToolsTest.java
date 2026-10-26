@@ -1188,6 +1188,27 @@ final class ToolsTest {
     }
 
     @Test
+    @DisplayName("what was found about a newer version of these tools is said once a session, on the first answer "
+            + "after it was found")
+    void aNewerVersionIsAnnouncedOnce() throws IOException {
+        mavenComponent("app");
+        Map<String, String> environment = Map.of("SHERIFF_REPO", repository.toString(), "XDG_STATE_HOME",
+                state.toString(), "XDG_CONFIG_HOME", state.toString(), "APPDATA", state.toString());
+        java.util.concurrent.atomic.AtomicReference<Optional<String>> found =
+                new java.util.concurrent.atomic.AtomicReference<>(Optional.empty());
+        Tools tools = new Tools(new McpConfig(environment), null, List::of).announcing(found::get);
+
+        String before = tools.call("sheriff_task", Map.of()).text();
+        found.set(Optional.of("Sheriff tools 9.9.9 is published; this is 0.1.8."));
+        String first = tools.call("sheriff_task", Map.of()).text();
+        String second = tools.call("sheriff_task", Map.of()).text();
+
+        assertFalse(before.contains("9.9.9"), before);
+        assertTrue(first.contains("\n\nSheriff tools 9.9.9 is published; this is 0.1.8."), first);
+        assertFalse(second.contains("9.9.9"), "once a session: " + second);
+    }
+
+    @Test
     @DisplayName("closing the tools with no settings page open closes nothing else")
     void closingWithoutAPage() {
         Map<String, String> environment = Map.of("SHERIFF_REPO", repository.toString(), "XDG_STATE_HOME",
