@@ -38,5 +38,15 @@ public enum SettingKind {
     /**
      * PIT's mutators, separated by commas.
      */
-    MUTATORS
+    MUTATORS,
+
+    /**
+     * A command line, its words separated by spaces.
+     */
+    COMMAND,
+
+    /**
+     * A web address, {@code http://} or {@code https://}.
+     */
+    ADDRESS
 }

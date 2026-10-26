@@ -258,7 +258,7 @@ in the answer.
 | `sheriff_guidelines` | The rules, before anything is broken, with the code Sheriff accepts | no |
 | `sheriff_autofix` | The agent's whole repair loop, on its own branch. Answers at once with a task id and runs in the background | yes |
 | `sheriff_task` | A task's command, state and result; without an id, the server's version, the build of Sheriff's image on this machine (the day it was built and its digest, as `latest` names whichever was pulled last), and the session's tasks | no |
-| `sheriff_config` | Without arguments, every setting below with its value and where it comes from; with `setting` and `value`, changes one in your settings file (or the project's, with `project` true), checking the value first | no |
+| `sheriff_config` | Without arguments, every setting below with its value and where it comes from; with `setting` and `value`, changes one in your settings file (or the project's, with `project` true), checking the value first; with `page` true, opens the settings page below and answers with its address | no |
 
 **A change is not finished until its tests test it.** In a Java component
 built with Maven, once it is clean, the step is `sheriff_fix` with `verify`:
@@ -581,13 +581,25 @@ a line and change its value. A setting a
 newer version brings is added at the end of the file when the server next
 starts, commented out the same way; nothing already in it is touched. A project's
 `.sheriff.properties` can set the same names for everyone who opens it (all
-but `AI_BACKEND` and the `SHERIFF_AGENT_*_TIMEOUT` of each assistant, which a
-cloned project must not choose; and `SHERIFF_IMAGE` only as `kaizten/sheriff`,
+but who answers in the repair loop and how: `AI_BACKEND`, `SHERIFF_AGENT_*`,
+`CODEX_COMMAND`, `ANTIGRAVITY_COMMAND` and the APIs' `ANTHROPIC_*` and
+`OPENAI_*`, which a cloned project must not choose; and `SHERIFF_IMAGE` only as `kaizten/sheriff`,
 a tag or a digest of it, as a cloned project must not choose which image runs), and an environment variable of the same name wins over both
-files. Or ask the assistant: `sheriff_config` lists them and changes one,
-refusing a value the tools could not use. `java -jar sheriff-mcp.jar --config`
-prints the same list, and `--config NAME=VALUE` (with `--project`, in the
-project's file) changes one the same way. A value written by hand into a file that its setting
+files.
+
+**The easiest way is a page in your browser**: `java -jar sheriff-mcp.jar
+--config-ui` opens it (the installers name the line), and so does asking the
+assistant for Sheriff's settings page (`sheriff_config` with `page`, which
+answers with its address). It lists every setting under its section, with what
+it does, the values it takes, the value in force and where that comes from, and
+changes one in your file or, with *This project's*, in the project's, refusing
+a value the tools could not use, as every other way does. It is served on
+`127.0.0.1` only, under a random token no other page can guess, refuses a
+request whose `Host` or `Origin` is not that address, and closes with its Done
+button, after 30 minutes unused, or with the session that opened it. Or ask the
+assistant: `sheriff_config` lists them and changes one. `java -jar
+sheriff-mcp.jar --config` prints the same list, and `--config NAME=VALUE` (with
+`--project`, in the project's file) changes one the same way. A value written by hand into a file that its setting
 does not take, a name that is no setting, or one a project may not set, is
 ignored, so the next file or the default decides; the listing ends with what
 is wrong, and so does the tools' first answer of a session. The tools read the settings when a session starts, the
@@ -672,6 +684,13 @@ which no tool reports.
 | `SHERIFF_FAIL_FAST` | unset | `1` makes the hooks run Sheriff with `--fail-fast`: it stops at the first error, so the check is quicker and reports one finding. Never used by the loop or `sheriff_fix`, which need all of them. The installers write it as an option of the hook command instead (`install.sh --fail-fast`) |
 | `VERIFICATION_TEST_CMD` | from the build tool | The project's test command |
 | `AI_BACKEND` | `claude_cli` | Who answers in the loop, below |
+| `SHERIFF_MAX_ITERATIONS`, `SHERIFF_MAX_FILES_PER_BATCH` | sized from the errors, `5` | The loop's passes, and the files a model is given at once |
+| `SHERIFF_MAX_RULES_IN_PROMPT` | the loop's own limit | Rules of the profile put in one prompt |
+| `SHERIFF_AGENT_GIT_SAFETY` | `1` | `0` lets the loop edit the working tree as it is: no branch of its own, no commit per pass, no stop when a model edits a file outside its batch. Your file only |
+| `CODEX_COMMAND`, `ANTIGRAVITY_COMMAND` | `codex exec --sandbox workspace-write`, `agy --mode accept-edits` | How the loop starts `codex` and `agy`, without the prompt (to add `--model`). Your file only |
+| `ANTHROPIC_MODEL`, `ANTHROPIC_BASE_URL`, `ANTHROPIC_MAX_TOKENS`, `ANTHROPIC_MAX_TOOL_ITERATIONS` | `claude-opus-5-5`, Anthropic's API, `16000`, `20` | `anthropic_api`'s model, endpoint, tokens per answer and file reads or writes per pass. Your file only, as a cloned project must not choose where code is sent |
+| `OPENAI_MODEL`, `OPENAI_BASE_URL`, `OPENAI_MAX_TOKENS`, `OPENAI_MAX_TOOL_ITERATIONS` | `gpt-4o-mini` / `qwen2.5-coder`, OpenAI's API / Ollama's `http://localhost:11434/v1`, `8000`, `20` | The same for `openai_api` / `local`. Your file only |
+| `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` | unset | The APIs' keys: environment variables only, never written into a file |
 
 | `AI_BACKEND` | Needs |
 |---|---|

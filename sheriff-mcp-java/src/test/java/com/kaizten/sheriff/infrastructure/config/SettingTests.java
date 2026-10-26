@@ -19,13 +19,13 @@ class SettingTests {
     @DisplayName("a line of the catalog gives the name, the kind with its minimum or choices, the default, who may "
             + "set it and its help")
     void aLineOfTheCatalogIsASetting() {
-        assertEquals(new Setting("A_COUNT", "5", SettingKind.COUNT, 3, List.of(), true, "", "Help."),
+        assertEquals(new Setting("A_COUNT", "5", SettingKind.COUNT, 3, List.of(), true, "", "Help.", ""),
                 Setting.parse("A_COUNT\tcount:3\t5\tproject\tHelp."));
-        assertEquals(new Setting("A_CHOICE", "x", SettingKind.CHOICE, 0, List.of("x", "y"), false, "", "Pick."),
+        assertEquals(new Setting("A_CHOICE", "x", SettingKind.CHOICE, 0, List.of("x", "y"), false, "", "Pick.", ""),
                 Setting.parse("A_CHOICE\tchoice:x,y\tx\tuser\tPick."));
-        assertEquals(new Setting("A_WORD", "", SettingKind.WORD, 0, List.of(), true, "", "Worked out."),
+        assertEquals(new Setting("A_WORD", "", SettingKind.WORD, 0, List.of(), true, "", "Worked out.", ""),
                 Setting.parse("A_WORD\tword\t\tproject\tWorked out."));
-        assertEquals(new Setting("AN_IMAGE", "", SettingKind.WORD, 0, List.of(), true, "kaizten/sheriff", "Image."),
+        assertEquals(new Setting("AN_IMAGE", "", SettingKind.WORD, 0, List.of(), true, "kaizten/sheriff", "Image.", ""),
                 Setting.parse("AN_IMAGE\tword\t\tproject:kaizten/sheriff\tImage."));
     }
 
@@ -47,6 +47,29 @@ class SettingTests {
         assertTrue(image.projectProblemWith("kaizten/sheriffs:latest").isPresent());
         assertTrue(image.projectProblemWith("evil/miner").isPresent());
         assertTrue(Setting.parse("A_WORD\tword\t\tproject\tAny.").projectProblemWith("evil/miner").isEmpty());
+    }
+
+    @Test
+    @DisplayName("a command takes spaces but no backslash nor line break; an address only http:// or https://")
+    void commandsAndAddresses() {
+        Setting command = Setting.parse("A_COMMAND\tcommand\tcodex exec\tuser\tCommand.");
+        Setting address = Setting.parse("AN_ADDRESS\taddress\t\tuser\tAddress.");
+        assertTrue(command.problemWith("agy --mode accept-edits --model x").isEmpty());
+        assertEquals("A_COMMAND takes a command on one line, with no backslashes (write a path with /), not "
+                + "'C:\\agy'.", command.problemWith("C:\\agy").orElseThrow());
+        assertTrue(command.problemWith("a\nb").isPresent());
+        assertTrue(address.problemWith("http://localhost:1234/v1").isEmpty());
+        assertTrue(address.problemWith("https://api.example.com").isEmpty());
+        assertEquals("AN_ADDRESS takes an address that starts with http:// or https://, not 'ftp://x'.",
+                address.problemWith("ftp://x").orElseThrow());
+        assertTrue(address.problemWith("https://a b").isPresent());
+        assertTrue(address.problemWith("").isEmpty(), "empty puts the default back");
+        assertEquals("Takes a command on one line, its words separated by spaces, with no backslashes. Empty puts "
+                + "the default back.", command.accepted());
+        assertEquals("Takes an address that starts with http:// or https://. Empty puts the default back.",
+                address.accepted());
+        assertEquals("Section", command.inSection("Section").section());
+        assertEquals("Section", command.inSection("Section").named("OTHER").section());
     }
 
     @Test

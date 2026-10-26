@@ -96,7 +96,7 @@ public final class Configuration {
     private static final String DEFAULT_IMAGE = "kaizten/sheriff:latest";
     private static final String DEFAULT_TEST_TYPE = "JAVA";
     private static final String DEFAULT_COMPONENT = "sheriff-mcp-java";
-    private static final String DEFAULT_MODEL = "claude-opus-5";
+    private static final String DEFAULT_MODEL = "claude-opus-5-5";
     private static final String DEFAULT_MARKER = "// SHERIFF: TODO";
     private static final String DEFAULT_VERIFICATION = "cd %s && mvn -q test";
     private static final String CATALOG_FILE = "rules_catalog.json";

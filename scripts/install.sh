@@ -660,6 +660,7 @@ main() {
   # line that says what the install amounts to.
   echo
   if (( ${#set_up[@]} > 0 )); then
+    echo "Its settings, in a page in your browser: \"$java_native\" -jar \"$jar_native\" --config-ui"
     echo "Sheriff is set up for $(join_names "${set_up[@]}")."
   elif (( ${#found[@]} == 0 )); then
     echo "No assistant was found (Claude Code, Codex or Antigravity), so Sheriff is installed only as"

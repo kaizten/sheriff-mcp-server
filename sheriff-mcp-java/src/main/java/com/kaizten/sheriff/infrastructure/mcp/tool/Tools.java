@@ -71,6 +71,7 @@ public final class Tools implements AutoCloseable {
     private final ImageProvisioning image;
     private final String taskTool;
     private final String configTool;
+    private final SheriffConfigTool settings;
     private final String testCall;
     private final String guidelinesTool;
     private final McpConfig configuration;
@@ -186,9 +187,10 @@ public final class Tools implements AutoCloseable {
                 new AnswerMemory(), new UntestedMethods(new SystemProcessRunner()), coverage, new StuckErrors(),
                 image::description);
         Map<String, Tool> definitions = new LinkedHashMap<>();
+        this.settings = new SheriffConfigTool(context);
         for (Tool tool : List.of(new SheriffTestTool(context).definition(), new SheriffFixTool(context).definition(),
                 new SheriffGuidelinesTool(context).definition(), new SheriffAutofixTool(context).definition(),
-                new SheriffTaskTool(context).definition(), new SheriffConfigTool(context).definition())) {
+                new SheriffTaskTool(context).definition(), settings.definition())) {
             definitions.put(tool.name(), tool);
         }
         this.byName = Collections.unmodifiableMap(definitions);
@@ -253,10 +255,12 @@ public final class Tools implements AutoCloseable {
     }
 
     /**
-     * Lets background tasks finish, for when the client has gone.
+     * Lets background tasks finish, for when the client has gone, and closes
+     * the settings page if one is open.
      */
     @Override
     public void close() {
+        settings.close();
         tasks.close();
     }
 

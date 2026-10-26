@@ -1,6 +1,8 @@
 # A sample catalog.
 
+## First part
 A_FLAG	flag	0	project	A switch.
 # between them
 
+##   Second part  
 B_SECONDS	seconds	10	user	Some seconds.
