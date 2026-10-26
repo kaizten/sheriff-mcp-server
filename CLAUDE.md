@@ -283,7 +283,11 @@ to be tried by hand.
     every report of a repair names them.
   - A fixer that *exits 0 having done nothing* says nothing. Only analyzing
     again catches it, so a repair is always followed by another analysis.
-    Never report a repair from the list of fixers that were run.
+    Never report a repair from the list of fixers that were run, nor from
+    `fix --report`'s JSON (image of 26 October, `sha256:7bbee950`): it
+    records `FolderNameUnderscore` as `fixed` with nothing changed, its
+    `remaining` is no analysis (209 against the 235 of one on PetClinic),
+    and `--dry-run` marks every finding `preview-only`, fixer or not.
   The image's jar fixers cannot run: Sheriff launches them without `-jar`,
   `BracesForStatements` is registered under a name its `pom.xml` does not
   produce, and `FolderNameUnderscore` is a stub that renames a hardcoded
@@ -710,12 +714,12 @@ the image as profiles. When writing code here:
   `maven-plugin-api` "outdated", whose version is the Maven the plugin requires, as
   maven-plugin-plugin writes it into the descriptor (3.10.0 refused Maven
   3.9). Its outdated-dependency rule asks the network, so a new release
-  anywhere can turn a module red with no change here. **That rule has a
-  fixer, and `sheriff_fix` on `sheriff-maven-plugin` runs it**: it writes
-  `maven.version` 3.10.0 and reformats the pom's XML declaration, its
-  `<project>` element and final newline. That is the one change of
-  `sheriff_fix`'s to undo here: put `sheriff-maven-plugin/pom.xml` back as
-  it was, or the plugin refuses Maven 3.9.
+  anywhere can turn a module red with no change here. The rule has no fixer
+  since the image of 26 October, so `sheriff_fix` leaves the plugin's
+  `pom.xml` alone (measured). An image whose fixer list (`fix -l`) gives
+  `JavaPomOutdatedDependency` one again would write `maven.version` 3.10.0:
+  that would be the one change of `sheriff_fix`'s to undo here, or the
+  plugin refuses Maven 3.9.
 - **JavaDoc is at least three lines** (`/**`, text, `*/`, each on its own
   line) on every method, constructor and field, with `@param` and `@return`.
   No hardcoded strings or numbers in a call, braces on every branch, imports
