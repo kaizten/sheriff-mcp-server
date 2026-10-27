@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.kaizten.sheriff.domain.BatchGrouping;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -66,6 +67,7 @@ class ConfigurationTests {
         assertEquals("sheriff-mcp-java", configuration.component());
         assertEquals("claude_cli", configuration.backend());
         assertEquals(5, configuration.loopSettings().maxFilesPerBatch());
+        assertEquals(BatchGrouping.FILE, configuration.loopSettings().grouping());
         assertTrue(configuration.loopSettings().useGitSafety());
         assertNull(configuration.loopSettings().maxIterations());
     }
@@ -105,12 +107,14 @@ class ConfigurationTests {
         Configuration configuration = with(Map.of(
                 "SHERIFF_MAX_ITERATIONS", "3",
                 "SHERIFF_MAX_FILES_PER_BATCH", "0",
+                "SHERIFF_BATCH_BY", "rule",
                 "SHERIFF_AGENT_GIT_SAFETY", "0",
                 "SHERIFF_TIMEOUT", "42",
                 "SHERIFF_MAX_RULES_IN_PROMPT", "10",
                 "ANTHROPIC_MAX_TOKENS", "1234"));
         assertEquals(3, configuration.loopSettings().maxIterations());
         assertEquals(0, configuration.loopSettings().maxFilesPerBatch());
+        assertEquals(BatchGrouping.RULE, configuration.loopSettings().grouping());
         assertFalse(configuration.loopSettings().useGitSafety());
         assertEquals(42, configuration.sheriffTimeout().toSeconds());
         assertEquals(10, configuration.maxRulesInPrompt());

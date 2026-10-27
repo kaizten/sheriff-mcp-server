@@ -3,6 +3,7 @@ package com.kaizten.sheriff.application.service;
 import com.kaizten.sheriff.application.PassMeter;
 import com.kaizten.sheriff.application.RunState;
 import com.kaizten.sheriff.application.usecase.FixCodeUntilClean;
+import com.kaizten.sheriff.domain.BatchGrouping;
 import com.kaizten.sheriff.domain.BatchPolicy;
 import com.kaizten.sheriff.domain.Rules;
 import com.kaizten.sheriff.domain.enumerate.StopReason;
@@ -27,6 +28,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.stream.Collectors;
 
 /**
  * Decides when to stop, retry, repair, or give up.
@@ -109,6 +111,7 @@ public final class FixLoop implements FixCodeUntilClean {
     private static final String AUTOMATIC_REPAIR_COMMIT_MESSAGE =
             "sheriff-agent: Sheriff's own fixers (no model involved)";
     private static final String BULLET = "- ";
+    private static final String RULE_NOTE = "%s in ";
     private static final String NEWLINE = "\n";
     private static final String COMMA = ", ";
     private static final String EMPTY = "";
@@ -317,7 +320,8 @@ public final class FixLoop implements FixCodeUntilClean {
             return verifyAndFinish(state);
         }
         if (state.maxIterations() == null) {
-            state.maxIterations(BatchPolicy.estimateMaxIterations(result.filesWithErrors().size(), settings.maxFilesPerBatch()));
+            state.maxIterations(BatchPolicy.estimateMaxIterations(result.errors(), settings.grouping(),
+                    settings.maxFilesPerBatch()));
             System.out.printf(
                     "  sizing the iteration cap to %d automatically, based on how many files have errors%n",
                     state.maxIterations());
@@ -328,10 +332,11 @@ public final class FixLoop implements FixCodeUntilClean {
                 return stalled;
             }
         } else if (state.hasHistory() && settings.maxIterations() == null) {
-            extendCap(state, result.filesWithErrors().size());
+            extendCap(state, result);
         }
         state.recordTotal(total);
-        List<SheriffFinding> batch = BatchPolicy.selectBatch(result.errors(), settings.maxFilesPerBatch(), state.parkedFiles());
+        List<SheriffFinding> batch = BatchPolicy.selectBatch(result.errors(), settings.grouping(),
+                settings.maxFilesPerBatch(), state.parkedFiles());
         if (batch.isEmpty()) {
             System.out.printf(
                     "%nNothing left to try: every file that still has errors (%d of them) was already "
@@ -354,7 +359,9 @@ public final class FixLoop implements FixCodeUntilClean {
      */
     private RunSummary runFixPass(RunState state, AnalysisResult result, List<SheriffFinding> batch, int total) {
         Set<String> allowedFiles = filesOf(batch);
-        state.lastBatchFiles(allowedFiles);
+        state.lastBatchFiles(batch.stream().filter(f -> !f.file().isEmpty())
+                .map(f -> BatchPolicy.parkingKey(f, settings.grouping()))
+                .collect(Collectors.toCollection(LinkedHashSet::new)));
         if (batch.size() < result.errors().size()) {
             reportBatching(state, result, batch, total, allowedFiles);
         }
@@ -428,11 +435,12 @@ public final class FixLoop implements FixCodeUntilClean {
      * files still with errors need more passes than are left.
      *
      * @param state the run so far
-     * @param filesWithErrors how many files still have errors
+     * @param result the analysis of the errors still there
      */
-    private void extendCap(RunState state, int filesWithErrors) {
+    private void extendCap(RunState state, AnalysisResult result) {
+        int filesWithErrors = result.filesWithErrors().size();
         int extended = BatchPolicy.extendedMaxIterations(state.maxIterations(), state.iteration() - 1,
-                filesWithErrors, settings.maxFilesPerBatch(), state.firstEstimate());
+                result.errors(), settings.grouping(), settings.maxFilesPerBatch(), state.firstEstimate());
         if (extended > state.maxIterations()) {
             System.out.printf("  extending the iteration cap to %d: the last pass lowered the errors, and %d file(s)"
                     + " still have them (at most %d, %d times the first estimate)%n", extended, filesWithErrors,
@@ -479,12 +487,15 @@ public final class FixLoop implements FixCodeUntilClean {
      */
     private void reportBatching(
             RunState state, AnalysisResult result, List<SheriffFinding> batch, int total, Set<String> allowedFiles) {
-        long parkedErrors = result.errors().stream().filter(f -> state.isParked(f.file())).count();
+        long parkedErrors = result.errors().stream()
+                .filter(f -> state.isParked(BatchPolicy.parkingKey(f, settings.grouping()))).count();
         long queued = total - batch.size() - parkedErrors;
         String parkedNote = parkedErrors == NO_ERRORS ? EMPTY : String.format(", %d error(s) parked", parkedErrors);
+        String rule = settings.grouping() == BatchGrouping.RULE ? String.format(RULE_NOTE, batch.get(0).referenceCode())
+                : EMPTY;
         System.out.printf(
-                "  batching: fixing %d file(s) this pass, %d error(s) left for later%s%n",
-                allowedFiles.size(), queued, parkedNote);
+                "  batching: fixing %s%d file(s) this pass, %d error(s) left for later%s%n",
+                rule, allowedFiles.size(), queued, parkedNote);
     }
 
     /**

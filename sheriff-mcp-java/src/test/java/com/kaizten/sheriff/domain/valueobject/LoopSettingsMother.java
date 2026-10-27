@@ -1,5 +1,6 @@
 package com.kaizten.sheriff.domain.valueobject;
 
+import com.kaizten.sheriff.domain.BatchGrouping;
 
 /**
  * Object Mother for LoopSettings.
@@ -29,7 +30,8 @@ final class LoopSettingsMother {
      * @return a LoopSettings equal to {@code value}
      */
     public static LoopSettings equalTo(LoopSettings value) {
-        return new LoopSettings(value.maxIterations(), value.useGitSafety(), value.maxFilesPerBatch());
+        return new LoopSettings(value.maxIterations(), value.useGitSafety(), value.maxFilesPerBatch(),
+                value.grouping());
     }
 
     /**

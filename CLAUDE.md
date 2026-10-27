@@ -859,9 +859,17 @@ line of `metrics-*.jsonl` beside the prompt logs with its time and its
 `TokenUsage`. Claude Code's comes from its JSON, at list price; Codex's from
 the events of `codex exec --json`, which `CodexCliFixer` adds, with its cached
 input taken out of its input so the two count alike. The API backends report
-none yet. `scripts/benchmark.sh` adds the lines of many runs up; a pass's
-tokens are shared among the rules it repaired by their errors, which is an
-approximation, and it says so.
+none yet. `scripts/benchmark.sh` adds the lines of many runs up, per backend
+and strategy; a pass's tokens are shared among the rules it repaired by their
+errors, which is an approximation, and it says so.
+
+**A pass's errors are grouped by file or by rule** (`BatchGrouping`,
+`SHERIFF_BATCH_BY`, `--batch-by`), as which costs less is a question for the
+benchmark, not a rule. By file, the default, a pass is every error of up to
+`SHERIFF_MAX_FILES_PER_BATCH` files. By rule it is the rule with the most
+errors, in up to that many of its files, and what a pass that lowered nothing
+parks is the rule in each file, not the file, so the file's other rules are
+still offered; the cap is counted per rule's batches of files.
 
 **The iteration cap grows while the passes make progress**, unless one was
 given (`--max-iterations`, `max_iterations` in `sheriff_autofix`). The first

@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.kaizten.sheriff.application.service.FixLoop;
+import com.kaizten.sheriff.domain.BatchGrouping;
 import com.kaizten.sheriff.domain.BatchPolicy;
 import com.kaizten.sheriff.domain.enumerate.StopReason;
 import com.kaizten.sheriff.domain.fake.FakeAnalyzer;
@@ -27,6 +28,9 @@ import com.kaizten.sheriff.domain.valueobject.SheriffFinding;
 import com.kaizten.sheriff.domain.valueobject.SheriffRule;
 import com.kaizten.sheriff.domain.valueobject.TokenUsage;
 import com.kaizten.sheriff.domain.valueobject.VerificationResult;
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -997,6 +1001,79 @@ class FixLoopTests {
             assertEquals(Map.of(), passes.get(0).errorsBefore());
             assertEquals(Map.of("R1", 1), passes.get(0).errorsAfter());
             assertEquals(USAGE, passes.get(0).usage());
+        }
+    }
+
+    @Nested
+    @DisplayName("a pass's errors grouped by rule")
+    class ByRule {
+
+        private SheriffFinding error(String file, String rule) {
+            return new SheriffFinding(file, rule + " broken", "fix " + rule, rule, SheriffFinding.ERROR, Map.of());
+        }
+
+        private AnalysisResult errors(SheriffFinding... findings) {
+            return AnalysisResult.of(List.of(findings));
+        }
+
+        private FixLoop byRule(FakeAnalyzer analyzer, FakeFixer fixer, Integer maxIterations, int batch) {
+            return new FixLoop(analyzer, fixer, new FakeVersionControl(), new FakeTestRunner(), RULES_CONTEXT,
+                    List.of(), new LoopSettings(maxIterations, false, batch, BatchGrouping.RULE));
+        }
+
+        @Test
+        @DisplayName("each pass is one rule's errors across its files, the biggest rule first")
+        void eachPassIsOneRule() {
+            FakeFixer fixer = new FakeFixer();
+            RunSummary summary = byRule(new FakeAnalyzer(List.of(
+                    errors(error("A.java", "R1"), error("A.java", "R2"), error("B.java", "R2")),
+                    errors(error("A.java", "R1")),
+                    FakeAnalyzer.result(0, "a.py"))), fixer, 8, 5).execute();
+            assertTrue(summary.ok());
+            assertEquals(List.of(List.of("A.java", "B.java"), List.of("A.java")),
+                    fixer.requests().stream().map(FixLoopTests::scopeOf).toList());
+            String first = fixer.requests().get(0).prompt();
+            assertTrue(first.contains("Errors to fix in this pass (2 total)"), first);
+            assertFalse(first.contains("R1 broken"), first);
+            assertTrue(fixer.requests().get(1).prompt().contains("R1 broken"));
+        }
+
+        @Test
+        @DisplayName("a rule no pass improved is parked in its file, and the file's other rules still get a pass")
+        void aStubbornRuleIsParkedInItsFile() {
+            FakeFixer fixer = new FakeFixer();
+            RunSummary summary = byRule(new FakeAnalyzer(List.of(
+                    errors(error("A.java", "R1"), error("A.java", "R2"), error("A.java", "R2")),
+                    errors(error("A.java", "R1"), error("A.java", "R2"), error("A.java", "R2")),
+                    errors(error("A.java", "R2"), error("A.java", "R2")))), fixer, 8, 5).execute();
+            assertEquals(StopReason.STALLED, summary.stoppedReason());
+            assertEquals(2, fixer.requests().size());
+            assertTrue(fixer.requests().get(1).prompt().contains("R1 broken"));
+            assertEquals(List.of("R2 in A.java"), summary.parkedFiles());
+        }
+
+        @Test
+        @DisplayName("with no cap given, the passes are counted per rule, and the batching line names the rule")
+        void theCapIsCountedPerRule() {
+            FakeFixer fixer = new FakeFixer();
+            ByteArrayOutputStream printed = new ByteArrayOutputStream();
+            PrintStream console = System.out;
+            System.setOut(new PrintStream(printed, true, StandardCharsets.UTF_8));
+            RunSummary summary;
+            try {
+                summary = byRule(new FakeAnalyzer(List.of(
+                        errors(error("A.java", "R1"), error("B.java", "R2"), error("C.java", "R3")),
+                        errors(error("B.java", "R2"), error("C.java", "R3")),
+                        errors(error("C.java", "R3")),
+                        FakeAnalyzer.result(0, "a.py"))), fixer, null, 0).execute();
+            } finally {
+                System.setOut(console);
+            }
+            assertTrue(summary.ok());
+            assertEquals(5, summary.maxIterations());
+            String output = printed.toString(StandardCharsets.UTF_8);
+            assertTrue(output.contains("batching: fixing R1 in 1 file(s) this pass, 2 error(s) left for later"),
+                    output);
         }
     }
 }

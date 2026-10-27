@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.kaizten.sheriff.domain.BatchGrouping;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import org.junit.jupiter.api.Test;
@@ -153,5 +154,14 @@ class LoopSettingsTests {
     void aCapOfNoIterationsIsRefused() {
         assertThrows(IllegalArgumentException.class, () -> new LoopSettings(0, true, 5));
         assertEquals(1, new LoopSettings(1, true, 5).maxIterations());
+    }
+
+    @Test
+    void aPassIsGroupedByFileUnlessSaidOtherwise() {
+        assertEquals(BatchGrouping.FILE, new LoopSettings(1, true, 5).grouping());
+        assertEquals(BatchGrouping.FILE, LoopSettings.defaults().grouping());
+        assertEquals(BatchGrouping.RULE, new LoopSettings(1, true, 5, BatchGrouping.RULE).grouping());
+        assertNotEquals(new LoopSettings(1, true, 5), new LoopSettings(1, true, 5, BatchGrouping.RULE));
+        assertThrows(IllegalArgumentException.class, () -> new LoopSettings(1, true, 5, null));
     }
 }

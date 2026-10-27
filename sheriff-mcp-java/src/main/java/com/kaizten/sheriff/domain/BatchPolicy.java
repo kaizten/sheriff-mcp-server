@@ -2,9 +2,13 @@ package com.kaizten.sheriff.domain;
 
 import com.kaizten.sheriff.domain.valueobject.SheriffFinding;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
+import java.util.stream.Collectors;
 
 /**
  * How much work one pass takes on, and how many passes a run is allowed.
@@ -31,6 +35,10 @@ public final class BatchPolicy {
     private static final int ITERATION_MARGIN = 2;
 
     private static final int NONE = 0;
+
+    private static final int ONE_PASS = 1;
+
+    private static final String RULE_IN_FILE = "%s in %s";
 
     /**
      * Never called: this class is a pair of pure functions and holds no state,
@@ -92,6 +100,138 @@ public final class BatchPolicy {
         }
         int needed = passesRun + estimateMaxIterations(filesWithErrors, maxFilesPerBatch);
         return Math.max(cap, Math.min(needed, firstEstimate * CEILING_FACTOR));
+    }
+
+    /**
+     * The cap when none was set, sized to the passes the grouping needs for
+     * these errors.
+     *
+     * <p>By file that is a pass per batch of files, as
+     * {@link #estimateMaxIterations(int, int)} counts it. By rule it is a pass
+     * per batch of each rule's files, and one per rule with no limit on the
+     * files.
+     *
+     * @param errors every error the analyzer reported
+     * @param grouping what the errors of one pass have in common
+     * @param maxFilesPerBatch how many files one pass covers
+     * @return the cap to use
+     */
+    public static int estimateMaxIterations(List<SheriffFinding> errors, BatchGrouping grouping, int maxFilesPerBatch) {
+        if (grouping == BatchGrouping.FILE) {
+            return estimateMaxIterations(filesOf(errors).size(), maxFilesPerBatch);
+        }
+        if (errors.isEmpty()) {
+            return FALLBACK_MAX_ITERATIONS;
+        }
+        int passesNeeded = NONE;
+        for (Set<String> files : filesByRule(errors).values()) {
+            passesNeeded += maxFilesPerBatch <= NONE ? ONE_PASS
+                    : (files.size() + maxFilesPerBatch - 1) / maxFilesPerBatch;
+        }
+        return passesNeeded + ITERATION_MARGIN;
+    }
+
+    /**
+     * The automatic cap after a pass that lowered the errors, as
+     * {@link #extendedMaxIterations(int, int, int, int, int)} grows it, with
+     * the passes still needed counted by the grouping.
+     *
+     * @param cap the cap in force
+     * @param passesRun the passes already run
+     * @param errors the errors still there
+     * @param grouping what the errors of one pass have in common
+     * @param maxFilesPerBatch how many files one pass covers
+     * @param firstEstimate the cap the first analysis gave
+     * @return the cap to use from now on
+     */
+    public static int extendedMaxIterations(int cap, int passesRun, List<SheriffFinding> errors,
+            BatchGrouping grouping, int maxFilesPerBatch, int firstEstimate) {
+        if (grouping == BatchGrouping.FILE) {
+            return extendedMaxIterations(cap, passesRun, filesOf(errors).size(), maxFilesPerBatch, firstEstimate);
+        }
+        if (errors.isEmpty()) {
+            return cap;
+        }
+        int needed = passesRun + estimateMaxIterations(errors, grouping, maxFilesPerBatch);
+        return Math.max(cap, Math.min(needed, firstEstimate * CEILING_FACTOR));
+    }
+
+    /**
+     * The errors of the next pass, grouped as asked, leaving out what an
+     * earlier pass could not improve.
+     *
+     * <p>By file it is {@link #selectBatch(List, int, Set)}. By rule it is the
+     * rule with the most errors not parked, the first by name among equals,
+     * in at most {@code maxFiles} of its files; what is parked is a rule in a
+     * file, so a file whose one rule a model could not fix is still offered
+     * for its others.
+     *
+     * @param errors every error the analyzer reported
+     * @param grouping what the errors of one pass have in common
+     * @param maxFiles the cap on files, zero or less for none
+     * @param parked what earlier passes could not improve, as
+     *     {@link #parkingKey(SheriffFinding, BatchGrouping)} names it
+     * @return the errors that make up this pass
+     */
+    public static List<SheriffFinding> selectBatch(
+            List<SheriffFinding> errors, BatchGrouping grouping, int maxFiles, Set<String> parked) {
+        if (grouping == BatchGrouping.FILE) {
+            return selectBatch(errors, maxFiles, parked);
+        }
+        List<SheriffFinding> candidates = errors.stream()
+                .filter(finding -> !parked.contains(parkingKey(finding, grouping))).toList();
+        Map<String, Long> perRule = candidates.stream()
+                .collect(Collectors.groupingBy(SheriffFinding::referenceCode, TreeMap::new, Collectors.counting()));
+        return perRule.entrySet().stream().max(Map.Entry.<String, Long>comparingByValue()
+                        .thenComparing(Map.Entry.comparingByKey(Comparator.reverseOrder())))
+                .map(chosen -> selectBatch(candidates.stream()
+                        .filter(finding -> finding.referenceCode().equals(chosen.getKey())).toList(), maxFiles, Set.of()))
+                .orElse(List.of());
+    }
+
+    /**
+     * What a pass that improved nothing sets aside of an error: its file, or
+     * its rule in its file.
+     *
+     * @param finding the error
+     * @param grouping what the errors of one pass have in common
+     * @return the name it is parked under
+     */
+    public static String parkingKey(SheriffFinding finding, BatchGrouping grouping) {
+        return grouping == BatchGrouping.FILE ? finding.file()
+                : String.format(RULE_IN_FILE, finding.referenceCode(), finding.file());
+    }
+
+    /**
+     * The distinct files of some errors, as
+     * {@code AnalysisResult.filesWithErrors} counts them: an error with no
+     * file has none.
+     *
+     * @param errors the errors
+     * @return their files, in the order they come
+     */
+    private static Set<String> filesOf(List<SheriffFinding> errors) {
+        Set<String> files = new LinkedHashSet<>();
+        for (SheriffFinding finding : errors) {
+            if (!finding.file().isEmpty()) {
+                files.add(finding.file());
+            }
+        }
+        return files;
+    }
+
+    /**
+     * The files each rule has errors in.
+     *
+     * @param errors the errors
+     * @return each rule's files
+     */
+    private static Map<String, Set<String>> filesByRule(List<SheriffFinding> errors) {
+        Map<String, Set<String>> files = new TreeMap<>();
+        for (SheriffFinding finding : errors) {
+            files.computeIfAbsent(finding.referenceCode(), rule -> new LinkedHashSet<>()).add(finding.file());
+        }
+        return files;
     }
 
     /**

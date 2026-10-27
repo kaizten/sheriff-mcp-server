@@ -1099,6 +1099,12 @@ del \code{pom.xml} (\code{sheriff.coverage}, \code{sheriff.branches},
   ficheros se le dan al modelo de cada vez. Menos ficheros, respuestas más
   centradas y más pasadas.}
 
+\setting{SHERIFF_BATCH_BY}{\code{file}}{\code{file} o \code{rule}}{Qué
+  tienen en común los errores que se le dan al modelo de cada vez.
+  \code{file}: todos los errores de unos pocos ficheros. \code{rule}: los
+  errores de una regla en unos pocos ficheros, así el modelo hace un solo tipo
+  de cambio cada vez.}
+
 \setting{SHERIFF_MAX_RULES_IN_PROMPT}{vacío: el límite del bucle}{reglas, 1 o
   más}{Cuántas reglas del perfil se ponen en cada prompt. Menos reglas, prompts
   más cortos y más baratos.}

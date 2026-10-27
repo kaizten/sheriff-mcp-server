@@ -1,5 +1,6 @@
 package com.kaizten.sheriff.infrastructure.config;
 
+import com.kaizten.sheriff.domain.BatchGrouping;
 import com.kaizten.sheriff.domain.Rules;
 import com.kaizten.sheriff.domain.valueobject.LoopSettings;
 import com.kaizten.sheriff.infrastructure.catalog.CatalogProvisioning;
@@ -52,6 +53,7 @@ public final class Configuration {
     private static final String GIT_SAFETY = "SHERIFF_AGENT_GIT_SAFETY";
     private static final String MAX_ITERATIONS = "SHERIFF_MAX_ITERATIONS";
     private static final String MAX_FILES_PER_BATCH = "SHERIFF_MAX_FILES_PER_BATCH";
+    private static final String BATCH_BY = "SHERIFF_BATCH_BY";
     private static final String BACKEND = "AI_BACKEND";
     private static final String CLAUDE_TIMEOUT = "SHERIFF_AGENT_CLAUDE_TIMEOUT";
     private static final String API_KEY = "ANTHROPIC_API_KEY";
@@ -441,7 +443,8 @@ public final class Configuration {
         return new LoopSettings(
                 optionalPositive(MAX_ITERATIONS),
                 !environment.getOrDefault(GIT_SAFETY, ENABLED).equals(DISABLED),
-                number(MAX_FILES_PER_BATCH, DEFAULT_BATCH));
+                number(MAX_FILES_PER_BATCH, DEFAULT_BATCH),
+                BatchGrouping.named(value(BATCH_BY, BatchGrouping.FILE.setting())));
     }
 
     /**
