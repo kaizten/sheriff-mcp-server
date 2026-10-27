@@ -2,11 +2,13 @@ package com.kaizten.sheriff.infrastructure.docker;
 
 import com.kaizten.sheriff.domain.port.AutomaticRepair;
 import com.kaizten.sheriff.domain.port.RuleCatalog;
+import com.kaizten.sheriff.domain.valueobject.AnalysisResult;
 import com.kaizten.sheriff.domain.valueobject.SheriffRule;
 import com.kaizten.sheriff.infrastructure.process.ProcessRunner;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Runs Sheriff's own fixers before any model is asked for anything.
@@ -27,6 +29,7 @@ public final class DeterministicFixer implements AutomaticRepair {
 
     private final RuleCatalog catalog;
     private final SheriffRepair repair;
+    private AnalysisResult analyzedBefore;
 
     /**
      * Wires the pass to one component.
@@ -76,6 +79,17 @@ public final class DeterministicFixer implements AutomaticRepair {
     }
 
     /**
+     * What the last repair found before its fixers ran.
+     *
+     * @return that analysis, empty before any repair or after one that could
+     *     not run
+     */
+    @Override
+    public Optional<AnalysisResult> analyzedBefore() {
+        return Optional.ofNullable(analyzedBefore);
+    }
+
+    /**
      * Applies every fixer Sheriff has for what is currently wrong.
      *
      * @return what it was able to take on, and what it left behind
@@ -83,6 +97,7 @@ public final class DeterministicFixer implements AutomaticRepair {
     public DeterministicFixReport run() {
         List<SheriffRule> rules = catalog.allRules();
         RepairOutcome outcome = repair.everyFixer(rules);
+        analyzedBefore = outcome.failure().isPresent() ? null : outcome.before();
         if (outcome.failure().isPresent()) {
             return DeterministicFixReport.unavailable(outcome.failure().get());
         }

@@ -65,6 +65,23 @@ class DeterministicFixerTests {
     }
 
     @Test
+    @DisplayName("what the repair found before its fixers ran is kept for the run to measure, and nothing before")
+    void keepsWhatItFoundBeforeRepairing() {
+        DeterministicFixer fixer = fixer(FakeProcessRunner.always(ProcessOutcome.completed(0, OUTPUT, "")), CATALOG);
+        assertTrue(fixer.analyzedBefore().isEmpty());
+        fixer.apply();
+        assertEquals(2, fixer.analyzedBefore().orElseThrow().total());
+    }
+
+    @Test
+    @DisplayName("a repair that could not run has nothing to measure")
+    void aRepairThatCouldNotRunKeepsNothing() {
+        DeterministicFixer fixer = fixer(FakeProcessRunner.always(ProcessOutcome.unavailable("no docker")), CATALOG);
+        fixer.apply();
+        assertTrue(fixer.analyzedBefore().isEmpty());
+    }
+
+    @Test
     @DisplayName("a plain fix -f runs first, because it applies some fixers the codes do not")
     void runsThePlainFixFirst() {
         FakeProcessRunner runner = FakeProcessRunner.always(ProcessOutcome.completed(0, OUTPUT, ""));

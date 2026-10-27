@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -139,6 +140,9 @@ class FixResultTests {
         assertTrue(FixResult.succeeded("done").ok());
         assertEquals("done", FixResult.succeeded("done").output());
         assertFalse(FixResult.failed("boom").ok());
+        TokenUsage usage = new TokenUsage(List.of(), 1, 2, 3, 4, 1, null);
+        assertEquals(usage, FixResult.succeeded("done", usage).usage());
+        assertEquals(null, FixResult.succeeded("done").usage());
     }
 
     /**

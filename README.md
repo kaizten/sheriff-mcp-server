@@ -567,6 +567,28 @@ instead, and with nothing left to try the run stops.
 A pass that touches a file outside its batch stops the run without committing,
 and the work is left in the tree for review.
 
+Every pass is measured by the analysis after it, and written as a JSON line to
+`metrics-<when the run started>.jsonl` beside the run's prompt logs
+(`PROMPT_LOG_DIR`): `kind` (`deterministic` for Sheriff's own fixers, `model`
+for the model's), `elapsed_ms`, `errors_before` and `errors_after` rule by rule
+in the pass's files (the whole component for Sheriff's fixers; `null` when no
+analysis followed), `repaired`, and `usage`: the models, the input, output and
+prompt-cache tokens, the turns and the cost. Claude Code's cost is at list
+price, also on a subscription; Codex reports none, and its fixer adds `--json`
+to a `codex exec` so that it reports its tokens. `scripts/benchmark.sh` runs the
+loop over a few public projects at pinned commits, with each backend and model
+asked for, and adds those lines up into which rules Sheriff finds, which its
+fixers and which the model repair, what is left, and the time and tokens per
+repair:
+
+```bash
+scripts/benchmark.sh --runs 3 --backend claude_cli:claude-sonnet-5-5 --backend codex_cli
+scripts/benchmark.sh --report ~/.local/state/sheriff-mcp/benchmark/<run>   # the tables again
+```
+
+It clones those projects, runs their builds and lets the model edit them, and
+spends tokens: on PetClinic a run is some five passes.
+
 ## Configuration
 
 Nothing is required: the server works out the mount, the components, each
@@ -746,6 +768,7 @@ bytecode reading and the 6 s of startup would go.
 mvn install          # both modules in order, with their tests; no Docker needed
 scripts/e2e.sh       # against real Sheriff and git, with a stand-in model; needs Docker
 scripts/playbook.sh  # the user's playbook, both languages, into playbook/build/; needs TeX
+scripts/benchmark.sh # the loop over public projects, measured; spends tokens (see above)
 ```
 
 CI (`.github/workflows/ci.yml`) runs both on every push to `main` and every

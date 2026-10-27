@@ -74,6 +74,7 @@ curl -fsSL https://github.com/kaizten/sheriff-mcp-server/releases/latest/downloa
 scripts/e2e.sh                                # against real Sheriff and git, no model: needs Docker
 scripts/ci-local.sh                           # before every push: CI's own steps, here (--no-build, --e2e)
 scripts/playbook.sh                           # the user's playbook, both languages: needs TeX
+scripts/benchmark.sh                          # the loop over public projects, measured: spends tokens
 ```
 
 `scripts/e2e.sh` checks what the unit suites cannot see without Docker:
@@ -849,6 +850,18 @@ session cut at a refused tool is reported rather than failed, and
 `--print-timeout` is set to the fixer's own limit, as `agy` gives up after
 five minutes. `agy` follows `HOME`; the jar does not, so a trial passes it
 `-Duser.home` too.
+
+**Every pass is measured** (`PassMeter`, `RunMetrics`, `MetricsFile`): held
+until the analysis after it, which the loop makes anyway, counts its rules in
+its batch's files (renamed ones followed; Sheriff's fixers on the whole
+component, from what `AutomaticRepair.analyzedBefore` found), and written as a
+line of `metrics-*.jsonl` beside the prompt logs with its time and its
+`TokenUsage`. Claude Code's comes from its JSON, at list price; Codex's from
+the events of `codex exec --json`, which `CodexCliFixer` adds, with its cached
+input taken out of its input so the two count alike. The API backends report
+none yet. `scripts/benchmark.sh` adds the lines of many runs up; a pass's
+tokens are shared among the rules it repaired by their errors, which is an
+approximation, and it says so.
 
 **The iteration cap grows while the passes make progress**, unless one was
 given (`--max-iterations`, `max_iterations` in `sheriff_autofix`). The first

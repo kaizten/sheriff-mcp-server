@@ -2,13 +2,17 @@ package com.kaizten.sheriff.infrastructure.codex;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kaizten.sheriff.domain.valueobject.FixRequest;
 import com.kaizten.sheriff.domain.valueobject.FixResult;
+import com.kaizten.sheriff.domain.valueobject.TokenUsage;
 import com.kaizten.sheriff.infrastructure.claude.PromptLog;
 import com.kaizten.sheriff.infrastructure.process.FakeProcessRunner;
 import com.kaizten.sheriff.infrastructure.process.ProcessOutcome;
+import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
@@ -39,7 +43,7 @@ class CodexCliFixerTests {
     void sendsThePromptOnStandardInput() {
         FakeProcessRunner runner = FakeProcessRunner.always(ProcessOutcome.completed(0, "done", ""));
         fixer(runner, DEFAULT_COMMAND).fix(REQUEST);
-        assertEquals(List.of("codex", "exec", "--sandbox", "workspace-write"), runner.command());
+        assertEquals(List.of("codex", "exec", "--sandbox", "workspace-write", "--json"), runner.command());
         assertEquals("arregla esto", runner.input());
     }
 
@@ -91,8 +95,75 @@ class CodexCliFixerTests {
     void worksInsideTheComponent() {
         FakeProcessRunner runner = FakeProcessRunner.always(ProcessOutcome.completed(0, "done", ""));
         new CodexCliFixer(runner, new PromptLog(null), Path.of("/work"), "app", DEFAULT_COMMAND, TIMEOUT).fix(REQUEST);
-        assertEquals(List.of("codex", "exec", "--sandbox", "workspace-write", "--cd", "app"), runner.command());
+        assertEquals(List.of("codex", "exec", "--sandbox", "workspace-write", "--json", "--cd", "app"),
+                runner.command());
         assertTrue(runner.input().startsWith("You are working inside the directory `app`"));
         assertTrue(runner.input().endsWith("arregla esto"));
+    }
+
+    private static final String EVENTS = """
+            {"type":"thread.started","thread_id":"t"}
+            {"type":"turn.started"}
+            {"type":"item.started","item":{"id":"item_0","type":"agent_message","text":"a draft"}}
+            {"type":"item.completed","item":{"id":"item_9","type":"command_execution","text":"ls"}}
+            {"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"edited A.java"}}
+            {"type":"turn.completed","usage":{"input_tokens":14314,"cached_input_tokens":11520,\
+            "cache_write_input_tokens":7,"output_tokens":5,"reasoning_output_tokens":0}}
+            {"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"and B.java"}}
+            {"type":"turn.completed","usage":{"input_tokens":100,"cached_input_tokens":0,"output_tokens":10}}
+            """;
+
+    @Test
+    @DisplayName("a command that already asks for --json is left as it is")
+    void aCommandWithJsonIsLeftAlone() {
+        FakeProcessRunner runner = FakeProcessRunner.always(ProcessOutcome.completed(0, "done", ""));
+        fixer(runner, List.of("codex", "exec", "--json", "--model", "o")).fix(REQUEST);
+        assertEquals(List.of("codex", "exec", "--json", "--model", "o"), runner.command());
+    }
+
+    @Test
+    @DisplayName("with --json the answer is the model's messages, and what every turn cost is added up")
+    void readsTheAnswerAndTheCostOffTheEvents() {
+        FixResult result = fixer(FakeProcessRunner.always(ProcessOutcome.completed(0, EVENTS, "")),
+                DEFAULT_COMMAND).fix(REQUEST);
+        assertTrue(result.ok());
+        assertEquals("edited A.java\nand B.java", result.output());
+        assertEquals(new TokenUsage(List.of(), 2894, 15, 11520, 7, 2, null), result.usage());
+    }
+
+    @Test
+    @DisplayName("the cost is the turns completed, added up, and nothing when none completed")
+    void addsUpTheCostOfEveryTurn() throws IOException {
+        ObjectMapper json = new ObjectMapper();
+        assertNull(CodexCliFixer.usageOf(List.of()));
+        assertNull(CodexCliFixer.usageOf(List.of(json.readTree("{\"type\":\"turn.started\"}"))));
+        assertEquals(new TokenUsage(List.of(), 0, 3, 5, 0, 1, null), CodexCliFixer.usageOf(List.of(json.readTree(
+                "{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":5,\"cached_input_tokens\":5,"
+                        + "\"output_tokens\":3}}"))));
+    }
+
+    @Test
+    @DisplayName("a pass that failed after a turn still says what it cost; plain text says nothing")
+    void aFailedPassStillSaysWhatItCost() {
+        FixResult failed = fixer(FakeProcessRunner.always(ProcessOutcome.completed(1, EVENTS, "quota")),
+                DEFAULT_COMMAND).fix(REQUEST);
+        assertFalse(failed.ok());
+        assertEquals(2, failed.usage().turns());
+        FixResult plain = fixer(FakeProcessRunner.always(ProcessOutcome.completed(0, "edited\n{not json", "")),
+                DEFAULT_COMMAND).fix(REQUEST);
+        assertNull(plain.usage());
+        assertEquals("edited\n{not json", plain.output());
+        FixResult typeless = fixer(FakeProcessRunner.always(ProcessOutcome.completed(0, "{\"foo\":1}", "")),
+                DEFAULT_COMMAND).fix(REQUEST);
+        assertEquals("{\"foo\":1}", typeless.output());
+    }
+
+    @Test
+    @DisplayName("more cached input than input is no input of its own, never a negative count")
+    void moreCachedThanInputIsNoInput() throws IOException {
+        TokenUsage usage = CodexCliFixer.usageOf(List.of(new ObjectMapper().readTree(
+                "{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":3,\"cached_input_tokens\":5}}")));
+        assertEquals(0, usage.inputTokens());
+        assertEquals(5, usage.cacheReadTokens());
     }
 }
