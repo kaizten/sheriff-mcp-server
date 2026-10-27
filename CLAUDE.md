@@ -299,7 +299,11 @@ to be tried by hand.
   while the count drops: one call, the same end state every time.
 - **A bad `--test` profile exits 0 too**, printing a usage banner to stdout
   and the reason to stderr. Locating the findings array by the first `[`
-  parses the banner instead.
+  parses the banner instead. So does a `fix` argument it refuses, among
+  them `--type DETERMINISTIC` as its help lists it (image of 26 October):
+  `SheriffRepair` passes `--type deterministic`, lower case, as `fix` would
+  run its AI fixer too with credentials within reach, and a `fix` that
+  answers with the banner did not run.
 - **The TypeScript profile traces every checker on stdout**, one
   `COMMAND: node ...` line each, before any findings; the analyzer drops
   them, or a clean TypeScript run reads as "not JSON".

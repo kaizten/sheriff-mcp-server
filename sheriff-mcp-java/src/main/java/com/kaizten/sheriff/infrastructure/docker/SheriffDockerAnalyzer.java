@@ -561,7 +561,7 @@ public final class SheriffDockerAnalyzer implements CodeAnalyzer {
      * @param standardError what Sheriff printed on stderr
      * @return that line, or the empty string when there is none
      */
-    private static String reasonOf(String standardError) {
+    static String reasonOf(String standardError) {
         for (String line : standardError.split(LINE_SEPARATOR_PATTERN)) {
             String trimmed = line.strip();
             if (!trimmed.isEmpty() && !trimmed.startsWith(USAGE_BANNER)) {
