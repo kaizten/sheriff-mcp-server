@@ -99,6 +99,16 @@ class SheriffDockerAnalyzerTests {
     }
 
     @Test
+    @DisplayName("Sheriff's reason is the first line of stderr that is not its banner, and none is the empty string")
+    void theReasonSkipsTheBannerAndBlankLines() {
+        assertEquals("ERROR. Fix type must be deterministic, non-deterministic or all.", SheriffDockerAnalyzer
+                .reasonOf("\n  Usage: Sheriff [options]\nERROR. Fix type must be deterministic, non-deterministic "
+                        + "or all.\nUsage: Sheriff"));
+        assertEquals("", SheriffDockerAnalyzer.reasonOf("Usage: Sheriff [options]\n\n"));
+        assertEquals("", SheriffDockerAnalyzer.reasonOf(""));
+    }
+
+    @Test
     @DisplayName("an empty result Sheriff did not record is 'nothing analyzed', never 'no errors'")
     void anUnrecordedEmptyRunIsAFailure() throws IOException {
         Files.writeString(state().resolve("sheriff_errors.json"), "{\"file:/data\": {\"other\": {\"JAVA\": []}}}");

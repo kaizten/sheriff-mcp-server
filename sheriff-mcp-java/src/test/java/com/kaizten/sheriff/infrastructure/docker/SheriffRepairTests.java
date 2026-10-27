@@ -158,6 +158,48 @@ class SheriffRepairTests {
     }
 
     @Test
+    @DisplayName("every fix runs only Sheriff's deterministic fixers, never its AI fixer")
+    void everyFixIsDeterministic() {
+        FakeProcessRunner runner = new FakeProcessRunner(List.of(ProcessOutcome.completed(0, TWO, ""), FIXED, FIXED,
+                ProcessOutcome.completed(0, TWO, "")));
+
+        repair(runner).everyFixer(List.of());
+
+        List<List<String>> fixes = runner.commands().stream().filter(command -> command.contains("fix")).toList();
+        assertEquals(2, fixes.size());
+        for (List<String> fix : fixes) {
+            assertEquals("deterministic", fix.get(fix.indexOf("--type") + 1), fix.toString());
+        }
+    }
+
+    @Test
+    @DisplayName("a fix that answered with its usage banner refused its arguments: a failure, with Sheriff's reason")
+    void aFixThatPrintedItsUsageIsAFailure() {
+        FakeProcessRunner runner = new FakeProcessRunner(List.of(ProcessOutcome.completed(0, TWO, ""),
+                ProcessOutcome.completed(0, "Usage: Sheriff [options] [command]",
+                        "ERROR. Fix type must be deterministic, non-deterministic or all.\nUsage: Sheriff"),
+                ProcessOutcome.completed(0, ONE, "")));
+
+        RepairOutcome outcome = repair(runner).onlyRules("SortedImport");
+
+        assertEquals(Optional.of("ERROR. Fix type must be deterministic, non-deterministic or all."),
+                outcome.failure());
+        assertEquals(List.of("test", "fix SortedImport"), steps(runner));
+    }
+
+    @Test
+    @DisplayName("a fix that answered with its usage banner and no reason is a failure all the same, said so")
+    void aFixThatPrintedOnlyItsUsageIsAFailure() {
+        FakeProcessRunner runner = new FakeProcessRunner(List.of(ProcessOutcome.completed(0, TWO, ""),
+                ProcessOutcome.completed(0, "Usage: Sheriff [options] [command]", "Usage: Sheriff"),
+                ProcessOutcome.completed(0, ONE, "")));
+
+        RepairOutcome outcome = repair(runner).onlyRules("SortedImport");
+
+        assertEquals(Optional.of("Sheriff refused the arguments of fix and gave no reason"), outcome.failure());
+    }
+
+    @Test
     @DisplayName("an outcome built with nothing in its lists has empty lists, never null ones")
     void anOutcomeNeverHoldsNull() {
         AnalysisResult none = AnalysisResult.of(List.of());

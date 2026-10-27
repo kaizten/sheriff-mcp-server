@@ -64,6 +64,10 @@ public final class SheriffRepair {
     private static final String FIX_COMMAND = "fix";
     private static final String APPLY_FLAG = "-f";
     private static final String FIXERS_FLAG = "--fixers";
+    private static final String TYPE_FLAG = "--type";
+    private static final String DETERMINISTIC_TYPE = "deterministic";
+    private static final String USAGE_BANNER = "Usage: Sheriff";
+    private static final String REFUSED_ARGUMENTS = "Sheriff refused the arguments of fix and gave no reason";
     private static final String URI_FLAG = "--uri";
     private static final String COMPONENT_FLAG = "--component";
     private static final String URI_ARGUMENT = "file:/data";
@@ -230,9 +234,15 @@ public final class SheriffRepair {
     }
 
     /**
-     * One {@code fix}, whose exit code says nothing: it is 1 whatever
-     * happened. What it says is on stdout, and a run that printed nothing
-     * there but a reason on stderr, or never started, did not repair.
+     * One {@code fix} of Sheriff's own fixers, whose exit code says nothing.
+     * What it says is on stdout, and a run that printed nothing there but a
+     * reason on stderr, or only its usage banner, or never started, did not
+     * repair.
+     *
+     * <p>The fixers are always the deterministic ones: with credentials
+     * within reach {@code fix} would also run its AI fixer, and an argument
+     * it refuses (the help lists {@code DETERMINISTIC}, which it does not
+     * take) prints the banner and exits 0.
      *
      * @param extraArguments what goes after the standard arguments
      * @return the fixers Sheriff said it could not apply, and why
@@ -241,6 +251,7 @@ public final class SheriffRepair {
     private List<String> runFix(List<String> extraArguments) {
         List<String> arguments = new ArrayList<>(List.of(
                 FIX_COMMAND, APPLY_FLAG,
+                TYPE_FLAG, DETERMINISTIC_TYPE,
                 URI_FLAG, URI_ARGUMENT,
                 COMPONENT_FLAG, component));
         arguments.addAll(extraArguments);
@@ -250,6 +261,10 @@ public final class SheriffRepair {
         }
         if (outcome.standardOutput().strip().isEmpty() && !outcome.standardError().strip().isEmpty()) {
             throw new FixNotRun(outcome.standardError().strip());
+        }
+        if (outcome.standardOutput().stripLeading().startsWith(USAGE_BANNER)) {
+            String reason = SheriffDockerAnalyzer.reasonOf(outcome.standardError());
+            throw new FixNotRun(reason.isEmpty() ? REFUSED_ARGUMENTS : reason);
         }
         return FixerFailures.in(outcome.standardOutput());
     }
