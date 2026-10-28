@@ -74,6 +74,7 @@ curl -fsSL https://github.com/kaizten/sheriff-mcp-server/releases/latest/downloa
 scripts/e2e.sh                                # against real Sheriff and git, no model: needs Docker
 scripts/ci-local.sh                           # before every push: CI's own steps, here (--no-build, --e2e)
 scripts/playbook.sh                           # the user's playbook, both languages: needs TeX
+scripts/benchmark.sh                          # the loop over public projects, measured: spends tokens
 ```
 
 `scripts/e2e.sh` checks what the unit suites cannot see without Docker:
@@ -849,6 +850,26 @@ session cut at a refused tool is reported rather than failed, and
 `--print-timeout` is set to the fixer's own limit, as `agy` gives up after
 five minutes. `agy` follows `HOME`; the jar does not, so a trial passes it
 `-Duser.home` too.
+
+**Every pass is measured** (`PassMeter`, `RunMetrics`, `MetricsFile`): held
+until the analysis after it, which the loop makes anyway, counts its rules in
+its batch's files (renamed ones followed; Sheriff's fixers on the whole
+component, from what `AutomaticRepair.analyzedBefore` found), and written as a
+line of `metrics-*.jsonl` beside the prompt logs with its time and its
+`TokenUsage`. Claude Code's comes from its JSON, at list price; Codex's from
+the events of `codex exec --json`, which `CodexCliFixer` adds, with its cached
+input taken out of its input so the two count alike. The API backends report
+none yet. `scripts/benchmark.sh` adds the lines of many runs up, per backend
+and strategy; a pass's tokens are shared among the rules it repaired by their
+errors, which is an approximation, and it says so.
+
+**A pass's errors are grouped by file or by rule** (`BatchGrouping`,
+`SHERIFF_BATCH_BY`, `--batch-by`), as which costs less is a question for the
+benchmark, not a rule. By file, the default, a pass is every error of up to
+`SHERIFF_MAX_FILES_PER_BATCH` files. By rule it is the rule with the most
+errors, in up to that many of its files, and what a pass that lowered nothing
+parks is the rule in each file, not the file, so the file's other rules are
+still offered; the cap is counted per rule's batches of files.
 
 **The iteration cap grows while the passes make progress**, unless one was
 given (`--max-iterations`, `max_iterations` in `sheriff_autofix`). The first

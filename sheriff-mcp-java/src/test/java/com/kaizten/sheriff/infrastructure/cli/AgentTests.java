@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.kaizten.sheriff.domain.BatchGrouping;
 import com.kaizten.sheriff.domain.valueobject.LoopSettings;
 import com.kaizten.sheriff.infrastructure.config.Composition;
 import com.kaizten.sheriff.infrastructure.config.Configuration;
@@ -271,12 +272,15 @@ class AgentTests {
         Agent agent = new Agent(configuration,
                 new Composition(configuration, FakeProcessRunner.always(ProcessOutcome.completed(0, "", ""))));
         LoopSettings overridden = agent.settingsFor(
-                List.of("--max-iterations", "2", "--max-files-per-batch", "1", "--no-git-safety"));
+                List.of("--max-iterations", "2", "--max-files-per-batch", "1", "--batch-by", "rule",
+                        "--no-git-safety"));
         assertEquals(2, overridden.maxIterations());
+        assertEquals(BatchGrouping.RULE, overridden.grouping());
         assertEquals(1, overridden.maxFilesPerBatch());
         assertFalse(overridden.useGitSafety());
         LoopSettings untouched = agent.settingsFor(List.of());
         assertEquals(5, untouched.maxFilesPerBatch());
+        assertEquals(BatchGrouping.FILE, untouched.grouping());
         assertTrue(untouched.useGitSafety());
     }
 

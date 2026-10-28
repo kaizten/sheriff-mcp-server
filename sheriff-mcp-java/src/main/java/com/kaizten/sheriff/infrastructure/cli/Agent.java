@@ -1,6 +1,7 @@
 package com.kaizten.sheriff.infrastructure.cli;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.kaizten.sheriff.domain.BatchGrouping;
 import com.kaizten.sheriff.domain.Rules;
 import com.kaizten.sheriff.domain.valueobject.AnalysisResult;
 import com.kaizten.sheriff.domain.valueobject.LoopSettings;
@@ -61,6 +62,7 @@ public final class Agent {
     private static final String JSON_REPORT = "--json-report";
     private static final String MAX_ITERATIONS = "--max-iterations";
     private static final String MAX_FILES = "--max-files-per-batch";
+    private static final String BATCH_BY = "--batch-by";
     private static final String NO_GIT_SAFETY = "--no-git-safety";
     private static final String EXTRACT_RULES = "--extract-rules";
     private static final String FULL_CHECK = "--full-check";
@@ -98,6 +100,7 @@ public final class Agent {
               --json-report PATH      also write the result as JSON
               --max-iterations N      cap the loop's iterations
               --max-files-per-batch N cap how many files one pass may touch
+              --batch-by file|rule    a pass's errors: every one of some files, or one rule's
               --no-git-safety         no branch, no commits, no scope check
               --help                  this text
             """;
@@ -716,10 +719,12 @@ public final class Agent {
         LoopSettings configured = configuration.loopSettings();
         String iterations = valueAfter(arguments, MAX_ITERATIONS);
         String files = valueAfter(arguments, MAX_FILES);
+        String grouping = valueAfter(arguments, BATCH_BY);
         return new LoopSettings(
                 iterations.isEmpty() ? configured.maxIterations() : flagNumber(MAX_ITERATIONS, iterations),
                 configured.useGitSafety() && !arguments.contains(NO_GIT_SAFETY),
-                files.isEmpty() ? configured.maxFilesPerBatch() : flagNumber(MAX_FILES, files));
+                files.isEmpty() ? configured.maxFilesPerBatch() : flagNumber(MAX_FILES, files),
+                grouping.isEmpty() ? configured.grouping() : BatchGrouping.named(grouping));
     }
 
     /**

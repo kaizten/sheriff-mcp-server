@@ -2,10 +2,13 @@ package com.kaizten.sheriff.infrastructure.claude;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kaizten.sheriff.domain.valueobject.FixRequest;
 import com.kaizten.sheriff.domain.valueobject.FixResult;
+import com.kaizten.sheriff.domain.valueobject.TokenUsage;
 import com.kaizten.sheriff.infrastructure.process.FakeProcessRunner;
 import com.kaizten.sheriff.infrastructure.process.Platform;
 import com.kaizten.sheriff.infrastructure.process.ProcessOutcome;
@@ -195,6 +198,40 @@ class ClaudeCliFixerTests {
                 ProcessOutcome.completed(0, STRUCTURED_FAILURE, ""))).fix(REQUEST);
         assertFalse(result.ok());
         assertTrue(result.output().contains("turn limit"));
+    }
+
+    @Test
+    @DisplayName("what a pass cost goes back with its answer: tokens apart by kind, turns, cost and models")
+    void handsBackWhatThePassCost() {
+        String withModels = STRUCTURED_SUCCESS.strip().replaceFirst("}$",
+                ",\"modelUsage\":{\"claude-sonnet-5-5\":{},\"claude-haiku-5-5\":{}}}");
+        FixResult result = fixer(FakeProcessRunner.always(ProcessOutcome.completed(0, withModels, ""))).fix(REQUEST);
+        assertEquals(new TokenUsage(List.of("claude-sonnet-5-5", "claude-haiku-5-5"), 2, 4, 0, 40806, 3, 0.164228),
+                result.usage());
+    }
+
+    @Test
+    @DisplayName("the cost of a result is read field by field, a missing one counting none")
+    void readsTheCostOfAResult() throws IOException {
+        assertNull(ClaudeCliFixer.usageOf(null));
+        TokenUsage usage = ClaudeCliFixer.usageOf(new ObjectMapper().readTree(STRUCTURED_SUCCESS));
+        assertEquals(new TokenUsage(List.of(), 2, 4, 0, 40806, 3, 0.164228), usage);
+        assertEquals(new TokenUsage(List.of(), 0, 0, 0, 0, 0, null),
+                ClaudeCliFixer.usageOf(new ObjectMapper().readTree("{\"result\":\"x\"}")));
+        assertEquals(new TokenUsage(List.of(), 1, 2, 3, 4, 5, null), ClaudeCliFixer.usageOf(new ObjectMapper()
+                .readTree("{\"result\":\"x\",\"num_turns\":5,\"total_cost_usd\":\"?\",\"usage\":"
+                        + "{\"input_tokens\":1,\"output_tokens\":2,\"cache_read_input_tokens\":3,"
+                        + "\"cache_creation_input_tokens\":4}}")));
+    }
+
+    @Test
+    @DisplayName("a failed pass still says what it cost, and plain text says nothing")
+    void aFailedPassStillSaysWhatItCost() {
+        FixResult failed = fixer(FakeProcessRunner.always(
+                ProcessOutcome.completed(0, STRUCTURED_FAILURE, ""))).fix(REQUEST);
+        assertEquals(new TokenUsage(List.of(), 0, 0, 0, 0, 0, null), failed.usage());
+        FixResult plain = fixer(FakeProcessRunner.always(ProcessOutcome.completed(0, "done", ""))).fix(REQUEST);
+        assertNull(plain.usage());
     }
 
     @Test

@@ -556,7 +556,8 @@ how it checks itself.
 | `--extract-rules` | Rebuilds the rule catalog from the image |
 
 Loop flags: `--max-iterations N`, `--max-files-per-batch N` (5),
-`--no-git-safety` (no branch, no commits, no scope check), `--json-report PATH`.
+`--batch-by file|rule` (`file`: every error of those files; `rule`: one rule's
+errors in those files, the rule with most first), `--no-git-safety` (no branch, no commits, no scope check), `--json-report PATH`.
 With no `--max-iterations`, the cap is sized from the first analysis (one pass
 per five files with errors, and two to spare) and grows after every pass that
 lowers the errors, to what the files still with errors need, up to three times
@@ -566,6 +567,31 @@ the two spare passes with work left. A pass that lowers nothing parks its files
 instead, and with nothing left to try the run stops.
 A pass that touches a file outside its batch stops the run without committing,
 and the work is left in the tree for review.
+
+Every pass is measured by the analysis after it, and written as a JSON line to
+`metrics-<when the run started>.jsonl` beside the run's prompt logs
+(`PROMPT_LOG_DIR`): `kind` (`deterministic` for Sheriff's own fixers, `model`
+for the model's), `elapsed_ms`, `errors_before` and `errors_after` rule by rule
+in the pass's files (the whole component for Sheriff's fixers; `null` when no
+analysis followed), `repaired`, and `usage`: the models, the input, output and
+prompt-cache tokens, the turns and the cost. Claude Code's cost is at list
+price, also on a subscription; Codex reports none, and its fixer adds `--json`
+to a `codex exec` so that it reports its tokens. `scripts/benchmark.sh` runs the
+loop over a few public projects at pinned commits, with each backend and model
+asked for, and with each strategy: `file:N` (every error of N files a pass)
+and `rule:N` (one rule's errors in N files), `0` for no limit. It adds those
+lines up into which strategy leaves least for least, which rules Sheriff
+finds, which its fixers and which the model repair, what is left, and the time
+and tokens per repair:
+
+```bash
+scripts/benchmark.sh --runs 3 --backend claude_cli:claude-sonnet-5-5 --backend codex_cli
+scripts/benchmark.sh --strategy file:5 --strategy rule:5 --strategy file:0
+scripts/benchmark.sh --report ~/.local/state/sheriff-mcp/benchmark/<run>   # the tables again
+```
+
+It clones those projects, runs their builds and lets the model edit them, and
+spends tokens: on PetClinic a run is some five passes.
 
 ## Configuration
 
@@ -692,6 +718,7 @@ which no tool reports.
 | `VERIFICATION_TEST_CMD` | from the build tool | The project's test command |
 | `AI_BACKEND` | `claude_cli` | Who answers in the loop, below |
 | `SHERIFF_MAX_ITERATIONS`, `SHERIFF_MAX_FILES_PER_BATCH` | sized from the errors, `5` | The loop's passes, and the files a model is given at once |
+| `SHERIFF_BATCH_BY` | `file` | What a pass's errors have in common: `file`, every error of a few files; `rule`, one rule's errors in a few files |
 | `SHERIFF_MAX_RULES_IN_PROMPT` | the loop's own limit | Rules of the profile put in one prompt |
 | `SHERIFF_AGENT_GIT_SAFETY` | `1` | `0` lets the loop edit the working tree as it is: no branch of its own, no commit per pass, no stop when a model edits a file outside its batch. Your file only |
 | `CODEX_COMMAND`, `ANTIGRAVITY_COMMAND` | `codex exec --sandbox workspace-write`, `agy --mode accept-edits` | How the loop starts `codex` and `agy`, without the prompt (to add `--model`). Your file only |
@@ -746,6 +773,7 @@ bytecode reading and the 6 s of startup would go.
 mvn install          # both modules in order, with their tests; no Docker needed
 scripts/e2e.sh       # against real Sheriff and git, with a stand-in model; needs Docker
 scripts/playbook.sh  # the user's playbook, both languages, into playbook/build/; needs TeX
+scripts/benchmark.sh # the loop over public projects, measured; spends tokens (see above)
 ```
 
 CI (`.github/workflows/ci.yml`) runs both on every push to `main` and every

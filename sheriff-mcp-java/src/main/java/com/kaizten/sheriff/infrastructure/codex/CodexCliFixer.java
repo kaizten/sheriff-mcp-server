@@ -1,8 +1,12 @@
 package com.kaizten.sheriff.infrastructure.codex;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kaizten.sheriff.domain.port.CodeFixer;
 import com.kaizten.sheriff.domain.valueobject.FixRequest;
 import com.kaizten.sheriff.domain.valueobject.FixResult;
+import com.kaizten.sheriff.domain.valueobject.TokenUsage;
 import com.kaizten.sheriff.infrastructure.claude.PromptLog;
 import com.kaizten.sheriff.infrastructure.process.ProcessOutcome;
 import com.kaizten.sheriff.infrastructure.process.ProcessRunner;
@@ -30,6 +34,12 @@ import java.util.Map;
  * <p>Like its sibling, children are marked with an environment variable, so
  * the repository's own gate hook stands aside for the tool that exists to
  * clear the errors it guards.
+ *
+ * <p>A {@code codex exec} is run with {@code --json}, added when the command
+ * does not have it: only its events say what a pass cost, input, cached input
+ * and output apart (measured with codex-cli 0.164.0); without it Codex prints
+ * one total on stderr. The answer handed back is the model's messages, read
+ * out of those events.
  */
 public final class CodexCliFixer implements CodeFixer {
 
@@ -57,6 +67,24 @@ public final class CodexCliFixer implements CodeFixer {
      * The flag that sets the directory Codex works in.
      */
     private static final String DIRECTORY_FLAG = "--cd";
+    private static final String EXEC_COMMAND = "exec";
+    private static final String JSON_FLAG = "--json";
+    private static final String LINE_SEPARATOR_PATTERN = "\\R";
+    private static final String MESSAGE_SEPARATOR = "\n";
+    private static final String TYPE_FIELD = "type";
+    private static final String TURN_COMPLETED = "turn.completed";
+    private static final String ITEM_COMPLETED = "item.completed";
+    private static final String ITEM_FIELD = "item";
+    private static final String AGENT_MESSAGE = "agent_message";
+    private static final String TEXT_FIELD = "text";
+    private static final String USAGE_FIELD = "usage";
+    private static final String INPUT_TOKENS_FIELD = "input_tokens";
+    private static final String CACHED_INPUT_TOKENS_FIELD = "cached_input_tokens";
+    private static final String CACHE_WRITE_TOKENS_FIELD = "cache_write_input_tokens";
+    private static final String OUTPUT_TOKENS_FIELD = "output_tokens";
+    private static final long NO_TOKENS = 0L;
+    private static final int NO_TURNS = 0;
+    private static final int ONE_TURN = 1;
 
     /**
      * What the prompt says first when Codex works inside the component.
@@ -97,6 +125,8 @@ public final class CodexCliFixer implements CodeFixer {
      * How long one invocation is given.
      */
     private final Duration timeout;
+
+    private final ObjectMapper json = new ObjectMapper();
 
     /**
      * Wires the fixer to a repository.
@@ -168,24 +198,102 @@ public final class CodexCliFixer implements CodeFixer {
         if (logged != null) {
             System.out.printf(LOGGED_MESSAGE, logged);
         }
+        List<JsonNode> events = events(outcome.standardOutput());
+        TokenUsage usage = usageOf(events);
         if (!outcome.succeeded()) {
-            return FixResult.failed(failureReason(outcome));
+            return new FixResult(false, failureReason(outcome), usage);
         }
-        return FixResult.succeeded(outcome.standardOutput());
+        return FixResult.succeeded(events.isEmpty() ? outcome.standardOutput() : messagesOf(events), usage);
     }
 
     /**
-     * The exact command this fixer runs. The prompt is not part of it:
+     * The events {@code codex exec --json} printed, one JSON object a line.
+     *
+     * @param standardOutput what Codex printed
+     * @return the lines that are events, none when it printed plain text
+     */
+    private List<JsonNode> events(String standardOutput) {
+        List<JsonNode> events = new ArrayList<>();
+        for (String line : standardOutput.split(LINE_SEPARATOR_PATTERN)) {
+            try {
+                JsonNode event = json.readTree(line);
+                if (event.has(TYPE_FIELD)) {
+                    events.add(event);
+                }
+            } catch (JsonProcessingException notAnEvent) {
+                continue;
+            }
+        }
+        return events;
+    }
+
+    /**
+     * What the model said, out of its events.
+     *
+     * @param events the events of one invocation
+     * @return its messages, one after another
+     */
+    private static String messagesOf(List<JsonNode> events) {
+        List<String> messages = new ArrayList<>();
+        for (JsonNode event : events) {
+            JsonNode item = event.path(ITEM_FIELD);
+            if (ITEM_COMPLETED.equals(event.path(TYPE_FIELD).asText())
+                    && AGENT_MESSAGE.equals(item.path(TYPE_FIELD).asText())) {
+                messages.add(item.path(TEXT_FIELD).asText());
+            }
+        }
+        return String.join(MESSAGE_SEPARATOR, messages);
+    }
+
+    /**
+     * What an invocation cost: the usage of every turn it completed, added up.
+     *
+     * <p>Codex's input includes what it read from its cache, which is taken
+     * out of it, so its input counts what Claude's does. It names no model
+     * and no cost.
+     *
+     * @param events the events of one invocation
+     * @return the cost, {@code null} when no turn reported one
+     */
+    static TokenUsage usageOf(List<JsonNode> events) {
+        long input = NO_TOKENS;
+        long cached = NO_TOKENS;
+        long written = NO_TOKENS;
+        long output = NO_TOKENS;
+        int turns = NO_TURNS;
+        for (JsonNode event : events) {
+            if (!TURN_COMPLETED.equals(event.path(TYPE_FIELD).asText())) {
+                continue;
+            }
+            JsonNode usage = event.path(USAGE_FIELD);
+            input += usage.path(INPUT_TOKENS_FIELD).asLong(NO_TOKENS);
+            cached += usage.path(CACHED_INPUT_TOKENS_FIELD).asLong(NO_TOKENS);
+            written += usage.path(CACHE_WRITE_TOKENS_FIELD).asLong(NO_TOKENS);
+            output += usage.path(OUTPUT_TOKENS_FIELD).asLong(NO_TOKENS);
+            turns += ONE_TURN;
+        }
+        if (turns == NO_TURNS) {
+            return null;
+        }
+        return new TokenUsage(List.of(), Math.max(NO_TOKENS, input - cached), output, cached, written, turns, null);
+    }
+
+    /**
+     * The exact command this fixer runs, with {@code --json} added to a
+     * {@code codex exec} that lacks it. The prompt is not part of it:
      * {@code codex exec} reads its instructions from standard input when it
      * is given none as an argument, and an argument is capped at 128 KB.
      *
      * @return the argument list
      */
     List<String> command() {
-        if (component.isEmpty()) {
-            return List.copyOf(baseCommand);
-        }
         List<String> command = new ArrayList<>(baseCommand);
+        if (command.contains(EXEC_COMMAND) && !command.contains(JSON_FLAG)) {
+            command.add(JSON_FLAG);
+        }
+        if (component.isEmpty()) {
+            return List.copyOf(command);
+        }
         command.add(DIRECTORY_FLAG);
         command.add(component);
         return List.copyOf(command);

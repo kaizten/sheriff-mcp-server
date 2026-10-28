@@ -8,8 +8,10 @@ package com.kaizten.sheriff.domain.valueobject;
  *
  * @param ok whether the invocation itself succeeded
  * @param output whatever the fixer said, for the log and for error messages
+ * @param usage what the invocation cost, {@code null} when its backend did
+ *     not say
  */
-public record FixResult(boolean ok, String output) {
+public record FixResult(boolean ok, String output, TokenUsage usage) {
 
     private static final String ERROR_OUTPUT_NOT_DEFINED = "Output is not defined";
 
@@ -28,6 +30,27 @@ public record FixResult(boolean ok, String output) {
         if (output == null) {
             throw new IllegalArgumentException(ERROR_OUTPUT_NOT_DEFINED);
         }
+    }
+
+    /**
+     * A result whose cost is not known.
+     *
+     * @param ok whether the invocation itself succeeded
+     * @param output whatever the fixer said
+     */
+    public FixResult(boolean ok, String output) {
+        this(ok, output, null);
+    }
+
+    /**
+     * A fixer invocation that ran, and what it cost.
+     *
+     * @param output what the fixer said
+     * @param usage what the invocation cost, as its backend reported it
+     * @return the successful result
+     */
+    public static FixResult succeeded(String output, TokenUsage usage) {
+        return new FixResult(true, output, usage);
     }
 
     /**

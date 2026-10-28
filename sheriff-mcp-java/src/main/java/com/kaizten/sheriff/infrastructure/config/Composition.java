@@ -36,6 +36,7 @@ import com.kaizten.sheriff.infrastructure.hook.ComponentGate;
 import com.kaizten.sheriff.infrastructure.hook.SheriffStopHook;
 import com.kaizten.sheriff.infrastructure.hook.StopBlocks;
 import com.kaizten.sheriff.infrastructure.hook.TurnStart;
+import com.kaizten.sheriff.infrastructure.metrics.MetricsFile;
 import com.kaizten.sheriff.infrastructure.mock.MockSheriffAnalyzer;
 import com.kaizten.sheriff.infrastructure.process.Platform;
 import com.kaizten.sheriff.infrastructure.process.ProcessRunner;
@@ -612,6 +613,6 @@ public final class Composition {
                 ? deterministicFixer()
                 : NO_AUTOMATIC_REPAIR;
         return new FixLoop(analyzer(), fixer(), versionControl(), testRunner(), repair, rulesContext(),
-                ruleCatalog().allRules(), settings);
+                ruleCatalog().allRules(), settings, new MetricsFile(configuration.promptLogDirectory()));
     }
 }

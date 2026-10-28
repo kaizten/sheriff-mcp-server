@@ -6,11 +6,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kaizten.sheriff.domain.port.CodeFixer;
 import com.kaizten.sheriff.domain.valueobject.FixRequest;
 import com.kaizten.sheriff.domain.valueobject.FixResult;
+import com.kaizten.sheriff.domain.valueobject.TokenUsage;
 import com.kaizten.sheriff.infrastructure.process.Platform;
 import com.kaizten.sheriff.infrastructure.process.ProcessOutcome;
 import com.kaizten.sheriff.infrastructure.process.ProcessRunner;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
@@ -121,6 +123,9 @@ public final class ClaudeCliFixer implements CodeFixer {
     private static final String TOTAL_COST_FIELD = "total_cost_usd";
     private static final String USAGE_FIELD = "usage";
     private static final String NUM_TURNS_FIELD = "num_turns";
+    private static final String MODEL_USAGE_FIELD = "modelUsage";
+    private static final int NO_TURNS = 0;
+    private static final long NO_TOKENS = 0L;
     private static final String INPUT_TOKENS_FIELD = "input_tokens";
     private static final String OUTPUT_TOKENS_FIELD = "output_tokens";
     private static final String CACHE_CREATION_TOKENS_FIELD = "cache_creation_input_tokens";
@@ -236,10 +241,12 @@ public final class ClaudeCliFixer implements CodeFixer {
             System.out.printf(DENIALS_MESSAGE, denials);
         }
         boolean erroredOut = parsed != null && parsed.path(IS_ERROR_FIELD).asBoolean(false);
+        TokenUsage usage = usageOf(parsed);
         if (!outcome.succeeded() || erroredOut) {
-            return FixResult.failed(failureReason(outcome, parsed));
+            return new FixResult(false, failureReason(outcome, parsed), usage);
         }
-        return FixResult.succeeded(parsed == null ? outcome.standardOutput() : parsed.path(RESULT_FIELD).asText());
+        return FixResult.succeeded(parsed == null ? outcome.standardOutput() : parsed.path(RESULT_FIELD).asText(),
+                usage);
     }
 
     /**
@@ -327,6 +334,34 @@ public final class ClaudeCliFixer implements CodeFixer {
             return outcome.standardOutput() + outcome.standardError();
         }
         return parsed.path(RESULT_FIELD).asText() + usageSummary(parsed);
+    }
+
+    /**
+     * What one invocation cost, as a value the run's metrics keep.
+     *
+     * <p>Claude Code counts the input read from its prompt cache and the
+     * input written to it apart from the rest, and names every model that
+     * answered, subagents' included, in {@code modelUsage}. Its cost is at
+     * list price, also on a subscription, where nothing is charged per call.
+     *
+     * @param parsed the structured result, or {@code null} when there was none
+     * @return the cost, {@code null} when there was no structured result
+     */
+    static TokenUsage usageOf(JsonNode parsed) {
+        if (parsed == null) {
+            return null;
+        }
+        JsonNode usage = parsed.path(USAGE_FIELD);
+        List<String> models = new ArrayList<>();
+        parsed.path(MODEL_USAGE_FIELD).fieldNames().forEachRemaining(models::add);
+        JsonNode cost = parsed.path(TOTAL_COST_FIELD);
+        return new TokenUsage(models,
+                usage.path(INPUT_TOKENS_FIELD).asLong(NO_TOKENS),
+                usage.path(OUTPUT_TOKENS_FIELD).asLong(NO_TOKENS),
+                usage.path(CACHE_READ_TOKENS_FIELD).asLong(NO_TOKENS),
+                usage.path(CACHE_CREATION_TOKENS_FIELD).asLong(NO_TOKENS),
+                parsed.path(NUM_TURNS_FIELD).asInt(NO_TURNS),
+                cost.isNumber() ? cost.asDouble() : null);
     }
 
     /**

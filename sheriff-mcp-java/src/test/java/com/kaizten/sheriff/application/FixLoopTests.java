@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.kaizten.sheriff.application.service.FixLoop;
+import com.kaizten.sheriff.domain.BatchGrouping;
 import com.kaizten.sheriff.domain.BatchPolicy;
 import com.kaizten.sheriff.domain.enumerate.StopReason;
 import com.kaizten.sheriff.domain.fake.FakeAnalyzer;
@@ -14,18 +15,27 @@ import com.kaizten.sheriff.domain.fake.FakeTestRunner;
 import com.kaizten.sheriff.domain.fake.FakeVersionControl;
 import com.kaizten.sheriff.domain.port.AutomaticRepair;
 import com.kaizten.sheriff.domain.port.CodeAnalyzer;
+import com.kaizten.sheriff.domain.port.CodeFixer;
 import com.kaizten.sheriff.domain.port.TestRunner;
 import com.kaizten.sheriff.domain.port.VersionControl;
 import com.kaizten.sheriff.domain.valueobject.AnalysisResult;
 import com.kaizten.sheriff.domain.valueobject.FixRequest;
+import com.kaizten.sheriff.domain.valueobject.FixResult;
 import com.kaizten.sheriff.domain.valueobject.LoopSettings;
+import com.kaizten.sheriff.domain.valueobject.PassMetrics;
 import com.kaizten.sheriff.domain.valueobject.RunSummary;
 import com.kaizten.sheriff.domain.valueobject.SheriffFinding;
 import com.kaizten.sheriff.domain.valueobject.SheriffRule;
+import com.kaizten.sheriff.domain.valueobject.TokenUsage;
 import com.kaizten.sheriff.domain.valueobject.VerificationResult;
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import org.junit.jupiter.api.DisplayName;
@@ -821,6 +831,249 @@ class FixLoopTests {
                     () -> VerificationResult.notRun("no build tool"), 8, false, 0).execute();
             assertEquals(StopReason.STALLED, summary.stoppedReason());
             assertNull(summary.testsPassed());
+        }
+    }
+
+    @Nested
+    @DisplayName("each pass, measured by the analysis after it")
+    class Metrics {
+
+        private static final TokenUsage USAGE = new TokenUsage(List.of("claude-sonnet-5-5"), 10, 20, 30, 40, 3, 0.5);
+
+        private static SheriffFinding error(String file, String rule) {
+            return new SheriffFinding(file, "d", "h", rule, SheriffFinding.ERROR, Map.of());
+        }
+
+        private static AnalysisResult errors(SheriffFinding... findings) {
+            return AnalysisResult.of(List.of(findings));
+        }
+
+        private static List<PassMetrics> run(List<AnalysisResult> analyses, CodeFixer fixer, VersionControl vc,
+                TestRunner runner, AutomaticRepair repair, boolean gitSafety, int batch) {
+            return run(analyses, fixer, vc, runner, repair, new LoopSettings(8, gitSafety, batch));
+        }
+
+        private static List<PassMetrics> run(List<AnalysisResult> analyses, CodeFixer fixer, VersionControl vc,
+                TestRunner runner, AutomaticRepair repair, LoopSettings settings) {
+            List<PassMetrics> passes = new ArrayList<>();
+            new FixLoop(new FakeAnalyzer(analyses), fixer, vc, runner, repair, RULES_CONTEXT, List.of(), settings,
+                    passes::add).execute();
+            return passes;
+        }
+
+        private static AutomaticRepair foundBefore(AnalysisResult before) {
+            return new AutomaticRepair() {
+                @Override
+                public String apply() {
+                    return "applied";
+                }
+
+                @Override
+                public Optional<AnalysisResult> analyzedBefore() {
+                    return Optional.of(before);
+                }
+            };
+        }
+
+        @Test
+        @DisplayName("the last pass the cap allows is measured by the analysis made after it")
+        void theLastPassIsMeasuredToo() {
+            List<PassMetrics> passes = run(List.of(errors(error("a.py", "R1"), error("a.py", "R2")),
+                    errors(error("a.py", "R2"))), request -> FixResult.succeeded("done", USAGE),
+                    new FakeVersionControl(), new FakeTestRunner(), () -> "", new LoopSettings(1, false, 0));
+            assertEquals(1, passes.size());
+            assertEquals(Map.of("R2", 1), passes.get(0).errorsAfter());
+            assertTrue(passes.get(0).elapsed().compareTo(Duration.ofMinutes(1)) < 0);
+        }
+
+        @Test
+        @DisplayName("Sheriff's fixers whose analysis before failed are not a pass to measure")
+        void sheriffsFixersWithAFailedAnalysisAreNotMeasured() {
+            List<PassMetrics> passes = run(List.of(new AnalysisResult(List.of(), false, "")), new FakeFixer(),
+                    new FakeVersionControl(), new FakeTestRunner(), foundBefore(AnalysisResult.failure("no docker")),
+                    false, 0);
+            assertEquals(List.of(), passes);
+        }
+
+        @Test
+        @DisplayName("a file renamed outside the batch is not counted in it")
+        void aRenameOutsideTheBatchIsNotCounted() {
+            List<PassMetrics> passes = run(List.of(errors(error("a.py", "R1")),
+                    errors(error("a.py", "R1"), error("X.py", "R9")), errors(error("a.py", "R1"))),
+                    request -> FixResult.succeeded("done", USAGE),
+                    new FakeVersionControl(List.of("a.py"), Map.of("X.py", "x.py")), new FakeTestRunner(),
+                    () -> "", new LoopSettings(1, true, 0));
+            assertEquals(Map.of("R1", 1), passes.get(0).errorsAfter());
+        }
+
+        @Test
+        @DisplayName("a model's pass counts the errors of its batch's files, rule by rule, before and after, and its cost")
+        void aModelPassIsMeasuredOnItsBatch() {
+            List<FixResult> answers = new ArrayList<>(List.of(FixResult.succeeded("done", USAGE),
+                    FixResult.failed("no second pass")));
+            List<PassMetrics> passes = run(List.of(
+                    errors(error("A.java", "R1"), error("A.java", "R1"), error("A.java", "R2"), error("B.java", "R1")),
+                    errors(error("A.java", "R2"), error("A.java", "R3"), error("B.java", "R1"))),
+                    request -> answers.remove(0), new FakeVersionControl(), new FakeTestRunner(), () -> "", false, 1);
+            assertEquals(2, passes.size());
+            assertEquals(Map.of("R2", 1, "R3", 1), passes.get(1).errorsBefore());
+            PassMetrics first = passes.get(0);
+            assertEquals("iteration-1", first.label());
+            assertEquals(PassMetrics.MODEL, first.kind());
+            assertEquals(Map.of("R1", 2, "R2", 1), first.errorsBefore());
+            assertEquals(Map.of("R2", 1, "R3", 1), first.errorsAfter());
+            assertEquals(Map.of("R1", 2), first.repaired());
+            assertEquals(USAGE, first.usage());
+            assertFalse(first.elapsed().isNegative());
+        }
+
+        @Test
+        @DisplayName("Sheriff's own fixers count the whole component, from what they found to the first analysis")
+        void sheriffsFixersAreMeasuredOnTheWholeComponent() {
+            AnalysisResult before = errors(error("A.java", "SortedImport"), error("B.java", "SortedImport"),
+                    error("B.java", "JavaDoc"));
+            List<PassMetrics> passes = run(List.of(new AnalysisResult(List.of(), false, "")), new FakeFixer(),
+                    new FakeVersionControl(), new FakeTestRunner(), foundBefore(before), false, 0);
+            assertEquals(1, passes.size());
+            assertEquals("sheriff-fixers", passes.get(0).label());
+            assertEquals(PassMetrics.DETERMINISTIC, passes.get(0).kind());
+            assertEquals(Map.of("SortedImport", 2, "JavaDoc", 1), passes.get(0).errorsBefore());
+            assertEquals(Map.of(), passes.get(0).errorsAfter());
+            assertNull(passes.get(0).usage());
+        }
+
+        @Test
+        @DisplayName("a repair that says nothing of what it found is not a pass to measure")
+        void aRepairWithNothingBeforeIsNotMeasured() {
+            List<PassMetrics> passes = run(List.of(new AnalysisResult(List.of(), false, "")), new FakeFixer(),
+                    new FakeVersionControl(), new FakeTestRunner(), () -> "applied", false, 0);
+            assertEquals(List.of(), passes);
+        }
+
+        @Test
+        @DisplayName("a pass the run was cut after is kept, cost and all, with nothing measured after it")
+        void aPassCutShortIsKeptUnmeasured() {
+            List<PassMetrics> passes = run(List.of(errors(error("a.py", "R1"))),
+                    request -> FixResult.succeeded("done", USAGE), new FakeVersionControl(List.of("other.py")),
+                    new FakeTestRunner(), () -> "", true, 0);
+            assertEquals(1, passes.size());
+            assertEquals(Map.of("R1", 1), passes.get(0).errorsBefore());
+            assertNull(passes.get(0).errorsAfter());
+            assertEquals(Map.of(), passes.get(0).repaired());
+            assertEquals(USAGE, passes.get(0).usage());
+        }
+
+        @Test
+        @DisplayName("a fixer that failed still spent what it spent")
+        void aFailedPassIsKeptWithItsCost() {
+            List<PassMetrics> passes = run(List.of(errors(error("a.py", "R1"))),
+                    request -> new FixResult(false, "boom", USAGE), new FakeVersionControl(), new FakeTestRunner(),
+                    () -> "", false, 0);
+            assertEquals(1, passes.size());
+            assertNull(passes.get(0).errorsAfter());
+            assertEquals(USAGE, passes.get(0).usage());
+        }
+
+        @Test
+        @DisplayName("a file the pass renamed is counted under its new name")
+        void aRenamedFileIsFollowed() {
+            List<PassMetrics> passes = run(List.of(
+                    errors(error("old.py", "FilenamePascalCase"), error("old.py", "R2")),
+                    errors(error("Old.py", "R2")), errors(error("Old.py", "R2"))),
+                    request -> FixResult.succeeded("done", USAGE),
+                    new FakeVersionControl(List.of("Old.py"), Map.of("Old.py", "old.py")), new FakeTestRunner(),
+                    () -> "", true, 0);
+            assertEquals(Map.of("R2", 1), passes.get(0).errorsAfter());
+            assertEquals(Map.of("FilenamePascalCase", 1), passes.get(0).repaired());
+        }
+
+        @Test
+        @DisplayName("the repair of a failing test is a pass of its own, on the whole component, with its cost")
+        void theTestRepairIsMeasuredToo() {
+            List<Boolean> results = new ArrayList<>(List.of(false, true));
+            TestRunner failsOnce = () -> results.remove(0) ? VerificationResult.passed("ok")
+                    : VerificationResult.failed("red");
+            List<PassMetrics> passes = run(List.of(new AnalysisResult(List.of(), false, ""),
+                    errors(error("a.py", "R1"))), request -> FixResult.succeeded("done", USAGE),
+                    new FakeVersionControl(), failsOnce, () -> "", false, 0);
+            assertEquals(1, passes.size());
+            assertEquals("repair", passes.get(0).label());
+            assertEquals(Map.of(), passes.get(0).errorsBefore());
+            assertEquals(Map.of("R1", 1), passes.get(0).errorsAfter());
+            assertEquals(USAGE, passes.get(0).usage());
+        }
+    }
+
+    @Nested
+    @DisplayName("a pass's errors grouped by rule")
+    class ByRule {
+
+        private SheriffFinding error(String file, String rule) {
+            return new SheriffFinding(file, rule + " broken", "fix " + rule, rule, SheriffFinding.ERROR, Map.of());
+        }
+
+        private AnalysisResult errors(SheriffFinding... findings) {
+            return AnalysisResult.of(List.of(findings));
+        }
+
+        private FixLoop byRule(FakeAnalyzer analyzer, FakeFixer fixer, Integer maxIterations, int batch) {
+            return new FixLoop(analyzer, fixer, new FakeVersionControl(), new FakeTestRunner(), RULES_CONTEXT,
+                    List.of(), new LoopSettings(maxIterations, false, batch, BatchGrouping.RULE));
+        }
+
+        @Test
+        @DisplayName("each pass is one rule's errors across its files, the biggest rule first")
+        void eachPassIsOneRule() {
+            FakeFixer fixer = new FakeFixer();
+            RunSummary summary = byRule(new FakeAnalyzer(List.of(
+                    errors(error("A.java", "R1"), error("A.java", "R2"), error("B.java", "R2")),
+                    errors(error("A.java", "R1")),
+                    FakeAnalyzer.result(0, "a.py"))), fixer, 8, 5).execute();
+            assertTrue(summary.ok());
+            assertEquals(List.of(List.of("A.java", "B.java"), List.of("A.java")),
+                    fixer.requests().stream().map(FixLoopTests::scopeOf).toList());
+            String first = fixer.requests().get(0).prompt();
+            assertTrue(first.contains("Errors to fix in this pass (2 total)"), first);
+            assertFalse(first.contains("R1 broken"), first);
+            assertTrue(fixer.requests().get(1).prompt().contains("R1 broken"));
+        }
+
+        @Test
+        @DisplayName("a rule no pass improved is parked in its file, and the file's other rules still get a pass")
+        void aStubbornRuleIsParkedInItsFile() {
+            FakeFixer fixer = new FakeFixer();
+            RunSummary summary = byRule(new FakeAnalyzer(List.of(
+                    errors(error("A.java", "R1"), error("A.java", "R2"), error("A.java", "R2")),
+                    errors(error("A.java", "R1"), error("A.java", "R2"), error("A.java", "R2")),
+                    errors(error("A.java", "R2"), error("A.java", "R2")))), fixer, 8, 5).execute();
+            assertEquals(StopReason.STALLED, summary.stoppedReason());
+            assertEquals(2, fixer.requests().size());
+            assertTrue(fixer.requests().get(1).prompt().contains("R1 broken"));
+            assertEquals(List.of("R2 in A.java"), summary.parkedFiles());
+        }
+
+        @Test
+        @DisplayName("with no cap given, the passes are counted per rule, and the batching line names the rule")
+        void theCapIsCountedPerRule() {
+            FakeFixer fixer = new FakeFixer();
+            ByteArrayOutputStream printed = new ByteArrayOutputStream();
+            PrintStream console = System.out;
+            System.setOut(new PrintStream(printed, true, StandardCharsets.UTF_8));
+            RunSummary summary;
+            try {
+                summary = byRule(new FakeAnalyzer(List.of(
+                        errors(error("A.java", "R1"), error("B.java", "R2"), error("C.java", "R3")),
+                        errors(error("B.java", "R2"), error("C.java", "R3")),
+                        errors(error("C.java", "R3")),
+                        FakeAnalyzer.result(0, "a.py"))), fixer, null, 0).execute();
+            } finally {
+                System.setOut(console);
+            }
+            assertTrue(summary.ok());
+            assertEquals(5, summary.maxIterations());
+            String output = printed.toString(StandardCharsets.UTF_8);
+            assertTrue(output.contains("batching: fixing R1 in 1 file(s) this pass, 2 error(s) left for later"),
+                    output);
         }
     }
 }

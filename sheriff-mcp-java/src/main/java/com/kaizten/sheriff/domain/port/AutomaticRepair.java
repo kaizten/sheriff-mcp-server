@@ -1,5 +1,8 @@
 package com.kaizten.sheriff.domain.port;
 
+import com.kaizten.sheriff.domain.valueobject.AnalysisResult;
+import java.util.Optional;
+
 /**
  * The repairs that need no model: the analyzer's own fixers, applied before
  * the loop spends a token on anything they could have done for free.
@@ -20,4 +23,14 @@ public interface AutomaticRepair {
      *     when there is nothing worth saying
      */
     String apply();
+
+    /**
+     * What the last {@link #apply()} found before it repaired anything,
+     * so a run can measure what the repair did.
+     *
+     * @return that analysis, empty when it did not analyze or could not
+     */
+    default Optional<AnalysisResult> analyzedBefore() {
+        return Optional.empty();
+    }
 }

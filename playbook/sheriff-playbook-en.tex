@@ -1092,6 +1092,11 @@ these settings.
   files the model is given at once. Fewer files, more focused answers and more
   passes.}
 
+\setting{SHERIFF_BATCH_BY}{\code{file}}{\code{file} or \code{rule}}{What
+  the errors the model is given at once have in common. \code{file}: every
+  error of a few files. \code{rule}: one rule's errors in a few files, so the
+  model makes one kind of change at a time.}
+
 \setting{SHERIFF_MAX_RULES_IN_PROMPT}{empty: the loop's own limit}{rules, 1 or
   more}{How many of the profile's rules go into each prompt. Fewer rules,
   shorter and cheaper prompts.}
