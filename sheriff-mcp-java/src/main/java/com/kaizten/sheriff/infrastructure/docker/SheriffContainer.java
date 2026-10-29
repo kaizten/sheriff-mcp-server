@@ -52,6 +52,12 @@ import java.util.stream.Stream;
  * profiles, nothing else differed; but nothing makes it so for every rule.
  * The parent's mount also left root-owned state files in the folder of
  * every project beside it, and made each of them wait for the others' runs.
+ *
+ * <p>Sheriff runs from the image's root, whatever {@code WORKDIR} the image
+ * declares: it finds its TypeScript analyzer in {@code ./node_modules}, which
+ * is under {@code /}. The image of 29 October ({@code sha256:e03d9daf})
+ * declares {@code /data}, and there every TypeScript analysis reported 0
+ * errors and exited 0, with Node's "Cannot find module" only on stdout.
  */
 public final class SheriffContainer {
 
@@ -59,6 +65,7 @@ public final class SheriffContainer {
     private static final String RUN = "run";
     private static final String REMOVE_WHEN_DONE = "--rm";
     private static final String NAME_FLAG = "--name";
+    private static final String WORKDIR_FLAG = "--workdir";
     private static final String CONTAINER_MOUNT = "/data";
     private static final String MOUNT_FLAG = "--mount";
     private static final String BIND_MOUNT = "type=bind,%s,target=" + CONTAINER_MOUNT;
@@ -68,6 +75,7 @@ public final class SheriffContainer {
     private static final String TMPFS_MOUNT = "type=tmpfs,%s";
     private static final String DESTINATION_FIELD = "destination=";
     private static final String SLASH = "/";
+    private static final String IMAGE_ROOT = SLASH;
     private static final String COMPONENT_FLAG = "--component";
     private static final int NEXT = 1;
     private static final String MAVEN_BUILD = "pom.xml";
@@ -98,7 +106,6 @@ public final class SheriffContainer {
     private static final String NO_STATE_FOLDER = "Could not create Sheriff's state folder %s: %s";
     private static final String STATE_NAME_REGEX = "[0-9a-f]{16}";
     private static final Pattern STATE_NAME = Pattern.compile(STATE_NAME_REGEX);
-
     private final ProcessRunner processes;
     private final String image;
     private final Path repositoryRoot;
@@ -286,7 +293,7 @@ public final class SheriffContainer {
      * @return the {@code docker run} invocation
      */
     List<String> command(String name, List<String> arguments) {
-        List<String> command = new ArrayList<>(List.of(DOCKER, RUN, REMOVE_WHEN_DONE, NAME_FLAG, name));
+        List<String> command = new ArrayList<>(List.of(DOCKER, RUN, REMOVE_WHEN_DONE, NAME_FLAG, name, WORKDIR_FLAG, IMAGE_ROOT));
         Optional<String> named = componentOf(arguments);
         if (named.isEmpty()) {
             command.addAll(List.of(MOUNT_FLAG, bindMount(repositoryRoot)));

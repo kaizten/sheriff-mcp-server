@@ -56,11 +56,6 @@ import java.util.function.Predicate;
  */
 public final class SettingsPage implements AutoCloseable {
 
-    /**
-     * How long a page waits unused before it closes.
-     */
-    public static final Duration IDLE_LIMIT = Duration.ofMinutes(30);
-
     private static final String PAGE_RESOURCE = "/settings-page.html";
     private static final String NO_PAGE = "The settings page %s is not in this jar.";
     private static final String LOOPBACK = "127.0.0.1";
@@ -119,7 +114,7 @@ public final class SettingsPage implements AutoCloseable {
     private static final String PROJECT_FILE_FIELD = "projectFile";
     private static final String SECTIONS_FIELD = "sections";
     private static final String TITLE_FIELD = "title";
-    private static final String SETTINGS_FIELD = "settings";
+    private static final String SETTINGS_FIELD = SETTINGS_PATH;
     private static final String PROBLEMS_FIELD = "problems";
     private static final String SOURCE_FIELD = "source";
     private static final String DEFAULT_FIELD = "default";
@@ -159,7 +154,6 @@ public final class SettingsPage implements AutoCloseable {
     private static final String DEFAULT_JAR = "sheriff-mcp.jar";
     private static final String QUOTE = "'";
     private static final String ESCAPED_QUOTE = "'\\''";
-
     private final Map<String, String> environment;
     private final Path project;
     private final Duration idleLimit;
@@ -170,6 +164,10 @@ public final class SettingsPage implements AutoCloseable {
     private final AtomicBoolean closing = new AtomicBoolean();
     private final AtomicLong lastUse = new AtomicLong(System.nanoTime());
     private final byte[] page;
+    /**
+     * How long a page waits unused before it closes.
+     */
+    public static final Duration IDLE_LIMIT = Duration.ofMinutes(30);
 
     /**
      * Opens a page on a port of its own.

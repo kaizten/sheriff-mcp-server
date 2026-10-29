@@ -31,7 +31,6 @@ public final class RuleRecovery {
     private static final String NUMBER_PATTERN = "-?\\d+";
     private static final String ANYTHING_PATTERN = ".*?";
     private static final String EMPTY = "";
-
     private final List<CompiledTemplate> templates;
 
     /**

@@ -54,7 +54,7 @@ class SheriffContainerTests {
     void namesTheContainerAndMountsTheRepository() {
         FakeProcessRunner runner = FakeProcessRunner.always(ProcessOutcome.completed(0, "", ""));
         container(runner).run(List.of("test", "--test", "JAVA"));
-        assertEquals(List.of("docker", "run", "--rm", "--name", "sheriff-agent-test", "--mount", "type=bind,source=" + REPOSITORY + ",target=/data",
+        assertEquals(List.of("docker", "run", "--rm", "--name", "sheriff-agent-test", "--workdir", "/", "--mount", "type=bind,source=" + REPOSITORY + ",target=/data",
                 "kaizten/sheriff:latest", "test", "--test", "JAVA"), runner.command());
     }
 
@@ -69,7 +69,7 @@ class SheriffContainerTests {
         Files.writeString(app.resolve("build.gradle"), "");
         FakeProcessRunner runner = FakeProcessRunner.always(ProcessOutcome.completed(0, "", ""));
         container(runner, repository).run(List.of("test", "--test", "JAVA", "--component", "app"));
-        assertEquals(List.of("docker", "run", "--rm", "--name", "sheriff-agent-test",
+        assertEquals(List.of("docker", "run", "--rm", "--name", "sheriff-agent-test", "--workdir", "/",
                 "--mount", SheriffContainer.bindMount(container(runner, repository).stateFolder("app")),
                 "--mount", "type=bind,source=" + app + ",target=/data/app",
                 "--mount", "type=tmpfs,destination=/data/app/target",
@@ -119,7 +119,7 @@ class SheriffContainerTests {
         SheriffContainer container = container(runner, repository);
         container.run(List.of("test", "--test", "JAVA", "--uri", "file:/data", "--component", "app"));
         Path state = container.stateFolder("app");
-        assertEquals(List.of("docker", "run", "--rm", "--name", "sheriff-agent-test",
+        assertEquals(List.of("docker", "run", "--rm", "--name", "sheriff-agent-test", "--workdir", "/",
                 "--mount", "type=bind,source=" + state + ",target=/data",
                 "--mount", "type=bind,source=" + app + ",target=/data/app",
                 "kaizten/sheriff:latest", "test", "--test", "JAVA", "--uri", "file:/data", "--component", "app"),

@@ -26,7 +26,6 @@ import java.util.Optional;
 public final class DeterministicFixer implements AutomaticRepair {
 
     private static final int NO_ERRORS = 0;
-
     private final RuleCatalog catalog;
     private final SheriffRepair repair;
     private AnalysisResult analyzedBefore;

@@ -21,17 +21,8 @@ import java.util.List;
  */
 public final class CheckCommand {
 
-    public static final int PASSED = 0;
-    public static final int ERRORS_FOUND = 1;
-    public static final int NOT_ANALYZED = 2;
-
     private static final String COMPONENT_FLAG = "--component";
     private static final String PROFILE_FLAG = "--profile";
-
-    /**
-     * The options this command reads, each followed by its value.
-     */
-    static final List<String> OPTIONS = List.of(COMPONENT_FLAG, PROFILE_FLAG);
     private static final String NOT_GIVEN = "";
     private static final int NOT_FOUND = -1;
     private static final int NEXT = 1;
@@ -47,10 +38,16 @@ public final class CheckCommand {
     private static final String UNAVAILABLE = "%s: Sheriff could not analyze it: %s%n";
     private static final String LINE_BREAK = "\\s*\\R\\s*";
     private static final String SPACE = " ";
-
     private final McpConfig config;
     private final SheriffRunner runner;
     private final PrintStream output;
+    /**
+     * The options this command reads, each followed by its value.
+     */
+    static final List<String> OPTIONS = List.of(COMPONENT_FLAG, PROFILE_FLAG);
+    public static final int PASSED = 0;
+    public static final int ERRORS_FOUND = 1;
+    public static final int NOT_ANALYZED = 2;
 
     /**
      * Wires the check to a project and to Sheriff.

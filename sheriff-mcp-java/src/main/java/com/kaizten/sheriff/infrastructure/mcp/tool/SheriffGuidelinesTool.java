@@ -55,7 +55,6 @@ final class SheriffGuidelinesTool {
     private static final String CODE_FENCE_OPEN = "```python";
     private static final String CODE_FENCE_CLOSE = "```";
     private static final String NEWLINE = "\n";
-
     private final ToolContext context;
 
     /**

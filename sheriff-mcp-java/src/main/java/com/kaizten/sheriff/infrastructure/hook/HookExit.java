@@ -9,17 +9,15 @@ package com.kaizten.sheriff.infrastructure.hook;
  */
 public final class HookExit {
 
+    private static final String UTILITY_CLASS_MESSAGE = "This is a utility class and cannot be instantiated.";
     /**
      * Let the tool call, or the turn, go ahead.
      */
     public static final int ALLOW = 0;
-
     /**
      * Stop it, and tell the model why.
      */
     public static final int BLOCK = 2;
-
-    private static final String UTILITY_CLASS_MESSAGE = "This is a utility class and cannot be instantiated.";
 
     /**
      * Never called: this class only carries the two exit codes, so an instance

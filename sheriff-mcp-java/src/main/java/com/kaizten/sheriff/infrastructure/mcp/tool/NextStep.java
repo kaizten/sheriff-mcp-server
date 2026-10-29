@@ -27,59 +27,57 @@ import java.util.Set;
  */
 final class NextStep {
 
-    /**
-     * How every step starts, so that a model, and this class, can find it.
-     */
-    static final String MARK = "Next step:";
-
-    private static final String REPAIR = "%n" + MARK + " %s. It applies every repair Sheriff has for these "
+    private static final String STEP_MARK = "Next step:";
+    private static final String REPAIR = "%n" + STEP_MARK + " %s. It applies every repair Sheriff has for these "
             + "errors and lists what it cannot repair.";
-    private static final String THESE_FILES = "%n" + MARK + " fix by hand every error listed above, all of "
+    private static final String THESE_FILES = "%n" + STEP_MARK + " fix by hand every error listed above, all of "
             + "them, in %s, each file from the last line up, as the line numbers are those of this analysis. "
             + "Leave the other files for now: the next answer lists them. Then %s again. These are the work, errors "
             + "that were already there included: do not ask the user whether to fix them, and do not stop "
             + "before a call reports 0 errors. Only a false positive of the checker may stay; name it and "
             + "say why.";
-    private static final String TESTS = "%n" + MARK + " run the project's tests (%s). If they pass, the "
+    private static final String TESTS = "%n" + STEP_MARK + " run the project's tests (%s). If they pass, the "
             + "component is done. If you change any file to make them pass, %s again.";
-    private static final String NO_TESTS = "%n" + MARK + " none, the component is done: it meets the "
-            + "standards and has no tests to run.";
-    private static final String PASSING = "%n" + MARK + " none, the component is done: it meets the "
-            + "standards and its tests pass.";
-    private static final String PROTOTYPE = "%n" + MARK + " none, the component is done: it meets the "
-            + "standards. SHERIFF_PROTOTYPE is 1, so nothing asks for its tests, runs them, measures them; tell the "
+    private static final String DONE = "%n" + STEP_MARK + " none, the component is done: it meets the ";
+    private static final String NO_TESTS = DONE + "standards and has no tests to run.";
+    private static final String PASSING = DONE + "standards and its tests pass.";
+    private static final String PROTOTYPE = DONE + "standards. SHERIFF_PROTOTYPE is 1, so nothing asks for its tests, runs them, measures them; tell the "
             + "user so, and that setting it back to 0 asks for them before the work is kept.";
-    private static final String FAILING = "%n" + MARK + " fix what makes the tests fail, then %s again.";
-    private static final String UNAVAILABLE = "%n%n" + MARK + " tell the user the code standards check could "
+    private static final String FAILING = "%n" + STEP_MARK + " fix what makes the tests fail, then %s again.";
+    private static final String UNAVAILABLE = "%n%n" + STEP_MARK + " tell the user the code standards check could "
             + "not run, and why, in their words above. Go on with the rest of the work, run the project's own "
             + "tests, and %s again before finishing.";
     private static final String UNTESTED = "%n%nThese methods are new and no test that changed calls them, so "
-            + "nothing checks they work:%n%s%n" + MARK + " add a test under the component's src/test for each "
+            + "nothing checks they work:%n%s%n" + STEP_MARK + " add a test under the component's src/test for each "
             + "one, that calls it and checks what it returns, edge cases included (nothing to return, a null "
             + "among the inputs). Then run %s, and %s again.";
-    private static final String MEASURE = "%n" + MARK + " %s. It runs the project's tests and then measures "
+    private static final String MEASURE = "%n" + STEP_MARK + " %s. It runs the project's tests and then measures "
             + "how well they test the lines this change wrote: the lines they run and the branches of each "
             + "condition they take (JaCoCo), and the changes to those lines they notice (PIT's mutation testing).";
     private static final String MEASURED_PASSING = "%n%s" + PASSING;
     private static final String WEAK_TESTS = "%n%nThe tests pass, but they do not test enough of what this change "
-            + "wrote. %s%s%n" + MARK + " add tests under the component's src/test that run each line listed, take "
+            + "wrote. %s%s%n" + STEP_MARK + " add tests under the component's src/test that run each line listed, take "
             + "every branch of each condition listed (each side of every && and ||, with the parameters that "
             + "make it go each way) and fail on each change listed, by checking what the code returns, edge "
             + "cases included (nothing to return, a null among the inputs, each limit of a comparison). Then %s "
             + "again.";
     private static final String UNMEASURED = "%n%nHow well the tests test this change could not be measured: %s%n"
-            + MARK + " none, the component is done: it meets the standards and its tests pass. Tell the user "
+            + STEP_MARK + " none, the component is done: it meets the standards and its tests pass. Tell the user "
             + "that the coverage and mutation testing of the change could not run, and why.";
-    private static final String EXHAUSTED = "%n" + MARK + " none: the %d error(s) above stayed through every "
+    private static final String EXHAUSTED = "%n" + STEP_MARK + " none: the %d error(s) above stayed through every "
             + "repair and every edit made for them, so the work on them is over. Tell the user each one, in a line, "
             + "and why it cannot be fixed; the rest of the component is done.";
     private static final String UNTESTED_LINE = "  - ";
     private static final String NEWLINE = "\n";
     private static final String FILE_SEPARATOR = ", ";
-    private static final String STEP_START = NEWLINE + MARK;
+    private static final String STEP_START = NEWLINE + STEP_MARK;
     private static final int NOT_FOUND = -1;
     private static final String PROJECT_TESTS = "the project's tests";
     private static final String ERROR_UTILITY_CLASS = "This is a utility class and cannot be instantiated.";
+    /**
+     * How every step starts, so that a model, and this class, can find it.
+     */
+    static final String MARK = STEP_MARK;
 
     /**
      * Refuses to be instantiated: every member here is static.
@@ -249,7 +247,7 @@ final class NextStep {
      * @return the answer, ending with a step
      */
     static String afterFailure(String answer, String testCall) {
-        return answer.contains(MARK) ? answer : answer + String.format(UNAVAILABLE, testCall);
+        return answer.contains(STEP_MARK) ? answer : answer + String.format(UNAVAILABLE, testCall);
     }
 
     /**

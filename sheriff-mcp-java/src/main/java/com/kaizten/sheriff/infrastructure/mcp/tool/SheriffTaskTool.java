@@ -39,7 +39,6 @@ final class SheriffTaskTool {
     private static final String TASK_RESULT = "%n%nResult:%n%s";
     private static final String NEWLINE = "\n";
     private static final String VERSION_LINE = "sheriff-mcp %s, running Sheriff's image %s.";
-
     private final ToolContext context;
 
     /**

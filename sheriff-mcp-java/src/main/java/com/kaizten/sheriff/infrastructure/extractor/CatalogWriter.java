@@ -39,24 +39,6 @@ public final class CatalogWriter {
     private static final String EXAMPLE_FIELD = "example";
     private static final String PROFILE_SOURCE_FIELD = "profile_source";
     private static final String UNMATCHED_CHECKS_FIELD = "unmatched_checks";
-
-    /**
-     * What the profile map came from when the image has no tree to ask.
-     */
-    public static final String BYTECODE_SOURCE =
-            "TestFactory bytecode + class reference graph (approximate)";
-
-    /**
-     * What it came from when Sheriff could simply be asked.
-     */
-    public static final String TREE_SOURCE = "sheriff tree --export-profile";
-
-    /**
-     * What it came from when the tree answered and the bytecode filled the
-     * codes the tree does not name.
-     */
-    public static final String BOTH_SOURCES =
-            "sheriff tree --export-profile, with the bytecode for codes it does not name";
     private static final String RULES_FIELD = "rules";
     private static final String CODE_FIELD = "code";
     private static final String REFERENCE_CODE_FIELD = "reference_code";
@@ -99,8 +81,22 @@ public final class CatalogWriter {
     private static final String EXAMPLE_LABEL = "**Accepted code:**";
     private static final String FENCE_OPEN = "```python";
     private static final String FENCE = "```";
-
     private final ObjectMapper json = new ObjectMapper();
+    /**
+     * What the profile map came from when the image has no tree to ask.
+     */
+    public static final String BYTECODE_SOURCE =
+            "TestFactory bytecode + class reference graph (approximate)";
+    /**
+     * What it came from when Sheriff could simply be asked.
+     */
+    public static final String TREE_SOURCE = "sheriff tree --export-profile";
+    /**
+     * What it came from when the tree answered and the bytecode filled the
+     * codes the tree does not name.
+     */
+    public static final String BOTH_SOURCES =
+            "sheriff tree --export-profile, with the bytecode for codes it does not name";
 
     /**
      * The catalog as the agent reads it.

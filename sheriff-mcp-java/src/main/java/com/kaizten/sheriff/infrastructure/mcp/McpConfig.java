@@ -73,7 +73,6 @@ public final class McpConfig {
     private static final String PROTOTYPE = "SHERIFF_PROTOTYPE";
     private static final String ENABLED = "1";
     private static final String NOT_POSITIVE = "%s must be at least 1 second, but it is '%s'.";
-
     private final Map<String, String> environment;
     private final Path workingDirectory;
     private ProjectLayout layout;

@@ -12,7 +12,6 @@ package com.kaizten.sheriff.infrastructure.mcp.task;
 public final class TaskFailure extends RuntimeException {
 
     private static final long serialVersionUID = 1L;
-
     /**
      * The task, as it was recorded when it failed.
      */

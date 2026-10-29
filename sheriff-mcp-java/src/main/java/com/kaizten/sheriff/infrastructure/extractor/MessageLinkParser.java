@@ -39,12 +39,10 @@ public final class MessageLinkParser {
     private static final String MESSAGE_OF_PATTERN =
             "\\binvokestatic\\s+#\\d+\\s+//\\s*Method\\s+\\S*?/types/(\\w+)KaiztenSheriffErrorMessage\\.of:";
     private static final String CODE_START_PATTERN = "^\\s*Code:\\s*$";
-
     private static final Pattern CLASS_LINE = Pattern.compile(CLASS_LINE_PATTERN);
     private static final Pattern LDC_STRING = Pattern.compile(LDC_PATTERN);
     private static final Pattern MESSAGE_OF = Pattern.compile(MESSAGE_OF_PATTERN);
     private static final Pattern CODE_START = Pattern.compile(CODE_START_PATTERN);
-
     private static final String LINE_SEPARATOR_PATTERN = "\\R";
     private static final int NOT_FOUND = -1;
     private static final int STRINGS_PER_MESSAGE = 2;
@@ -55,7 +53,6 @@ public final class MessageLinkParser {
     private static final String DOT = ".";
     private static final String SLASH = "/";
     private static final String NOT_INSTANTIABLE = "This is a utility class and cannot be instantiated.";
-
     private static final String[][] JAVAP_ESCAPES = {
         {"\\n", "\n"},
         {"\\r", "\r"},

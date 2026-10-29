@@ -7,7 +7,6 @@ import com.kaizten.sheriff.infrastructure.process.ProcessOutcome;
 import com.kaizten.sheriff.infrastructure.process.ProcessRunner;
 import java.nio.file.Path;
 import java.time.Duration;
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -22,25 +21,22 @@ import java.util.Map;
  */
 public final class ShellTestRunner implements TestRunner {
 
+    private static final String DISABLED_MESSAGE = "No verification command configured; skipping the test gate.";
+    private final ProcessRunner processes;
+    private final String command;
+    private final Path workingDirectory;
+    private final Duration timeout;
     /**
      * Why a component with no build tool had no tests run, as it is reported.
      */
     public static final String NO_TESTS_REASON =
             "No build tool with tests was found in the component, so nothing was verified beyond Sheriff.";
-
     /**
      * The command given for a component with no build tool: it is never run,
      * but a command it has to be, because an empty one is replaced by the
      * default on its way through the environment.
      */
     public static final String NO_TESTS_COMMAND = "echo '" + NO_TESTS_REASON + "'";
-
-    private static final String DISABLED_MESSAGE = "No verification command configured; skipping the test gate.";
-
-    private final ProcessRunner processes;
-    private final String command;
-    private final Path workingDirectory;
-    private final Duration timeout;
 
     /**
      * Wires the runner to one command.

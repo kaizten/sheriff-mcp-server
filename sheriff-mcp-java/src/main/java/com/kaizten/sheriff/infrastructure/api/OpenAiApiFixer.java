@@ -51,54 +51,44 @@ public final class OpenAiApiFixer implements CodeFixer {
      * The path appended to the configured base URL.
      */
     private static final String COMPLETIONS_PATH = "/chat/completions";
-
     /**
      * The header carrying the key, where one is needed.
      */
     private static final String AUTHORIZATION = "Authorization";
-
     /**
      * The scheme that header uses.
      */
     private static final String BEARER = "Bearer ";
-
     /**
      * The header naming the body's type.
      */
     private static final String CONTENT_TYPE = "Content-Type";
-
     /**
      * The body's type.
      */
     private static final String JSON_TYPE = "application/json";
-
     /**
      * Reported when a key is required and none was configured.
      */
     private static final String MISSING_KEY =
             "No OpenAI API key configured. Set OPENAI_API_KEY, or use AI_BACKEND=local for a model "
                     + "served on this machine, which needs none.";
-
     /**
      * Reported when the tool loop hits its ceiling.
      */
     private static final String EXHAUSTED = "The model was still calling tools after %d turns.";
-
     /**
      * Reported when the endpoint answers with something other than success.
      */
     private static final String BAD_STATUS = "%s answered %d: %s";
-
     /**
      * What a server says when the prompt does not fit its context window.
      */
     private static final String CONTEXT_EXCEEDED = "exceed_context_size";
-
     /**
      * No hint to add.
      */
     private static final String NO_HINT = "";
-
     /**
      * How to fix that, for Ollama, whose default window is 4096 tokens and
      * cannot be widened through this API.
@@ -107,296 +97,238 @@ public final class OpenAiApiFixer implements CodeFixer {
             "%n  The prompt does not fit the model's context window. With Ollama, make a copy of the "
             + "model with a larger one (16384 or more) and point OPENAI_MODEL at it:%n"
             + "    printf 'FROM %s\\nPARAMETER num_ctx 16384\\n' > Modelfile && ollama create %s-16k -f Modelfile";
-
     /**
      * Reported when the endpoint could not be reached at all.
      */
     private static final String UNREACHABLE = "Could not reach %s: %s";
-
     /**
      * Reported when a tool nobody offered is called.
      */
     private static final String UNKNOWN_TOOL = "Unknown tool '%s'.";
-
     /**
      * Between the lines of the transcript.
      */
     private static final String TRANSCRIPT_SEPARATOR = "\n";
-
     /**
      * Between a tool's name and what it answered.
      */
     private static final String OUTCOME_SEPARATOR = ": ";
-
     /**
      * The name of the tool that reads a file.
      */
     private static final String READ_TOOL = "read_file";
-
     /**
      * The name of the tool that writes one.
      */
     private static final String WRITE_TOOL = "write_file";
-
     /**
      * What the read tool is for.
      */
     private static final String READ_DESCRIPTION = "Read one of the files this task is allowed to change.";
-
     /**
      * What the write tool is for.
      */
     private static final String WRITE_DESCRIPTION = "Replace the whole contents of one of those files.";
-
     /**
      * The argument naming a file.
      */
     private static final String PATH_ARGUMENT = "path";
-
     /**
      * The argument carrying a file's new contents.
      */
     private static final String CONTENT_ARGUMENT = "content";
-
     /**
      * The value used when an argument is absent.
      */
     private static final String MISSING_ARGUMENT = "";
-
     /**
      * How long one request is given before it is abandoned.
      */
     private static final int REQUEST_TIMEOUT_SECONDS = 600;
-
     /**
      * The lowest HTTP status that is not a success.
      */
     private static final int FIRST_ERROR_STATUS = 300;
-
     /**
      * How much of a failing body is worth reporting.
      */
     private static final int REPORTED_BODY_LIMIT = 400;
-
     /**
      * The field a model puts its tool calls in.
      */
     private static final String TOOL_CALLS = "tool_calls";
-
     /**
      * The field holding the answers.
      */
     private static final String CHOICES = "choices";
-
     /**
      * The field holding one answer's message.
      */
     private static final String MESSAGE = "message";
-
     /**
      * A fenced code block in a reply, where models put the calls they write.
      */
     private static final String FENCED_REGEX = "```(?:json)?\\s*(.*?)```";
-
     /**
      * A fenced code block in a reply, compiled.
      */
     private static final Pattern FENCED_BLOCK = Pattern.compile(OpenAiApiFixer.FENCED_REGEX, Pattern.DOTALL);
-
     /**
      * The group holding a fenced block's body.
      */
     private static final int FENCED_BODY = 1;
-
     /**
      * What the model is told about calls it wrote as text.
      */
     private static final String TEXTUAL_CALLS_HEADER =
             "You wrote these tool calls as text instead of calling the tools. They were run for you:%n";
-
     /**
      * One such call's result.
      */
     private static final String TEXTUAL_CALL_RESULT = "- %s(%s): %s%n";
-
     /**
      * How the transcript marks a call the model wrote as text.
      */
     private static final String TEXTUAL_CALL_NOTE = "(written as text) ";
-
     /**
      * The field saying why an answer stopped.
      */
     private static final String FINISH_REASON = "finish_reason";
-
     /**
      * The finish reason of an answer that ran out of tokens.
      */
     private static final String LENGTH_FINISH = "length";
-
     /**
      * The finish reason of an answer a content filter stopped.
      */
     private static final String FILTERED_FINISH = "content_filter";
-
     /**
      * What a pass reports when the reply ran out of tokens.
      */
     private static final String TRUNCATED =
             "The model's reply was cut off at the %d-token limit, so nothing in that reply was applied. "
                     + "Raise OPENAI_MAX_TOKENS if this keeps happening.";
-
     /**
      * What a pass reports when a content filter stopped the reply.
      */
     private static final String FILTERED =
             "The endpoint's content filter stopped the reply, so nothing in that reply was applied.";
-
     /**
      * The field naming the model.
      */
     private static final String MODEL_FIELD = "model";
-
     /**
      * The field capping the answer.
      */
     private static final String MAX_TOKENS_FIELD = "max_tokens";
-
     /**
      * The field carrying the conversation.
      */
     private static final String MESSAGES_FIELD = "messages";
-
     /**
      * The field offering the tools.
      */
     private static final String TOOLS_FIELD = "tools";
-
     /**
      * The field naming a thing's kind.
      */
     private static final String TYPE_FIELD = "type";
-
     /**
      * The only kind of tool this API has.
      */
     private static final String FUNCTION_TYPE = "function";
-
     /**
      * The field naming a function.
      */
     private static final String NAME_FIELD = "name";
-
     /**
      * The field describing one.
      */
     private static final String DESCRIPTION_FIELD = "description";
-
     /**
      * The field holding a function's parameters.
      */
     private static final String PARAMETERS_FIELD = "parameters";
-
     /**
      * The field holding a schema's properties.
      */
     private static final String PROPERTIES_FIELD = "properties";
-
     /**
      * The field listing which of them are required.
      */
     private static final String REQUIRED_FIELD = "required";
-
     /**
      * The JSON schema type of an object.
      */
     private static final String OBJECT_TYPE = "object";
-
     /**
      * The JSON schema type of a string.
      */
     private static final String STRING_TYPE = "string";
-
     /**
      * The field naming who is speaking.
      */
     private static final String ROLE_FIELD = "role";
-
     /**
      * The person asking.
      */
     private static final String USER_ROLE = "user";
-
     /**
      * A tool answering.
      */
     private static final String TOOL_ROLE = "tool";
-
     /**
      * The field carrying what was said.
      */
-    private static final String CONTENT_FIELD = "content";
-
+    private static final String CONTENT_FIELD = CONTENT_ARGUMENT;
     /**
      * The field tying an answer to the call it answers.
      */
     private static final String TOOL_CALL_ID_FIELD = "tool_call_id";
-
     /**
      * The field holding a call's identifier.
      */
     private static final String ID_FIELD = "id";
-
     /**
      * The field holding a call's arguments.
      */
     private static final String ARGUMENTS_FIELD = "arguments";
-
     /**
      * The key for an OpenAI-compatible endpoint, empty when none is needed.
      */
     private final String apiKey;
-
     /**
      * The endpoint's base URL, without a trailing slash.
      */
     private final String baseUrl;
-
     /**
      * The model to ask for.
      */
     private final String model;
-
     /**
      * The ceiling on one answer.
      */
     private final long maxTokens;
-
     /**
      * How many tool round trips one fix may take.
      */
     private final int maxToolIterations;
-
     /**
      * Whether a missing key should stop the run before it starts.
      */
     private final boolean keyRequired;
-
     /**
      * The repository the tools are scoped to.
      */
     private final Path repositoryRoot;
-
     /**
      * The only folder the tools may read or write in.
      */
     private final Path workspace;
-
     /**
      * Where the exchange is recorded.
      */
     private final PromptLog promptLog;
-
     /**
      * How JSON is read and written.
      */

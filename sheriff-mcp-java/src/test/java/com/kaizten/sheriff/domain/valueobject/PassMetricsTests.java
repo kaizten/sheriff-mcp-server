@@ -56,7 +56,11 @@ class PassMetricsTests {
      */
     @Test
     void shouldBeEqualToAnotherInstanceWithSameValue() {
-        assertEquals(PassMetricsMother.random(), PassMetricsMother.random());
+        PassMetrics first = new PassMetrics("iteration-1", PassMetrics.MODEL, Map.of("R1", 2), Map.of("R1", 1),
+                Duration.ZERO, null);
+        PassMetrics second = new PassMetrics("iteration-1", PassMetrics.MODEL, Map.of("R1", 2), Map.of("R1", 1),
+                Duration.ZERO, null);
+        assertEquals(first, second);
     }
 
     /**
@@ -163,6 +167,18 @@ class PassMetricsTests {
                 new PassMetrics("p", PassMetrics.DETERMINISTIC, Map.of(), null, Duration.ZERO, null).kind());
         assertEquals(PassMetrics.MODEL,
                 new PassMetrics("p", PassMetrics.MODEL, Map.of(), null, Duration.ZERO, null).kind());
+    }
+
+    /**
+     * Every collection it returns is unmodifiable.
+     */
+    @Test
+    void shouldReturnImmutableCollection() {
+        final PassMetrics value = new PassMetrics("iteration-1", PassMetrics.MODEL, Map.of("R1", 2), Map.of("R1", 1),
+                Duration.ZERO, null);
+        assertThrows(UnsupportedOperationException.class, () -> value.errorsBefore().clear());
+        assertThrows(UnsupportedOperationException.class, () -> value.errorsAfter().clear());
+        assertThrows(UnsupportedOperationException.class, () -> value.repaired().clear());
     }
 
     /**

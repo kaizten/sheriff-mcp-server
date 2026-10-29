@@ -33,12 +33,6 @@ import java.util.stream.Stream;
  */
 public final class TemporaryFolders {
 
-    /**
-     * How long a marker is kept: longer than any session is left and picked
-     * up again, short enough that the folder stays small.
-     */
-    public static final Duration MARKER_LIFETIME = Duration.ofDays(7);
-
     private static final String TEMPORARY_DIRECTORY = "java.io.tmpdir";
     private static final String HOME_PROPERTY = "sheriff.temp.home";
     private static final String USER_NAME = "user.name";
@@ -47,6 +41,11 @@ public final class TemporaryFolders {
     private static final String SAFE_CHARACTER = "_";
     private static final String UNKNOWN_USER = "user";
     private static final String ERROR_UTILITY_CLASS = "This is a utility class and cannot be instantiated.";
+    /**
+     * How long a marker is kept: longer than any session is left and picked
+     * up again, short enough that the folder stays small.
+     */
+    public static final Duration MARKER_LIFETIME = Duration.ofDays(7);
 
     /**
      * Refuses to be instantiated: every member here is static.

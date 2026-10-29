@@ -44,25 +44,9 @@ public final class ComponentGate {
     private static final String PERL_SCRIPT_SUFFIX = ".pl";
     private static final String PERL_MODULE_SUFFIX = ".pm";
     private static final String PYTHON_SUFFIX = ".py";
-
-    /**
-     * Extensions Sheriff actually analyzes.
-     *
-     * <p>Editing a README is not this gate's business.
-     */
-    static final Set<String> GUARDED_SUFFIXES = Set.of(
-            JAVA_SUFFIX,
-            TYPESCRIPT_SUFFIX,
-            TYPESCRIPT_JSX_SUFFIX,
-            VUE_SUFFIX,
-            PERL_SCRIPT_SUFFIX,
-            PERL_MODULE_SUFFIX,
-            PYTHON_SUFFIX);
-
     private static final String ALLOWED_COMPONENTS = "SHERIFF_GATE_COMPONENTS";
     private static final String LIST_SEPARATOR = ",";
     private static final int COMPONENT_DEPTH = 2;
-
     private static final String FIX_TOOL = "sheriff_fix";
     private static final String NO_PROFILE = "";
     private static final String DEFAULT_JAR = "sheriff-mcp.jar";
@@ -82,11 +66,23 @@ public final class ComponentGate {
     private static final String TESTS_STEP = "Next step: run %s and fix what fails until it passes, then call "
             + "the sheriff_test tool with component '%s' once more, as a fix can break a rule. If the tests "
             + "already failed before this turn, say so instead of leaving them.";
-
     private final Configuration configuration;
     private final Composition composition;
     private final VerdictCache verdicts;
     private StuckErrors stuck = new StuckErrors();
+    /**
+     * Extensions Sheriff actually analyzes.
+     *
+     * <p>Editing a README is not this gate's business.
+     */
+    static final Set<String> GUARDED_SUFFIXES = Set.of(
+            JAVA_SUFFIX,
+            TYPESCRIPT_SUFFIX,
+            TYPESCRIPT_JSX_SUFFIX,
+            VUE_SUFFIX,
+            PERL_SCRIPT_SUFFIX,
+            PERL_MODULE_SUFFIX,
+            PYTHON_SUFFIX);
 
     /**
      * Wires the gate to the user's own record of verdicts, the one the MCP's
@@ -381,5 +377,4 @@ public final class ComponentGate {
         String name = path.getFileName().toString().toLowerCase(Locale.ROOT);
         return GUARDED_SUFFIXES.stream().anyMatch(name::endsWith);
     }
-
 }
