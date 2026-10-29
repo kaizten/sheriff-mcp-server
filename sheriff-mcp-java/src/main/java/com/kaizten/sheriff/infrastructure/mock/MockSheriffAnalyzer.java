@@ -26,7 +26,6 @@ public final class MockSheriffAnalyzer implements CodeAnalyzer {
     private static final String HOW_TO_SOLVE = "Remove the '%s' marker from line %d.";
     private static final String REFERENCE_CODE = "MockMarker";
     private static final String NOTHING_TO_ANALYZE = "The mock has nothing to analyze at %s";
-
     private final Path repositoryRoot;
     private final Path target;
     private final String marker;

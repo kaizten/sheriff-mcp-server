@@ -32,7 +32,6 @@ public final class StopBlocks {
     private static final String STALLED = "stalled";
     private static final String NOT_STALLED = "";
     private static final int ONE_STALL = 1;
-
     private final Path directory;
 
     /**

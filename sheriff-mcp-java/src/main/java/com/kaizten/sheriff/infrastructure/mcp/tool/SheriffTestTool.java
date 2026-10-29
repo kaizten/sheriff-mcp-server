@@ -28,7 +28,6 @@ final class SheriffTestTool {
     private static final String HEADER = "%s has %d error(s) under %s%s.";
     private static final String AND_WARNINGS = " and %d warning(s)";
     private static final int NO_ERRORS = 0;
-
     private final ToolContext context;
 
     /**

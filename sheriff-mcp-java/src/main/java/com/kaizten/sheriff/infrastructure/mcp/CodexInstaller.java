@@ -40,8 +40,9 @@ public final class CodexInstaller {
     private static final String JAVA_ON_THE_PATH = "java";
     private static final String SERVER_NAME = "sheriff";
     private static final String TABLE_START = "[";
-    private static final String SERVER_TABLE = "[mcp_servers." + SERVER_NAME + "]";
-    private static final String SERVER_SUBTABLE = "[mcp_servers." + SERVER_NAME + ".";
+    private static final String SERVERS_TABLE = "[mcp_servers.";
+    private static final String SERVER_TABLE = SERVERS_TABLE + SERVER_NAME + "]";
+    private static final String SERVER_SUBTABLE = SERVERS_TABLE + SERVER_NAME + ".";
     private static final int TOOL_TIMEOUT_SECONDS = 600;
     private static final int WSL_TOOL_TIMEOUT_SECONDS = 1800;
     private static final String SERVER_ENTRY = """
@@ -76,7 +77,6 @@ public final class CodexInstaller {
     private static final String UNINSTALLED = "Sheriff is no longer in %s or %s.%n";
     private static final int SUCCESS = 0;
     private static final int FAILURE = 2;
-
     private final Path codexHome;
     private final Path jar;
     private final PrintStream output;

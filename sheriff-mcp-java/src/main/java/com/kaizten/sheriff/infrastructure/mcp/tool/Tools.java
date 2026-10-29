@@ -17,7 +17,6 @@ import com.kaizten.sheriff.infrastructure.mcp.task.TaskRegistry;
 import com.kaizten.sheriff.infrastructure.process.SystemProcessRunner;
 import com.kaizten.sheriff.infrastructure.shell.ShellTestRunner;
 import java.nio.file.Path;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -65,7 +64,6 @@ public final class Tools implements AutoCloseable {
             + "how to fix it; %s lists the settings and changes one:%s";
     private static final String SETTINGS_PROBLEM = "%n  - %s";
     private static final String SERVER_VERSION_FIELD = "server_version";
-
     private final TaskRegistry tasks;
     private final Map<String, Tool> byName;
     private final ImageProvisioning image;

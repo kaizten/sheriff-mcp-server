@@ -100,7 +100,6 @@ public final class ChangeCoverage {
             + "said:%n%s";
     private static final String UNREADABLE = "a report could not be read: %s";
     private static final String NOT_MAVEN = "the component does not build with Maven";
-
     private final ProcessRunner processes;
     private final Path mount;
     private final BiFunction<String, List<String>, Optional<String>> maven;

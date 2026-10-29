@@ -41,7 +41,6 @@ public final class RuleCatalogExtractor {
     private static final String FORMAT_FLAG = "--format";
     private static final String IMAGE_ID_FORMAT = "{{.Id}}";
     private static final Duration INSPECT_TIMEOUT = Duration.ofSeconds(60);
-
     private final ProcessRunner processes;
     private final CatalogWriter writer = new CatalogWriter();
     private final Path workingDirectory;

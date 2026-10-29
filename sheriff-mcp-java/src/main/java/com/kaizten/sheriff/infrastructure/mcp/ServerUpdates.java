@@ -37,16 +37,6 @@ import java.util.function.Supplier;
  */
 public final class ServerUpdates {
 
-    /**
-     * The setting that chooses what is done.
-     */
-    public static final String SETTING = "SHERIFF_UPDATES";
-
-    /**
-     * How long what was found is trusted before looking again.
-     */
-    public static final Duration CHECK_EVERY = Duration.ofDays(1);
-
     private static final String AUTO = "auto";
     private static final String NEVER = "never";
     private static final String NOTIFY = "notify";
@@ -77,7 +67,6 @@ public final class ServerUpdates {
             + "itself failed (%s). Tell the user." + HOW_TO_UPDATE;
     private static final String CHECKSUM_DIFFERS = "the jar downloaded does not match its release's checksum";
     private static final String NO_CHECKSUM = "the release's checksum names no hash";
-
     private final String mode;
     private final String current;
     private final ReleaseSource releases;
@@ -85,6 +74,14 @@ public final class ServerUpdates {
     private final Optional<Path> jar;
     private final Supplier<Instant> clock;
     private volatile String notice;
+    /**
+     * The setting that chooses what is done.
+     */
+    public static final String SETTING = "SHERIFF_UPDATES";
+    /**
+     * How long what was found is trusted before looking again.
+     */
+    public static final Duration CHECK_EVERY = Duration.ofDays(1);
 
     /**
      * What looks for a newer version, and what it does when there is one.

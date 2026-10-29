@@ -19,7 +19,6 @@ final class AnswerMemory {
 
     private static final String FIELD_SEPARATOR = "|";
     private static final String LINE_SEPARATOR = "\n";
-
     private final Map<String, String> listed = new ConcurrentHashMap<>();
     private final Map<String, Set<String>> shown = new ConcurrentHashMap<>();
     private final Map<String, List<String>> changedByRepair = new ConcurrentHashMap<>();

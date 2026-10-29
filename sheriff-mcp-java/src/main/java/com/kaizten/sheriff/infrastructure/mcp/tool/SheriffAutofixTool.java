@@ -68,7 +68,6 @@ final class SheriffAutofixTool {
     private static final String NO_TESTS_LINE =
             "%nNo build tool with tests was found in the component, so no tests were run: only Sheriff checked "
             + "this code.";
-
     private final ToolContext context;
 
     /**

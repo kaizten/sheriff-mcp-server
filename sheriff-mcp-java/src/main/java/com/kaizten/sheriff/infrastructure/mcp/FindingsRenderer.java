@@ -35,13 +35,6 @@ import java.util.regex.Pattern;
  */
 public final class FindingsRenderer {
 
-    /**
-     * How many findings one call renders in full before the rest are only
-     * named. The first file is always rendered whole, however many errors it
-     * carries, so the answer is never all summary and no detail.
-     */
-    static final int MAX_FINDINGS_RENDERED = 60;
-
     private static final int NOTHING_SHOWN_YET = 0;
     private static final int FIRST = 1;
     private static final String NO_FILE = "(no file)";
@@ -67,9 +60,14 @@ public final class FindingsRenderer {
     private static final Pattern LINE = Pattern.compile(LINE_PATTERN);
     private static final int NO_LINE = -1;
     private static final int FIRST_GROUP = 1;
-
     private final Map<String, SheriffRule> byCode;
     private final RuleRecovery recovery;
+    /**
+     * How many findings one call renders in full before the rest are only
+     * named. The first file is always rendered whole, however many errors it
+     * carries, so the answer is never all summary and no detail.
+     */
+    static final int MAX_FINDINGS_RENDERED = 60;
 
     /**
      * Wires the renderer to the catalog it looks rules up in.

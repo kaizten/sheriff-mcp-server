@@ -23,7 +23,6 @@ public final class RunState {
 
     private static final String LABEL_SEPARATOR = "/";
     private static final String NO_BRANCH = "";
-
     private final List<Integer> errorHistory = new ArrayList<>();
     private final Set<String> parkedFiles = new TreeSet<>();
     private Set<String> lastBatchFiles = Set.of();

@@ -87,7 +87,6 @@ final class SheriffFixTool {
     private static final int NO_ERRORS = 0;
     private static final int ERRORS_PER_ANSWER = 20;
     private static final String CODE_SEPARATOR = ",";
-
     private final ToolContext context;
 
     /**
@@ -402,5 +401,4 @@ final class SheriffFixTool {
         }
         return String.format(TESTS_FAIL_EARLIER, command, String.join(FILE_SEPARATOR, earlier), excerpt);
     }
-
 }

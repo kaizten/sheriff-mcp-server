@@ -85,7 +85,6 @@ public final class AnthropicApiFixer implements CodeFixer {
     private static final String BAD_STATUS = "%s answered %d: %s";
     private static final String UNREACHABLE = "Could not reach %s: %s";
     private static final String NOT_JSON = "%s answered with something that is not JSON: %s";
-    private static final String DEFAULT_BASE_URL = "https://api.anthropic.com";
     private static final String MESSAGES_PATH = "/v1/messages";
     private static final String TRAILING_SLASH = "/";
     private static final String CONTENT_TYPE = "content-type";
@@ -103,7 +102,7 @@ public final class AnthropicApiFixer implements CodeFixer {
     private static final String TOOLS_FIELD = "tools";
     private static final String MESSAGES_FIELD = "messages";
     private static final String ROLE_FIELD = "role";
-    private static final String CONTENT_FIELD = "content";
+    private static final String CONTENT_FIELD = CONTENT_ARGUMENT;
     private static final String TYPE_FIELD = "type";
     private static final String NAME_FIELD = "name";
     private static final String ID_FIELD = "id";
@@ -119,8 +118,8 @@ public final class AnthropicApiFixer implements CodeFixer {
     private static final String ASSISTANT_ROLE = "assistant";
     private static final String TOOL_USE_TYPE = "tool_use";
     private static final String TOOL_RESULT_TYPE = "tool_result";
-    private static final String TEXT_TYPE = "text";
-    private static final String MAX_TOKENS_STOP = "max_tokens";
+    private static final String TEXT_TYPE = TEXT_FIELD;
+    private static final String MAX_TOKENS_STOP = MAX_TOKENS_FIELD;
     private static final String REFUSAL_STOP = "refusal";
     private static final int FIRST_TURN = 0;
     private static final int FIRST_ERROR_STATUS = 300;
@@ -136,7 +135,6 @@ public final class AnthropicApiFixer implements CodeFixer {
     private static final double ONE_PER_SECOND = 1.0;
     private static final int EQUAL = 0;
     private static final long ONE = 1L;
-
     private final String apiKey;
     private final String baseUrl;
     private final String model;
@@ -146,6 +144,7 @@ public final class AnthropicApiFixer implements CodeFixer {
     private final Path workspace;
     private final PromptLog promptLog;
     private final ObjectMapper json = new ObjectMapper();
+    private static final String DEFAULT_BASE_URL = "https://api.anthropic.com";
 
     /**
      * Wires the fixer to an API key and a repository.

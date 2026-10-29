@@ -44,13 +44,6 @@ public final class Settings {
     private static final String SECTION_START = "## ";
     private static final String LINE_BREAK = "\\R";
     private static final String NO_CATALOG = "The settings catalog %s is not in this jar.";
-
-    /**
-     * Every setting, in the order a person reads them, from the catalog in
-     * {@code settings.tsv}, where one is added by adding its line.
-     */
-    public static final List<Setting> ALL = catalog(CATALOG);
-
     private static final String ERROR_UTILITY_CLASS = "This is a utility class and cannot be instantiated.";
     private static final String FILE_NAME = "sheriff.properties";
     private static final String FOLDER = "sheriff-mcp";
@@ -117,6 +110,11 @@ public final class Settings {
     private static final int MOST_EDITS = 3;
     private static final int NO_EDITS = 0;
     private static final int ONE_EDIT = 1;
+    /**
+     * Every setting, in the order a person reads them, from the catalog in
+     * {@code settings.tsv}, where one is added by adding its line.
+     */
+    public static final List<Setting> ALL = catalog(CATALOG);
 
     /**
      * Refuses to be instantiated: every member here is static.

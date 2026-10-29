@@ -1,6 +1,7 @@
 package com.kaizten.sheriff.domain.valueobject;
 
 import java.time.Duration;
+import java.util.Collections;
 import java.util.Map;
 import java.util.TreeMap;
 
@@ -61,21 +62,20 @@ public record PassMetrics(
     /**
      * The rule by rule count of what the pass left fewer of, measured.
      *
-     * @return each rule whose count dropped, with how much, in name order;
-     *     empty when nothing was measured after the pass
+     * @return each rule whose count dropped, with how much, in name order,
+     *     unmodifiable; empty when nothing was measured after the pass
      */
     public Map<String, Integer> repaired() {
         Map<String, Integer> repaired = new TreeMap<>();
-        if (errorsAfter == null) {
-            return repaired;
+        if (errorsAfter != null) {
+            errorsBefore.forEach((rule, before) -> {
+                int dropped = before - errorsAfter.getOrDefault(rule, NONE);
+                if (dropped > NONE) {
+                    repaired.put(rule, dropped);
+                }
+            });
         }
-        errorsBefore.forEach((rule, before) -> {
-            int dropped = before - errorsAfter.getOrDefault(rule, NONE);
-            if (dropped > NONE) {
-                repaired.put(rule, dropped);
-            }
-        });
-        return repaired;
+        return Collections.unmodifiableMap(repaired);
     }
 
     private static final String ERROR_NOT_DEFINED = "A pass's label, kind, errors before or time is not defined";

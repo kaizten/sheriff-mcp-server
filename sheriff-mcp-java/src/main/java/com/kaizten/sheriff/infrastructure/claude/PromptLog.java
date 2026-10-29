@@ -21,7 +21,6 @@ public final class PromptLog {
     private static final DateTimeFormatter STAMP = DateTimeFormatter.ofPattern(STAMP_PATTERN);
     private static final String FILE_FORMAT = "%s_%s.txt";
     private static final String CONTENT_FORMAT = "=== PROMPT ===%n%s%n%n=== RESPONSE ===%n%s%n";
-
     private final Path directory;
 
     /**

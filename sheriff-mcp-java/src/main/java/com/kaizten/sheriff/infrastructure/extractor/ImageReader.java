@@ -20,7 +20,6 @@ import java.util.Map;
 public final class ImageReader {
 
     private static final String MESSAGE_PACKAGE = "com/kaizten/analysis/error/message";
-
     /**
      * Where the checkers live, newest layout first. They moved from {@code
      * analysis/checker} to {@code analysis/test} in the image published on
@@ -29,9 +28,7 @@ public final class ImageReader {
      * there, so one reader handles an image from either side of the change.
      */
     private static final String CHECKER_PACKAGES = "com/kaizten/analysis/test com/kaizten/analysis/checker";
-
     private static final String CHECKER_PATTERNS = "'com/kaizten/analysis/test/*' 'com/kaizten/analysis/checker/*'";
-
     private static final String CONSTANTS_SCRIPT = """
             cd /tmp && unzip -o -q /app.jar '%s/*' || exit 1
             for pattern in %s; do
@@ -41,7 +38,6 @@ public final class ImageReader {
             CLASSES=$(find $DIRS -name '*.class' | sed 's|/|.|g; s|\\.class$||')
             javap -p -constants -cp /tmp $CLASSES 2>/dev/null
             """.formatted(MESSAGE_PACKAGE, CHECKER_PATTERNS, MESSAGE_PACKAGE, CHECKER_PACKAGES);
-
     /**
      * Disassembles the checkers so each message class can be paired with the
      * text the checker hands it. Only the checkers: the message classes carry
@@ -58,7 +54,6 @@ public final class ImageReader {
             CLASSES=$(find $DIRS -name '*.class' | sed 's|/|.|g; s|\\.class$||')
             javap -p -c -cp /tmp $CLASSES 2>/dev/null
             """.formatted(CHECKER_PATTERNS, CHECKER_PACKAGES);
-
     /**
      * Read from the constant pool with {@code strings} rather than javap: 650
      * classes of disassembled bytecode is tens of megabytes to say something a
@@ -71,7 +66,6 @@ public final class ImageReader {
               strings "$f" | grep -oE 'com/kaizten/[A-Za-z0-9/$]+' | sort -u
             done
             """;
-
     private static final String FACTORY_SCRIPT = """
             cd /tmp && unzip -o -q /app.jar 'com/kaizten/analysis/factory/*' || exit 1
             echo '@@@SWITCHMAP'
@@ -79,7 +73,6 @@ public final class ImageReader {
             echo '@@@CREATE'
             javap -c -p -cp /tmp com.kaizten.analysis.factory.TestFactory 2>/dev/null
             """;
-
     private static final Duration TIMEOUT = Duration.ofSeconds(600);
     private static final String SHELL = "sh";
     private static final String SHELL_FLAG = "-c";
@@ -100,7 +93,6 @@ public final class ImageReader {
     private static final String NETWORK_FLAG = "--network";
     private static final String NETWORK_VARIABLE = "SHERIFF_DOCKER_NETWORK";
     private static final int AFTER_REMOVE_FLAG = 3;
-
     private final ProcessRunner processes;
     private final String image;
     private final Path workingDirectory;

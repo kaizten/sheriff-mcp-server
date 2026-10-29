@@ -57,7 +57,6 @@ public final class SheriffImage {
     private static final Duration HUB_TIMEOUT = Duration.ofSeconds(5);
     private static final String CURRENT_DIRECTORY = ".";
     private static final Path HERE = Path.of(CURRENT_DIRECTORY);
-
     private final ProcessRunner processes;
     private final String image;
     private final Function<String, Optional<String>> publishedDigests;

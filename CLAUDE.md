@@ -290,14 +290,19 @@ to be tried by hand.
   - A fixer that *exits 0 having done nothing* says nothing. Only analyzing
     again catches it, so a repair is always followed by another analysis.
     Never report a repair from the list of fixers that were run, nor from
-    `fix --report`'s JSON (image of 26 October, `sha256:7bbee950`): it
-    records `FolderNameUnderscore` as `fixed` with nothing changed, its
-    `remaining` is no analysis (209 against the 235 of one on PetClinic),
-    and `--dry-run` marks every finding `preview-only`, fixer or not.
-  The image's jar fixers cannot run: Sheriff launches them without `-jar`,
-  `BracesForStatements` is registered under a name its `pom.xml` does not
-  produce, and `FolderNameUnderscore` is a stub that renames a hardcoded
-  `com.oldpkg` and exits 0 regardless.
+    a finding's status in `fix --report`'s JSON: a fixer that clears every
+    finding of its rule in a file marks one `fixed` and the rest
+    `unattempted` (4 of 26 `EmptyLinesInMethod` on PetClinic, image of 29
+    October 17:29, `sha256:05a1f4a4`). That image's `remaining` is an
+    analysis (`remainingVerified`; 1,432 and 1,406 in two rounds, the same
+    as a `test` after each), and `--dry-run` says `planned` or `skipped`
+    per finding, but plans every finding of a file where one run fixes only
+    the first rule (28 planned, 2 fixed).
+  Of the image's two jar fixers, `BracesForStatements` works (images of 28
+  and 29 October: it braces a classic `for`), and `FolderNameUnderscore`
+  renames `my_pkg` to `my-pkg` and leaves `package com.my_pkg;` as it was
+  (`sha256:05a1f4a4`): no Java package can be named after that folder, and
+  the analysis after it finds nothing.
 - **`fix -f` with no `--fixers` is not every fixer, nor only the state's.**
   Its default set leaves fixers out and runs some regardless of the state.
   With `--fixers A,B` it runs only those. So `sheriff_fix` with no arguments
@@ -309,10 +314,16 @@ to be tried by hand.
   them `--type DETERMINISTIC` as its help lists it (image of 26 October):
   `SheriffRepair` passes `--type deterministic`, lower case, as `fix` would
   run its AI fixer too with credentials within reach, and a `fix` that
-  answers with the banner did not run.
+  answers with the banner did not run. With `sha256:05a1f4a4` a `fix` with
+  no `--type` does the same, as `all` needs `--ai-provider`.
 - **The TypeScript profile traces every checker on stdout**, one
   `COMMAND: node ...` line each, before any findings; the analyzer drops
   them, or a clean TypeScript run reads as "not JSON".
+- **Sheriff finds its TypeScript analyzer in `./node_modules`**, under `/`,
+  so `SheriffContainer` runs it with `--workdir /`. The image of 29 October
+  (`sha256:e03d9daf`) declares `WORKDIR /data`, and there every TypeScript
+  analysis reported 0 errors and exited 0, Node's "Cannot find module" on
+  stdout; `scripts/e2e.sh` scenarios 9 and 10 catch it.
 - **Every run drops three `sheriff_*.json` files at the root of the mount**,
   which is the component's state folder,
   `${XDG_CACHE_HOME:-~/.cache}/sheriff-mcp/state/<digest of its path>`
@@ -326,7 +337,10 @@ to be tried by hand.
   is the fallback) and `sheriff_tracked_files.json` gives
   `AnalysisResult.trackedFiles`, whose hashes name what a repair changed
   (`changedSince`); both can be exported. `sheriff_summary.json` is always
-  `{ }` and ignored.
+  `{ }` and ignored. Newer images also leave `sheriff_history.json` (every
+  run appended) and, since 29 October, `sheriff_tracked_components.json` (a
+  hash per component); they stay in the state folder, as a run with them
+  kept found the same errors (measured).
 - **Sheriff is incremental, so its state is cleared *before* every run too.**
   It skips every file whose hash is in `sheriff_tracked_files.json`, which
   records no profile and no rule version: state left by one profile makes the
@@ -473,8 +487,15 @@ A declaration applies only to components in its language, and a
 single-module project ignores its parent, which is its siblings' too. **No
 rule can be taken out**: an exclusion added on a model's claim of a conflict
 was measured and withdrawn. `KnownFalsePositives`, inside the one analyzer,
-drops only `FilenamePascalCase` on `package-info.java` and
-`module-info.java`, names Java requires.
+drops only findings measured wrong, each on what the source shows, never a
+rule: `FilenamePascalCase` on `package-info.java` and `module-info.java`,
+names Java requires; and, since the image of 29 October,
+`FourSpaceIndentation` on a comment's `*` lines and inside a text block,
+`JavaVariableName` on a `static final` constant and `UnusedImport` on an
+import used as an annotation. On this repository's code, clean under the
+image of 28 October, those three were 13,981 of 14,879 errors under the new
+one, and every `UnusedImport` of the plugin. A line it cannot read keeps
+its finding.
 
 ## The MCP's answers
 

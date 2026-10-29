@@ -65,7 +65,6 @@ public final class UntestedMethods {
     private static final int TYPE_GROUP = 3;
     private static final int NAME_GROUP = 4;
     private static final int NOT_FOUND = -1;
-
     private final ProcessRunner processes;
 
     /**

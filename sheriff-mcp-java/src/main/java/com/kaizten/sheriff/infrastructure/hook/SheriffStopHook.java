@@ -134,7 +134,6 @@ public final class SheriffStopHook {
     private static final int TEST_OUTPUT_LIMIT = 1500;
     private static final String NO_COMPONENT = "";
     private static final String PROJECT_TESTS = "the project's tests";
-
     private final ComponentGate gate;
     private final GitVersionControl git;
     private final Function<String, VerificationResult> tests;

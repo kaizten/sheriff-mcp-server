@@ -64,7 +64,6 @@ public final class SheriffGateHook {
             """;
     private static final String UNAVAILABLE =
             "sheriff-agent's gate could not run Sheriff on %s -- letting the edit through unchecked.%n";
-
     private final ComponentGate gate;
     private final GateMemory memory;
     private final TurnStart turns;

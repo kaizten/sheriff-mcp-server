@@ -58,7 +58,6 @@ final class SheriffConfigTool implements AutoCloseable {
             + "true for this project only; an empty value puts the default back. To change them in a page in the "
             + "browser, call %s with page true, or run this in a terminal on this machine:%n  %s";
     private static final String NO_VALUE = "Give the value to set %s to, or an empty one to put its default back.";
-
     private final ToolContext context;
     private final SettingsPageOpener opener;
     private SettingsPage page;

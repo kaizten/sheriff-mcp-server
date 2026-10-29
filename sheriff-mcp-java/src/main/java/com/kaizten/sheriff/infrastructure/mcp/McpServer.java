@@ -72,12 +72,7 @@ public final class McpServer {
     private static final String CHANGED_LINE = "%s%n";
     private static final String CONFIG_USAGE = "--config takes at most one NAME=VALUE; java -jar sheriff-mcp.jar "
             + "--config lists the names.%n";
-    private static final String CONFIG_REFUSED = "%s%n";
-    /**
-     * What {@link #settingsCommand} answers when the command line is not
-     * one of its own.
-     */
-    static final int NOT_SETTINGS = -1;
+    private static final String CONFIG_REFUSED = CHANGED_LINE;
     private static final String ARGUMENT_SEPARATOR = "=";
     private static final String CALL_USAGE = "--call takes a tool's name, then its arguments as name=value.";
     private static final int CALL_FAILED = 2;
@@ -175,6 +170,11 @@ public final class McpServer {
             """;
     private static final String ERROR_UTILITY_CLASS = "This is a utility class and cannot be instantiated.";
     private static final String SHUTDOWN_THREAD = "sheriff-shutdown";
+    /**
+     * What {@link #settingsCommand} answers when the command line is not
+     * one of its own.
+     */
+    static final int NOT_SETTINGS = -1;
 
     /**
      * Refuses to be instantiated: every member here is static.

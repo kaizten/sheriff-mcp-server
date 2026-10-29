@@ -87,7 +87,6 @@ public final class Composition {
     private static final String NOTHING_REPAIRED = "";
     private static final String NO_BRANCH_STAMP = "";
     private static final AutomaticRepair NO_AUTOMATIC_REPAIR = () -> NOTHING_REPAIRED;
-
     private final Configuration configuration;
     private final ProcessRunner processes;
     private final UnaryOperator<String> profiles;

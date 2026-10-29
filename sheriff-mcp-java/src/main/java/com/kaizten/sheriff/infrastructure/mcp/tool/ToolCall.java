@@ -27,7 +27,6 @@ public final class ToolCall {
     private static final String QUOTE = "'";
     private static final String ESCAPED_QUOTE = "'\\''";
     private static final String NOTHING = "";
-
     private final Path directory;
     private final Path jar;
     private final boolean windows;

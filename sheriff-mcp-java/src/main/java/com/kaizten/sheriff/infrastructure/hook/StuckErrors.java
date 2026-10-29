@@ -48,26 +48,23 @@ import java.util.stream.Collectors;
  */
 public final class StuckErrors {
 
-    /**
-     * The attempts after which an error is left for the end.
-     */
-    public static final int DEFERRED_AT = 2;
-
-    /**
-     * The attempts after which an error is told to the user rather than
-     * worked on again.
-     */
-    public static final int LAST_AT = 3;
-
     private static final String DIRECTORY = "sheriff-stuck";
     private static final String ATTEMPTS_FIELD = "attempts";
     private static final String REPAIRED_FIELD = "repaired";
     private static final String KEY_SEPARATOR = "|";
     private static final int ONE_MORE = 1;
     private static final int NONE = 0;
-
     private final Path directory;
     private final ObjectMapper json = new ObjectMapper();
+    /**
+     * The attempts after which an error is left for the end.
+     */
+    public static final int DEFERRED_AT = 2;
+    /**
+     * The attempts after which an error is told to the user rather than
+     * worked on again.
+     */
+    public static final int LAST_AT = 3;
 
     /**
      * The record in the user's own folder of the temporary directory.

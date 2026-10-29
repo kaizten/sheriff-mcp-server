@@ -70,7 +70,7 @@ public final class HookInstaller {
     private static final String EDITING_TOOLS = "Edit|Write|MultiEdit|NotebookEdit";
     private static final String TYPE = "type";
     private static final String COMMAND_TYPE = "command";
-    private static final String COMMAND = "command";
+    private static final String COMMAND = COMMAND_TYPE;
     private static final String GATE_FLAG = "--hook-gate";
     private static final String STOP_FLAG = "--hook-stop";
     private static final String TURN_FLAG = "--hook-turn";
@@ -117,7 +117,6 @@ public final class HookInstaller {
     private static final String UNINSTALLED = "Sheriff's hooks are no longer in %s.%n";
     private static final int SUCCESS = 0;
     private static final int FAILURE = 2;
-
     private final ObjectMapper json = new ObjectMapper();
     private final Path settings;
     private final Path jar;

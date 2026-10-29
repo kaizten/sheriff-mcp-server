@@ -65,7 +65,7 @@ class SheriffDockerAnalyzerTests {
         List<String> command = runner.command();
         assertTrue(command.get(4).startsWith("sheriff-agent-"), "every run is a named container");
         assertEquals(
-                List.of("docker", "run", "--rm", "--name", command.get(4),
+                List.of("docker", "run", "--rm", "--name", command.get(4), "--workdir", "/",
                         "--mount", "type=bind,source=" + analyzer(runner).stateFolder() + ",target=/data",
                         "--mount", "type=bind,source=" + repository.resolve("app") + ",target=/data/app",
                         "kaizten/sheriff:latest", "test", "--test", "JAVA", "--uri", "file:/data",

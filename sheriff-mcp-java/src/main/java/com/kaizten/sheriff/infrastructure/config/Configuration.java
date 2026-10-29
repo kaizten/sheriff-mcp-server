@@ -94,7 +94,6 @@ public final class Configuration {
     private static final String CURRENT_DIRECTORY = ".";
     private static final String BUILD_DIRECTORY = "target";
     private static final String JAR_SUFFIX = ".jar";
-
     private static final String DEFAULT_IMAGE = "kaizten/sheriff:latest";
     private static final String DEFAULT_TEST_TYPE = "JAVA";
     private static final String DEFAULT_COMPONENT = "sheriff-mcp-java";
@@ -122,7 +121,6 @@ public final class Configuration {
     private static final String NOT_A_NUMBER = "%s must be a whole number, but it is '%s'.";
     private static final String NOT_POSITIVE = "%s must be at least 1, but it is '%s'.";
     private static final int MINIMUM_POSITIVE = 1;
-
     private final Map<String, String> environment;
     private final Path agentDirectory;
 

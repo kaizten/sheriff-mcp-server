@@ -81,9 +81,9 @@ public final class JsonRpcServer {
     private static final String CONTENT_FIELD = "content";
     private static final String TYPE_FIELD = "type";
     private static final String TEXT_TYPE = "text";
-    private static final String TEXT_FIELD = "text";
+    private static final String TEXT_FIELD = TEXT_TYPE;
     private static final String IS_ERROR_FIELD = "isError";
-    private static final String NAME_ARGUMENT_FIELD = "name";
+    private static final String NAME_ARGUMENT_FIELD = NAME_FIELD;
     private static final String ARGUMENTS_FIELD = "arguments";
     private static final String INVALID_JSON = "Invalid JSON: %s";
     private static final String NOT_AN_OBJECT = "A request must be a JSON object.";
@@ -96,7 +96,6 @@ public final class JsonRpcServer {
     private static final String QUICK_CALL_THREAD = "sheriff-quick-call";
     private static final Predicate<String> NONE_AT_ONCE = name -> false;
     private static final long DRAIN_HOURS = 6;
-
     private final Supplier<List<Map<String, Object>>> listTools;
     private final BiFunction<String, Map<String, Object>, ToolOutcome> callTool;
     private final Predicate<String> answersAtOnce;

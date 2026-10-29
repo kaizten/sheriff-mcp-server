@@ -65,17 +65,7 @@ public final class TaskRegistry implements AutoCloseable {
             anything it changed. A repair loop may have left it on its own branch with a pass \
             uncommitted, and an analysis cut short leaves Sheriff's sheriff_*.json files at \
             the root of what it mounts, which the next run clears by itself.""";
-
-    /**
-     * How many finished task folders are kept on disk.
-     *
-     * <p>Enough that anything asked about in a session is still there, few
-     * enough that the directory stays readable by a person.
-     */
-    static final int RETAINED_FOLDERS = 50;
-
     private static final String ID_PATTERN = "[0-9a-f]{" + ID_LENGTH + "}";
-
     private final Path base;
     private final Supplier<Map<String, String>> provenance;
     private final Map<String, Task> tasks = Collections.synchronizedMap(new LinkedHashMap<>());
@@ -88,6 +78,13 @@ public final class TaskRegistry implements AutoCloseable {
     private final AtomicBoolean pruned = new AtomicBoolean();
     private final Object writing = new Object();
     private boolean stopping;
+    /**
+     * How many finished task folders are kept on disk.
+     *
+     * <p>Enough that anything asked about in a session is still there, few
+     * enough that the directory stays readable by a person.
+     */
+    static final int RETAINED_FOLDERS = 50;
 
     /**
      * A registry keeping its tasks under one directory.

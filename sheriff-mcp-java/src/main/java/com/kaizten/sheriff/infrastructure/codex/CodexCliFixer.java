@@ -47,22 +47,18 @@ public final class CodexCliFixer implements CodeFixer {
      * Marks the child process as the agent's own.
      */
     private static final String AGENT_MARKER = "SHERIFF_AGENT_RUNNING";
-
     /**
      * The value that marker carries.
      */
     private static final String AGENT_MARKER_VALUE = "1";
-
     /**
      * Reported when the CLI ran but ended badly.
      */
     private static final String EXIT_FAILURE = "exit code %d";
-
     /**
      * Printed once the exchange has been written down.
      */
     private static final String LOGGED_MESSAGE = "  prompt/response logged to %s%n";
-
     /**
      * The flag that sets the directory Codex works in.
      */
@@ -85,7 +81,6 @@ public final class CodexCliFixer implements CodeFixer {
     private static final long NO_TOKENS = 0L;
     private static final int NO_TURNS = 0;
     private static final int ONE_TURN = 1;
-
     /**
      * What the prompt says first when Codex works inside the component.
      */
@@ -95,37 +90,30 @@ public final class CodexCliFixer implements CodeFixer {
             write inside `%1$s`.
 
             """;
-
     /**
      * The component the edits are confined to, empty for none.
      */
     private final String component;
-
     /**
      * How to run the process.
      */
     private final ProcessRunner processes;
-
     /**
      * Where the exchange is recorded.
      */
     private final PromptLog promptLog;
-
     /**
      * The directory the CLI runs in.
      */
     private final Path repositoryRoot;
-
     /**
      * The command that invokes Codex, prompt excluded.
      */
     private final List<String> baseCommand;
-
     /**
      * How long one invocation is given.
      */
     private final Duration timeout;
-
     private final ObjectMapper json = new ObjectMapper();
 
     /**

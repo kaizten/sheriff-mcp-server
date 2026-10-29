@@ -44,7 +44,6 @@ public final class ProvisionedCatalog implements RuleCatalog {
     private static final Duration ALWAYS = Duration.ZERO;
     private static final String REFRESHING =
             "The rule catalog is missing or was extracted from another image; extracting it again.%n";
-
     private final Supplier<CompletableFuture<Path>> provision;
     private final Predicate<Path> usable;
     private final Duration patience;

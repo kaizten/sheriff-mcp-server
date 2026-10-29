@@ -44,7 +44,6 @@ public final class MarkdownRuleCatalog implements RuleCatalog {
     private static final String PLACEHOLDER_PREFIX = "_";
     private static final String FENCE = "```";
     private static final String EMPTY = "";
-
     private final Path path;
 
     /**

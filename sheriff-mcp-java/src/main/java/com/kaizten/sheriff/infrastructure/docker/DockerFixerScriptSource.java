@@ -22,11 +22,6 @@ import java.util.regex.Pattern;
  */
 public final class DockerFixerScriptSource implements FixerScriptSource {
 
-    /**
-     * Where Sheriff keeps the scripts, inside the image.
-     */
-    public static final String FIXERS_ROOT = "/sheriff-fixers";
-
     private static final String ERROR_NOT_A_SCRIPT_PATH = "Not a fixer script path: ";
     private static final String ERROR_COULD_NOT_READ = "Could not read ";
     private static final String PARENT_SEGMENT = "..";
@@ -41,10 +36,13 @@ public final class DockerFixerScriptSource implements FixerScriptSource {
     private static final String SHELL = "sh";
     private static final String COMMAND_FLAG = "-c";
     private static final int SUCCESS_EXIT_CODE = 0;
-
     private final ProcessRunner processes;
     private final String image;
     private final Duration timeout;
+    /**
+     * Where Sheriff keeps the scripts, inside the image.
+     */
+    public static final String FIXERS_ROOT = "/sheriff-fixers";
 
     /**
      * Builds a source reading from one image.

@@ -26,15 +26,6 @@ import java.util.Optional;
 public final class Rules {
 
     /**
-     * How many of a profile's rules to put in one prompt. A profile's own
-     * rules are worth a few thousand characters in every fixer prompt; a
-     * language's entire rule set is not. Only bites on the broadest profiles
-     * ({@code JAVA} runs about fifty rules, {@code JAVA_HEXAGONAL} over two
-     * hundred), where a truncated list plus a pointer beats a wall of text.
-     */
-    public static final int DEFAULT_MAX_RULES_IN_PROMPT = 80;
-
-    /**
      * What a source file of each language is called at the end.
      *
      * <p>The same facts the edit gate keys on, kept here because deciding
@@ -64,16 +55,6 @@ public final class Rules {
             VUE_LANGUAGE, VUE_SUFFIXES,
             PERL_LANGUAGE, PERL_SUFFIXES,
             PYTHON_LANGUAGE, PYTHON_SUFFIXES);
-
-    /**
-     * How many accepted-code examples one prompt carries.
-     *
-     * <p>Each runs to about 700 characters, so a dozen is already several
-     * thousand. The errors are what the prompt is about; this is support for
-     * them.
-     */
-    public static final int DEFAULT_MAX_EXAMPLES_IN_PROMPT = 12;
-
     private static final String ACCEPTED_CODE_HEADER =
             "For some of the errors above, Sheriff ships the script that repairs them, "
             + "and that script says exactly what it would write. These are those "
@@ -87,7 +68,6 @@ public final class Rules {
     private static final String OMITTED_SEPARATOR = ", ";
     private static final String CODE_BLOCK_SEPARATOR = "\n";
     private static final String NOTHING = "";
-
     private static final String BASE_CONTEXT =
             "Sheriff is analyzing this code with the '%s' profile. Its rules are built "
                     + "into the tool itself, not into a file in this repository.";
@@ -127,6 +107,22 @@ public final class Rules {
     private static final int NOT_FOUND = -1;
     private static final int FIRST = 0;
     private static final int NO_LIMIT = 0;
+    /**
+     * How many of a profile's rules to put in one prompt. A profile's own
+     * rules are worth a few thousand characters in every fixer prompt; a
+     * language's entire rule set is not. Only bites on the broadest profiles
+     * ({@code JAVA} runs about fifty rules, {@code JAVA_HEXAGONAL} over two
+     * hundred), where a truncated list plus a pointer beats a wall of text.
+     */
+    public static final int DEFAULT_MAX_RULES_IN_PROMPT = 80;
+    /**
+     * How many accepted-code examples one prompt carries.
+     *
+     * <p>Each runs to about 700 characters, so a dozen is already several
+     * thousand. The errors are what the prompt is about; this is support for
+     * them.
+     */
+    public static final int DEFAULT_MAX_EXAMPLES_IN_PROMPT = 12;
 
     /**
      * Prevents instantiation of this utility class.

@@ -55,11 +55,6 @@ import java.util.stream.Collectors;
  * undone, as it broke the build, was made again by every call.
  */
 public final class SheriffRepair {
-    /**
-     * No limit on the rounds: they run until one repairs nothing, which they
-     * reach, as a round runs only when the count before it dropped.
-     */
-    public static final int NO_LIMIT = Integer.MAX_VALUE;
 
     private static final String FIX_COMMAND = "fix";
     private static final String APPLY_FLAG = "-f";
@@ -77,14 +72,17 @@ public final class SheriffRepair {
     private static final int NO_ROUNDS = 0;
     private static final int ONE_ROUND = 1;
     private static final int NAMED_FIXER_ROUNDS = 1;
-
     private static final int FIRST_PROFILE = 0;
-
     private final SheriffContainer container;
     private final SheriffDockerAnalyzer analyzer;
     private final String component;
     private int roundLimit = NO_LIMIT;
     private Predicate<SheriffFinding> withheld = finding -> false;
+    /**
+     * No limit on the rounds: they run until one repairs nothing, which they
+     * reach, as a round runs only when the count before it dropped.
+     */
+    public static final int NO_LIMIT = Integer.MAX_VALUE;
 
     /**
      * Wires the repair to one component.
