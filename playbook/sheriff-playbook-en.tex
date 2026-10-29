@@ -216,10 +216,14 @@ The MCP server & At the end it starts it once, as your assistant will, and
 \end{tabularx}
 \end{center}
 
-It writes Claude Code's hooks even when \code{claude} is not on the
-\code{PATH}, as long as the folder \path{~/.claude} exists: they are only a
-settings file, which the desktop app and the editor extensions read too. It
-touches no project. Sheriff's rules (the \emph{catalog}) are not in the
+It looks for \code{claude}, \code{codex} and \code{agy} on the \code{PATH}
+and in the folders npm, nvm, Homebrew and their own installers put them in.
+One it finds off the \code{PATH} it sets up all the same, and it prints the
+line that puts it on yours. It writes Claude Code's hooks even with no
+\code{claude}, as long as the folder \path{~/.claude} exists, and sets Codex up
+with no \code{codex} as long as \path{~/.codex} does: they are only settings
+files, which the desktop apps and the editor extensions read too. It touches no
+project. Sheriff's rules (the \emph{catalog}) are not in the
 download: the tools extract them from the image the first time they need them,
 in about 6 seconds.
 
@@ -1342,9 +1346,17 @@ engine is not running. Start it (for example,
 or, on Windows, Docker Desktop is set to Windows containers
 (\code{no matching manifest for windows}): switch it to Linux containers, its
 default. The server pulls the image when it starts.}
-\problem{\code{claude}, \code{codex} or \code{agy is not on the PATH}}{That
-assistant was not installed, so the installer did not set it up. Once you
-install it, run the line again, or the command it printed.}
+\problem{\code{Claude Code}, \code{Codex} or \code{Antigravity was not found}}{The
+installer did not find that assistant's command, on the \code{PATH} or in the
+folders it is usually installed in, nor (Claude Code and Codex) its folder in
+your home, so it did not set it up. If it is installed after all, run the
+command printed below that line: it sets it up without looking for the
+assistant. If not, install it and run the line again.}
+\problem{\code{codex is not on this shell's PATH but is in ...}}{Nothing is
+wrong: the installer found it in that folder and set it up. Sheriff does not
+need it on the \code{PATH}. If your terminal does not find the command either,
+the line printed below puts that folder on your \code{PATH}; open a new
+terminal after it.}
 \problem{\code{No assistant was found}}{None of Claude Code, Codex or
 Antigravity is installed, so the installer wrote nothing into any assistant's
 configuration: Sheriff is there only as the CI check (\code{--check}) and the

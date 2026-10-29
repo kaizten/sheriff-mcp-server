@@ -219,10 +219,14 @@ El servidor MCP & Al final lo arranca una vez, como lo arrancará tu asistente,
 \end{tabularx}
 \end{center}
 
-Los hooks de Claude Code los escribe aunque \code{claude} no esté en el
-\code{PATH}, si existe la carpeta \path{~/.claude}: son solo un archivo de
-ajustes, y la aplicación de escritorio y las extensiones de los editores
-también lo leen. No toca ningún proyecto. Las reglas de Sheriff (el \emph{catálogo}) no
+Busca \code{claude}, \code{codex} y \code{agy} en el \code{PATH} y en las
+carpetas donde los dejan npm, nvm, Homebrew y sus propios instaladores. El
+que encuentra fuera del \code{PATH} lo configura igualmente, y te imprime la
+línea que lo pone en el tuyo. Los hooks de Claude Code los escribe aunque no
+haya \code{claude}, si existe la carpeta \path{~/.claude}, y configura Codex
+aunque no haya \code{codex}, si existe \path{~/.codex}: son solo archivos de
+ajustes, y las aplicaciones de escritorio y las extensiones de los editores
+también los leen. No toca ningún proyecto. Las reglas de Sheriff (el \emph{catálogo}) no
 vienen en la descarga: las herramientas las extraen de la imagen la primera vez
 que las necesitan, en unos 6 segundos.
 
@@ -1355,9 +1359,17 @@ Docker de WSL no está en marcha. Arráncalo (por ejemplo,
 Windows, Docker Desktop está en modo de contenedores Windows
 (\code{no matching manifest for windows}): cámbialo a contenedores Linux, su
 modo por defecto. El servidor la descargará al arrancar.}
-\problem{\code{claude}, \code{codex} o \code{agy is not on the PATH}}{Ese
-asistente no estaba instalado, así que el instalador no lo ha configurado.
-Cuando lo instales, repite la línea, o ejecuta el comando que te ha imprimido.}
+\problem{\code{Claude Code}, \code{Codex} o \code{Antigravity was not found}}{El
+instalador no ha encontrado el comando de ese asistente, ni en el \code{PATH} ni
+en las carpetas donde se suele instalar, ni (Claude Code y Codex) su carpeta en
+tu home, así que no lo ha configurado. Si sí lo tienes instalado, ejecuta el
+comando que imprime debajo de esa línea: lo configura sin buscar el asistente.
+Si no, instálalo y repite la línea.}
+\problem{\code{codex is not on this shell's PATH but is in ...}}{No pasa nada:
+el instalador lo ha encontrado en esa carpeta y lo ha configurado. Sheriff no
+necesita que esté en el \code{PATH}. Si tu terminal tampoco encuentra el
+comando, la línea que imprime debajo pone esa carpeta en tu \code{PATH}; abre
+una terminal nueva después.}
 \problem{\code{No assistant was found}}{No hay instalado ninguno de Claude
 Code, Codex ni Antigravity, así que el instalador no ha escrito nada en la
 configuración de ningún asistente: Sheriff queda solo como comprobación de CI

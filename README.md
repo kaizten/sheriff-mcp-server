@@ -48,11 +48,15 @@ leaving nothing in your session, and takes options.
 It installs the jar in `~/.local/share/sheriff-agent/`, pulls Sheriff's image
 (about 4 GB the first time, only what changed after that), and sets up the
 assistants the machine already has, never installing one: Claude Code when
-`claude` is on the PATH or `~/.claude` exists (its desktop app and IDE
-extensions use it), with the hooks for every project and, with `claude` on the
-PATH, the MCP server registered at user scope as `sheriff`; Codex and
-Antigravity the same way when `codex` or `agy` is on the PATH. It ends saying
-which it set up. With none of them it writes no assistant's configuration and
+there is a `claude` command or a `~/.claude` folder (its desktop app and IDE
+extensions use it), with the hooks for every project and, with `claude`, the
+MCP server registered at user scope as `sheriff`; Codex the same way when there
+is a `codex` command or a `~/.codex` folder (`CODEX_HOME`), and Antigravity
+when there is an `agy` command. A command is looked for on the PATH and then in
+the folders npm, nvm, Homebrew and the assistants' own installers put it in;
+one found off the PATH is set up all the same, and the installer prints the line that puts it on
+yours. It ends saying which it set up, and for each assistant it did not find,
+the command that sets it up by hand. With none of them it writes no assistant's configuration and
 says so: the jar is still the CI gate (`--check`) and the Maven plugin's, and
 running the line again once an assistant is installed sets it up. A release
 carries no rule catalog: the tools extract it from the image on first use
@@ -431,7 +435,8 @@ file, so a build does not depend on who runs it.
 ## Codex
 
 The same jar works from Codex, and `scripts/install.sh` sets it up for every
-project when `codex` is on the PATH, as it does Claude Code. Tested on
+project when it finds `codex` or `~/.codex`, as it does Claude Code; Codex
+need not be on the PATH, as setting it up only writes `~/.codex`. Tested on
 `codex-cli` 0.157, in `codex exec` and in the interactive session. What is
 left for you is one review: Codex asks before it runs a new hook, the first
 time a session starts ("Hooks need review"), or with `/hooks`. Approve it once;
@@ -512,7 +517,7 @@ drives it the same way, with `AI_BACKEND=antigravity_cli` (see
 ## Antigravity
 
 Google Antigravity's command line, `agy`, is an MCP client too, and the same
-server works from it. `scripts/install.sh` sets it up when `agy` is on the PATH
+server works from it. `scripts/install.sh` sets it up when it finds `agy`
 (`--no-antigravity` leaves it alone); by hand:
 
 ```bash

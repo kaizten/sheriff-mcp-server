@@ -129,9 +129,13 @@ including `SHERIFF_EXPORT_DIR`.
 already has**, never installing one, then says in its last line which. With
 no assistant it writes nothing into anyone's configuration and says the jar
 is installed only as the CI gate and the Maven plugin. `install.ps1` mirrors
-it.
+it. A command is looked for on the PATH and then where npm, nvm, Homebrew and
+the assistants' installers put it (`find_command`, `Find-Assistant`), as an assistant installed
+is not always on the PATH the installer is given. One found off the
+PATH is set up all the same, and named with the line that puts it on the
+user's; one not found gets the command that sets it up without looking.
 
-- **Claude Code** (`claude` on the PATH, or `~/.claude`, which the desktop
+- **Claude Code** (a `claude` command, or `~/.claude`, which the desktop
   app and the IDE extensions read without putting `claude` on the PATH): the
   MCP server at user scope as `sheriff` when there is a `claude` to register
   it with, and the hooks in `~/.claude/settings.json`
@@ -139,14 +143,15 @@ it.
   tools that do not commit or spend tokens (not `sheriff_autofix`), so a
   model without auto mode is not stopped at a prompt. `--uninstall-hooks`
   takes out only those rules.
-- **Codex** (`codex` on the PATH, `--install-codex`, `CodexInstaller`): the
+- **Codex** (a `codex` command, or `${CODEX_HOME:-~/.codex}`, as setting it
+  up only writes there; `--install-codex`, `CodexInstaller`): the
   server in `~/.codex/config.toml` with the time limit and the approval
   `codex mcp add` cannot write, the order of work in `~/.codex/AGENTS.md`,
   and the Stop and turn hooks, without the gate, in `~/.codex/hooks.json`.
   Codex's review of a new hook is left to the user on purpose; the installer
   and the playbook say what skipping it costs (without the Stop hook Codex
   stops with errors left).
-- **Antigravity** (`agy` on the PATH, `--install-antigravity`): see below.
+- **Antigravity** (an `agy` command, `--install-antigravity`): see below.
 
 **Codex runs a hook in Windows PowerShell 5.1**, not cmd, so on Windows each
 hook line is PowerShell's: `& 'C:/.../java.exe' '-Dsheriff.docker=wsl' -jar

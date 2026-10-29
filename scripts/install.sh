@@ -56,15 +56,17 @@ install.sh [options]      from a checkout: build, test and install
 Installs into ${SHERIFF_HOME:-~/.local/share/sheriff-agent}: sheriff-mcp.jar
 (the MCP server, the hooks, the CI gate and the agent's CLI) and, from a
 checkout that has one, rules_catalog.json. Sets up only the assistants this
-machine has, and ends saying which. With Claude Code (claude on the PATH, or
-~/.claude, which its desktop app and IDE extensions use), wires the hooks into
-~/.claude/settings.json and, with claude on the PATH, registers the server at
-user scope as ${SHERIFF_MCP_NAME:-sheriff}, replacing an earlier
-registration. With codex on
-the PATH, sets Codex up the same way (--install-codex); Codex asks once before
-it runs a new hook, and that review stays with you. With agy on the PATH, sets
-Antigravity up too (--install-antigravity): the server and the tools it may run
-without asking, as it has no Sheriff hooks. The image pulled is
+machine has, and ends saying which. A command is looked for on the PATH and
+in the folders npm, nvm, Homebrew and the assistants' own installers put it in,
+and one found off the PATH is set up all the same. With Claude Code (claude,
+or ~/.claude, which its desktop app and IDE extensions use), wires the hooks
+into ~/.claude/settings.json and, with claude, registers the server at user
+scope as ${SHERIFF_MCP_NAME:-sheriff}, replacing an earlier registration. With
+Codex (codex, or ${CODEX_HOME:-~/.codex}), sets it up the same way
+(--install-codex); Codex asks once before it runs a new hook, and that review
+stays with you. With agy, sets Antigravity up too (--install-antigravity): the
+server and the tools it may run without asking, as it has no Sheriff hooks.
+The image pulled is
 ${SHERIFF_IMAGE:-kaizten/sheriff:latest}.
 USAGE
 }
@@ -454,6 +456,78 @@ check_server() {
   exit 1
 }
 
+# Every folder an assistant's installer puts its command in. The installer
+# gets the PATH of whatever started it, which need not be the one the user's
+# terminal builds through nvm, an npm prefix or a line in an rc file; and an
+# assistant the user runs from an editor may never have been on any PATH.
+command_folders() {
+  local home="${HOME:-}" prefix
+  if [[ -n "$home" ]]; then
+    echo "$home/.local/bin"
+    echo "$home/.claude/local"
+    echo "$home/.npm-global/bin"
+    echo "$home/.volta/bin"
+    echo "$home/.bun/bin"
+    echo "${PNPM_HOME:-$home/.local/share/pnpm}"
+    ls -d "${NVM_DIR:-$home/.nvm}"/versions/node/*/bin 2>/dev/null | sort -r || true
+  fi
+  if command -v npm >/dev/null 2>&1; then
+    prefix="$(npm prefix -g 2>/dev/null </dev/null)" || prefix=""
+    if [[ -n "$prefix" ]]; then
+      prefix="$(posix_path "$prefix")"
+      echo "$prefix/bin"
+      echo "$prefix"
+    fi
+  fi
+  if [[ -n "${APPDATA:-}" ]]; then
+    echo "$(posix_path "$APPDATA")/npm"
+  fi
+  echo /opt/homebrew/bin
+  echo /usr/local/bin
+  echo /home/linuxbrew/.linuxbrew/bin
+}
+
+# Where a command is: on this shell's PATH, or else in one of those folders.
+# Prints nothing when it is nowhere.
+find_command() {
+  local name="$1" folder suffix
+  if command -v "$name" 2>/dev/null; then
+    return 0
+  fi
+  while IFS= read -r folder; do
+    for suffix in "" .cmd .exe; do
+      if [[ -f "$folder/$name$suffix" && -x "$folder/$name$suffix" ]]; then
+        echo "$folder/$name$suffix"
+        return 0
+      fi
+    done
+  done < <(command_folders)
+  return 0
+}
+
+# A command found off this shell's PATH, said once: where it is, that it is set
+# up all the same, and the line that puts its folder on the user's PATH.
+off_path() {
+  local name="$1" path="$2" folder
+  if command -v "$name" >/dev/null 2>&1; then
+    return 0
+  fi
+  folder="$(dirname "$path")"
+  echo "$name is not on this shell's PATH but is in $folder, so it is set up all the same."
+  echo "If your terminal does not find $name either, this puts it on its PATH:"
+  case "${SHELL##*/}" in
+    fish) echo "  fish_add_path '$folder'" ;;
+    zsh) echo "  echo 'export PATH=\"$folder:\$PATH\"' >> ~/.zshrc" ;;
+    *)
+      if [[ "$(uname -s)" == Darwin ]]; then
+        echo "  echo 'export PATH=\"$folder:\$PATH\"' >> ~/.bash_profile"
+      else
+        echo "  echo 'export PATH=\"$folder:\$PATH\"' >> ~/.bashrc"
+      fi
+      ;;
+  esac
+}
+
 main() {
   local home_dir
   home_dir="$(posix_path "${SHERIFF_HOME:-$HOME/.local/share/sheriff-agent}")"
@@ -577,22 +651,29 @@ main() {
   local found=() set_up=()
   # Claude Code is there when its command is, or its folder: the desktop app
   # and the IDE extensions read ~/.claude/settings.json without putting claude
-  # on the PATH, so the hooks go in for them too. With neither, nothing is
+  # on the PATH, so the hooks go in for them too. Codex likewise, as setting it
+  # up writes its folder and never runs codex. With neither, nothing is
   # written: a settings file used to be created for an assistant nobody had.
-  local claude_cli=0 claude_found=0
-  if command -v claude >/dev/null 2>&1; then
-    claude_cli=1
-  fi
-  if (( claude_cli == 1 )) || [[ -d "${HOME:-}/.claude" ]]; then
+  local claude_bin codex_bin agy_bin codex_home
+  claude_bin="$(find_command claude)"
+  codex_bin="$(find_command codex)"
+  agy_bin="$(find_command agy)"
+  codex_home="$(posix_path "${CODEX_HOME:-$HOME/.codex}")"
+  local claude_found=0
+  if [[ -n "$claude_bin" || -d "${HOME:-}/.claude" ]]; then
     claude_found=1
     found+=("Claude Code")
   fi
   if (( claude_found == 0 )); then
-    echo "claude is not on the PATH and there is no ~/.claude, so Claude Code was left alone. Once it is installed:"
+    echo "Claude Code was not found (no claude on this shell's PATH or in the folders its installers use,"
+    echo "and no ~/.claude), so it was left alone. If it is installed after all, or once it is, these set it up:"
     echo "  claude mcp add --scope user $name -- \"$java_native\" -jar \"$jar_native\""
     echo "  \"$java_native\" -jar \"$jar_native\" --install-hooks --user"
   else
     local claude_set_up=0
+    if [[ -n "$claude_bin" ]]; then
+      off_path claude "$claude_bin"
+    fi
     if (( hooks == 1 )); then
       SHERIFF_JAVA="$java_native" "${jar[@]}" --install-hooks --user ${hook_options[@]+"${hook_options[@]}"}
       claude_set_up=1
@@ -600,32 +681,47 @@ main() {
       echo "The hooks were left out (--no-hooks). For every project, or in one project's folder without --user:"
       echo "  \"$java_native\" -jar \"$jar_native\" --install-hooks --user"
     fi
-    if (( claude_cli == 1 )); then
-      # Removed first, so that running this again replaces it.
-      claude mcp remove --scope user "$name" >/dev/null 2>&1 || true
-      claude mcp add --scope user "$name" ${server_options[@]+"${server_options[@]}"} \
+    if [[ -n "$claude_bin" ]]; then
+      # With its folder first on the PATH, as an npm install of claude is a
+      # node script, and nvm keeps node beside it. Removed first, so that
+      # running this again replaces it.
+      local claude_path
+      claude_path="$(dirname "$claude_bin"):$PATH"
+      PATH="$claude_path" "$claude_bin" mcp remove --scope user "$name" >/dev/null 2>&1 || true
+      PATH="$claude_path" "$claude_bin" mcp add --scope user "$name" ${server_options[@]+"${server_options[@]}"} \
         -- "$java_native" -jar "$jar_native"
       echo "Registered the MCP server as '$name'. Restart open Claude Code sessions to pick it up."
       claude_set_up=1
     else
-      echo "claude is not on the PATH, so the MCP server was not registered. By hand:" >&2
+      echo "There is a ~/.claude but no claude command, so the MCP server was not registered. By hand:" >&2
       echo "  claude mcp add --scope user $name -- \"$java_native\" -jar \"$jar_native\"" >&2
     fi
     if (( claude_set_up == 1 )); then
       set_up+=("Claude Code")
     fi
   fi
-  if command -v codex >/dev/null 2>&1; then
+  local codex_found=0
+  if [[ -n "$codex_bin" || -d "$codex_home" ]]; then
+    codex_found=1
     found+=("Codex")
   fi
-  if command -v agy >/dev/null 2>&1; then
+  if [[ -n "$agy_bin" ]]; then
     found+=("Antigravity")
   fi
   if (( codex == 1 )); then
-    if ! command -v codex >/dev/null 2>&1; then
-      echo "codex is not on the PATH, so Codex was left alone. Once it is installed:"
+    if (( codex_found == 0 )); then
+      local codex_label="~/.codex"
+      if [[ -n "${CODEX_HOME:-}" ]]; then
+        codex_label="$CODEX_HOME"
+      fi
+      echo "Codex was not found (no codex on this shell's PATH or in the folders npm, nvm and Homebrew use,"
+      echo "and no $codex_label), so it was left alone. If it is installed after all, or once it is, this sets"
+      echo "it up, with no need for codex on the PATH:"
       echo "  \"$java_native\" -jar \"$jar_native\" --install-codex"
     else
+      if [[ -n "$codex_bin" ]]; then
+        off_path codex "$codex_bin"
+      fi
       if (( hooks == 0 )); then
         codex_options+=(--no-hooks)
       fi
@@ -638,10 +734,12 @@ main() {
   # Antigravity takes the same --pull-always as Codex, and nothing about hooks:
   # it has none of Sheriff's.
   if (( antigravity == 1 )); then
-    if ! command -v agy >/dev/null 2>&1; then
-      echo "agy is not on the PATH, so Antigravity was left alone. Once it is installed:"
+    if [[ -z "$agy_bin" ]]; then
+      echo "Antigravity was not found (no agy on this shell's PATH or in the folders its installer uses),"
+      echo "so it was left alone. If it is installed after all, or once it is, this sets it up:"
       echo "  \"$java_native\" -jar \"$jar_native\" --install-antigravity"
     else
+      off_path agy "$agy_bin"
       local antigravity_options=()
       if (( pull_always == 1 )); then
         antigravity_options+=(--pull-always)
@@ -666,7 +764,8 @@ main() {
     echo "No assistant was found (Claude Code, Codex or Antigravity), so Sheriff is installed only as"
     echo "the CI check and the Maven plugin:"
     echo "  \"$java_native\" -jar \"$jar_native\" --check"
-    echo "Install one of them and run this again to set it up."
+    echo "Install one of them and run this again to set it up. One installed where this did not look"
+    echo "is set up by the line printed for it above."
   else
     echo "Sheriff is set up for no assistant: the options left out $(join_names "${found[@]}")."
   fi
