@@ -46,15 +46,17 @@
 # one breaks that path: run this again after it.
 #
 # Only the assistants this machine has are set up, and the run ends saying
-# which, after starting the server once as they will. With Claude Code
-# (claude on the PATH, or %USERPROFILE%\.claude, which its desktop app and IDE
+# which, after starting the server once as they will. A command is looked for
+# on the PATH and in npm's folder and .local\bin, and one found off the PATH is
+# set up all the same. With Claude Code
+# (claude, or %USERPROFILE%\.claude, which its desktop app and IDE
 # extensions use), the hooks go into
 # %USERPROFILE%\.claude\settings.json: they guard every project Claude Code
 # opens, and let everything through where there is nothing Sheriff analyzes;
-# with claude on the PATH the server is registered too. With codex on the
-# PATH, Codex is set up the same
+# with claude the server is registered too. With Codex (codex, or
+# %USERPROFILE%\.codex or CODEX_HOME), it is set up the same
 # way (--install-codex). Codex asks once before it runs a new hook; that
-# review stays with you. With agy on the PATH, Antigravity is set up too
+# review stays with you. With agy, Antigravity is set up too
 # (--install-antigravity): the server and the tools it may run without asking,
 # as it has no Sheriff hooks.
 #
@@ -424,6 +426,33 @@ function Test-Server {
     $said = (($run.Output.Trim() + "`n" + $run.Errors.Trim()).Trim() -split "`n" | Select-Object -Last 4) -join ' '
     return "it gave no answer to initialize naming it sheriff (exit code $($run.ExitCode)). $said".Trim()
 }
+# Where an assistant's command is: on the PATH, or else in a folder its
+# installers put it in (npm's global folder, the native installers'
+# .local\bin), which an editor-only install or a PATH not yet reloaded leaves
+# off this session's PATH. Nothing when it is nowhere.
+function Find-Assistant([string]$Name) {
+    $command = Get-Command $Name -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($command) { return $command.Source }
+    $folders = @((Join-Path $HOME '.local\bin'), (Join-Path $HOME '.npm-global\bin'), (Join-Path $HOME '.bun\bin'))
+    if ($env:APPDATA) { $folders += (Join-Path $env:APPDATA 'npm') }
+    if ($env:LOCALAPPDATA) { $folders += (Join-Path $env:LOCALAPPDATA 'pnpm') }
+    foreach ($folder in $folders) {
+        foreach ($file in "$Name.exe", "$Name.cmd", $Name) {
+            $candidate = Join-Path $folder $file
+            if (Test-Path -PathType Leaf $candidate) { return $candidate }
+        }
+    }
+    return $null
+}
+# A command found off the PATH, said once: where it is, that it is set up all
+# the same, and the line that puts its folder on the user's PATH.
+function Write-OffPath([string]$Name, [string]$Path) {
+    if (Get-Command $Name -CommandType Application -ErrorAction SilentlyContinue) { return }
+    $folder = Split-Path -Parent $Path
+    Write-Host "$Name is not on this session's PATH but is in $folder, so it is set up all the same."
+    Write-Host "If your terminal does not find $Name either, this puts it on your PATH (for new terminals):"
+    Write-Host "  [Environment]::SetEnvironmentVariable('Path', '$folder;' + [Environment]::GetEnvironmentVariable('Path', 'User'), 'User')"
+}
 # Only the assistants this machine has are set up, and the run ends saying
 # which: found is every one there, setUp the ones this run wrote into.
 $found = @()
@@ -436,17 +465,23 @@ $env:SHERIFF_JAVA = $java
 try {
     # Claude Code is there when its command is, or its folder: the desktop app
     # and the IDE extensions read .claude\settings.json without putting claude on
-    # the PATH, so the hooks go in for them too. With neither, nothing is written:
+    # the PATH, so the hooks go in for them too. Codex likewise, as setting it up
+    # writes its folder and never runs codex. With neither, nothing is written:
     # a settings file used to be created for an assistant nobody had.
-    $claudeCli = [bool](Get-Command claude -ErrorAction SilentlyContinue)
-    $claudeFound = $claudeCli -or (Test-Path (Join-Path $HOME '.claude'))
+    $claudeCommand = Find-Assistant 'claude'
+    $codexCommand = Find-Assistant 'codex'
+    $agyCommand = Find-Assistant 'agy'
+    $codexHome = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $HOME '.codex' }
+    $claudeFound = $claudeCommand -or (Test-Path (Join-Path $HOME '.claude'))
     if (-not $claudeFound) {
-        Write-Host "claude is not on the PATH and there is no .claude folder, so Claude Code was left alone. Once it is installed:"
+        Write-Host "Claude Code was not found (no claude on the PATH or in the folders its installers use, and no"
+        Write-Host ".claude folder), so it was left alone. If it is installed after all, or once it is, these set it up:"
         Write-Host "  claude mcp add --scope user $name -- `"$java`" -jar `"$jar`""
         Write-Host "  $javaCommand -jar `"$jar`" --install-hooks --user"
     } else {
         $found += 'Claude Code'
         $claudeSetUp = $false
+        if ($claudeCommand) { Write-OffPath 'claude' $claudeCommand }
         if ($NoHooks) {
             Write-Host "The hooks were left out (-NoHooks). For every project, or in one project's folder without --user:"
             Write-Host "  $javaCommand -jar `"$jar`" --install-hooks --user"
@@ -455,27 +490,30 @@ try {
             if ($LASTEXITCODE -ne 0) { Write-Error "The hooks could not be written; see the message above." }
             $claudeSetUp = $true
         }
-        if ($claudeCli) {
+        if ($claudeCommand) {
             # Removed first, so that running this again replaces it.
-            $null = Test-Native { claude mcp remove --scope user $name }
+            $null = Test-Native { & $claudeCommand mcp remove --scope user $name }
             # Quoted, or PowerShell takes -- as its own end of parameters and drops it.
-            & claude mcp add --scope user $name @serverOptions '--' $java -jar $jar
+            & $claudeCommand mcp add --scope user $name @serverOptions '--' $java -jar $jar
             if ($LASTEXITCODE -ne 0) { Write-Error "The MCP server could not be registered; see the message above." }
             Write-Host "Registered the MCP server as '$name'. Restart open Claude Code sessions to pick it up."
             $claudeSetUp = $true
         } else {
-            Write-Host "claude is not on the PATH, so the MCP server was not registered. By hand:"
+            Write-Host "There is a .claude folder but no claude command, so the MCP server was not registered. By hand:"
             Write-Host "  claude mcp add --scope user $name -- `"$java`" -jar `"$jar`""
         }
         if ($claudeSetUp) { $setUp += 'Claude Code' }
     }
-    if (Get-Command codex -ErrorAction SilentlyContinue) { $found += 'Codex' }
-    if (Get-Command agy -ErrorAction SilentlyContinue) { $found += 'Antigravity' }
+    $codexFound = $codexCommand -or (Test-Path $codexHome)
+    if ($codexFound) { $found += 'Codex' }
+    if ($agyCommand) { $found += 'Antigravity' }
     if (-not $NoCodex) {
-        if (-not (Get-Command codex -ErrorAction SilentlyContinue)) {
-            Write-Host "codex is not on the PATH, so Codex was left alone. Once it is installed:"
+        if (-not $codexFound) {
+            Write-Host "Codex was not found (no codex on the PATH or in npm's folder, and no $codexHome), so it was"
+            Write-Host "left alone. If it is installed after all, or once it is, this sets it up, with no need for codex on the PATH:"
             Write-Host "  $javaCommand -jar `"$jar`" --install-codex"
         } else {
+            if ($codexCommand) { Write-OffPath 'codex' $codexCommand }
             if ($NoHooks) { $codexOptions += '--no-hooks' }
             & $java -jar $jar --install-codex @hookOptions @codexOptions
             if ($LASTEXITCODE -ne 0) { Write-Error "Codex could not be set up; see the message above." }
@@ -486,10 +524,12 @@ try {
     # Antigravity takes the same -PullAlways as Codex, and nothing about hooks: it
     # has none of Sheriff's.
     if (-not $NoAntigravity) {
-        if (-not (Get-Command agy -ErrorAction SilentlyContinue)) {
-            Write-Host "agy is not on the PATH, so Antigravity was left alone. Once it is installed:"
+        if (-not $agyCommand) {
+            Write-Host "Antigravity was not found (no agy on the PATH or in the folders its installer uses), so it was"
+            Write-Host "left alone. If it is installed after all, or once it is, this sets it up:"
             Write-Host "  $javaCommand -jar `"$jar`" --install-antigravity"
         } else {
+            Write-OffPath 'agy' $agyCommand
             $antigravityOptions = @()
             if ($PullAlways) { $antigravityOptions += '--pull-always' }
             & $java -jar $jar --install-antigravity @antigravityOptions
@@ -520,7 +560,8 @@ if ($setUp.Count -gt 0) {
     Write-Host "No assistant was found (Claude Code, Codex or Antigravity), so Sheriff is installed only as"
     Write-Host "the CI check and the Maven plugin:"
     Write-Host "  $javaCommand -jar `"$jar`" --check"
-    Write-Host "Install one of them and run this again to set it up."
+    Write-Host "Install one of them and run this again to set it up. One installed where this did not look"
+    Write-Host "is set up by the line printed for it above."
 } else {
     Write-Host "Sheriff is set up for no assistant: the options left out $(Join-Names $found)."
 }
