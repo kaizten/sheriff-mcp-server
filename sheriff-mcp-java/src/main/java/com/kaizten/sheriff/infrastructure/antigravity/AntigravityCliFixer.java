@@ -47,47 +47,38 @@ public final class AntigravityCliFixer implements CodeFixer {
      * Marks the child process as the agent's own.
      */
     private static final String AGENT_MARKER = "SHERIFF_AGENT_RUNNING";
-
     /**
      * The value that marker carries.
      */
     private static final String AGENT_MARKER_VALUE = "1";
-
     /**
      * The flag that sets how long {@code agy} waits for its answer.
      */
     private static final String PRINT_TIMEOUT_FLAG = "--print-timeout";
-
     /**
      * How that flag's value is written: seconds, with Go's unit.
      */
     private static final String SECONDS = "%ds";
-
     /**
      * Reported when the CLI ran but ended badly.
      */
     private static final String EXIT_FAILURE = "exit code %d";
-
     /**
      * Printed once the exchange has been written down.
      */
     private static final String LOGGED_MESSAGE = "  prompt/response logged to %s%n";
-
     /**
      * What {@code agy} writes when a tool it may not use ended the session.
      */
     private static final String REFUSED_MARKER = "auto-denied";
-
     /**
      * Printed when the session ended at a refused tool.
      */
     private static final String REFUSED_MESSAGE = "  Antigravity stopped at a tool it may not use here: %s%n";
-
     /**
      * What the prompt says first when there is no component to confine it to.
      */
     private static final String NO_COMPONENT = "";
-
     /**
      * What the prompt says first when Antigravity works inside the component.
      */
@@ -97,7 +88,6 @@ public final class AntigravityCliFixer implements CodeFixer {
             write inside `%1$s`.
 
             """;
-
     /**
      * What the prompt says when no command is granted.
      */
@@ -107,7 +97,6 @@ public final class AntigravityCliFixer implements CodeFixer {
             your turn before your edits are done. The tests are run for you after you finish.
 
             """;
-
     /**
      * What the prompt says when the tests may be run.
      */
@@ -115,7 +104,6 @@ public final class AntigravityCliFixer implements CodeFixer {
             To check your work, run the project's tests with exactly `%s`, with nothing added:
             no pipe, no redirection.
             """;
-
     /**
      * What the prompt says about the commands granted, the tests or not.
      */
@@ -125,47 +113,38 @@ public final class AntigravityCliFixer implements CodeFixer {
             ends your turn before your edits are done.
 
             """;
-
     /**
      * What is said about the tests when there are none to run.
      */
     private static final String NO_TESTS = "";
-
     /**
      * Reported when a pass's home could not be written.
      */
     private static final String HOME_FAILURE = "could not prepare Antigravity's settings for this pass: %s";
-
     /**
      * The component the edits are confined to, empty for none.
      */
     private final String component;
-
     /**
      * How to run the process.
      */
     private final ProcessRunner processes;
-
     /**
      * Where the exchange is recorded.
      */
     private final PromptLog promptLog;
-
     /**
      * The directory Sheriff mounts.
      */
     private final Path repositoryRoot;
-
     /**
      * The command that invokes {@code agy}, prompt and time limit excluded.
      */
     private final List<String> baseCommand;
-
     /**
      * How long one invocation is given.
      */
     private final Duration timeout;
-
     /**
      * The home each pass runs with, and the commands it grants.
      */

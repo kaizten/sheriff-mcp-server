@@ -51,7 +51,6 @@ public final class FileTools {
     private static final String SEPARATOR = ", ";
     private static final String REPOSITORY_NAME = "the repository";
     private static final String QUOTED = "'%s'";
-
     private final Path repositoryRoot;
     private final Path workspace;
     private final Set<String> allowedFiles;

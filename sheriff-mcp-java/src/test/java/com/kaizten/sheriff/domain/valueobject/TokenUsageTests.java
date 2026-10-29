@@ -55,7 +55,9 @@ class TokenUsageTests {
      */
     @Test
     void shouldBeEqualToAnotherInstanceWithSameValue() {
-        assertEquals(TokenUsageMother.random(), TokenUsageMother.random());
+        TokenUsage first = new TokenUsage(List.of("m"), 1, 2, 3, 4, 5, 0.5);
+        TokenUsage second = new TokenUsage(List.of("m"), 1, 2, 3, 4, 5, 0.5);
+        assertEquals(first, second);
     }
 
     /**

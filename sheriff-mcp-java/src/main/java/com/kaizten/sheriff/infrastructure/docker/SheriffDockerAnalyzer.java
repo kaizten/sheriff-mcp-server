@@ -80,19 +80,6 @@ public final class SheriffDockerAnalyzer implements CodeAnalyzer {
     private static final String ERRORS_STATE_FILE = "sheriff_errors.json";
     private static final String SUMMARY_STATE_FILE = "sheriff_summary.json";
     private static final String TRACKED_FILES_STATE_FILE = "sheriff_tracked_files.json";
-
-    /**
-     * The state Sheriff writes at the root of the mounted volume.
-     */
-    public static final List<String> STATE_FILES =
-            List.of(ERRORS_STATE_FILE, SUMMARY_STATE_FILE, TRACKED_FILES_STATE_FILE);
-
-    /**
-     * The state worth keeping: the findings and the tracked files. The
-     * summary has been empty in every run seen.
-     */
-    public static final List<String> EXPORTED_STATE_FILES = List.of(ERRORS_STATE_FILE, TRACKED_FILES_STATE_FILE);
-
     private static final String TEST_SUBCOMMAND = "test";
     private static final String TEST_FLAG = "--test";
     private static final String URI_FLAG = "--uri";
@@ -124,11 +111,9 @@ public final class SheriffDockerAnalyzer implements CodeAnalyzer {
             + "state file, so nothing was analyzed. That is not the same as a clean component, and "
             + "Sheriff gives no other way to tell the two apart: it exits 0 either way and says "
             + "nothing on an empty result.";
-
     private static final int NONE_WITHHELD = 0;
     private static final int LAST_TO_FIRST = -1;
     private static final int FIRST_INDEX = 0;
-
     private final SheriffContainer container;
     private final ObjectMapper json = new ObjectMapper();
     private final String testType;
@@ -137,6 +122,16 @@ public final class SheriffDockerAnalyzer implements CodeAnalyzer {
     private final boolean cleanUpState;
     private final Optional<Path> exportDirectory;
     private final boolean failFast;
+    /**
+     * The state Sheriff writes at the root of the mounted volume.
+     */
+    public static final List<String> STATE_FILES =
+            List.of(ERRORS_STATE_FILE, SUMMARY_STATE_FILE, TRACKED_FILES_STATE_FILE);
+    /**
+     * The state worth keeping: the findings and the tracked files. The
+     * summary has been empty in every run seen.
+     */
+    public static final List<String> EXPORTED_STATE_FILES = List.of(ERRORS_STATE_FILE, TRACKED_FILES_STATE_FILE);
 
     /**
      * Wires the analyzer to one Sheriff image and one component.
@@ -374,13 +369,13 @@ public final class SheriffDockerAnalyzer implements CodeAnalyzer {
         List<TrackedFile> tracked = trackedFiles();
         Optional<JsonNode> recorded = recordedEntries();
         if (recorded.isPresent()) {
-            return AnalysisResult.of(KnownFalsePositives.without(toFindings(recorded.get())), tracked);
+            return AnalysisResult.of(KnownFalsePositives.without(toFindings(recorded.get()), repositoryRoot), tracked);
         }
         if (output.isBlank()) {
             return AnalysisResult.failure(String.format(NOT_RECORDED, component, testType));
         }
         try {
-            return AnalysisResult.of(KnownFalsePositives.without(parse(output)), tracked);
+            return AnalysisResult.of(KnownFalsePositives.without(parse(output), repositoryRoot), tracked);
         } catch (IOException exception) {
             return AnalysisResult.failure(PARSE_FAILURE);
         }

@@ -32,7 +32,6 @@ public final class GateMemory {
     private static final String MEMORY_DIRECTORY = "sheriff-gate";
     private static final String DIGEST = "SHA-256";
     private static final String SEPARATOR = "\n";
-
     private final Path directory;
 
     /**

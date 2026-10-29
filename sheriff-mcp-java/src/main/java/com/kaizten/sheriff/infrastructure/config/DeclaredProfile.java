@@ -42,16 +42,6 @@ import org.xml.sax.helpers.DefaultHandler;
  */
 public final class DeclaredProfile {
 
-    /**
-     * The file a project that does not build with Maven declares it in.
-     */
-    public static final String FILE_NAME = ".sheriff.properties";
-
-    /**
-     * The key that declares the profile in that file.
-     */
-    static final String FILE_KEY = "profile";
-
     private static final String ERROR_UTILITY_CLASS = "This is a utility class and cannot be instantiated.";
     private static final String MAVEN_BUILD = "pom.xml";
     private static final String PROPERTIES_ELEMENT = "properties";
@@ -59,6 +49,14 @@ public final class DeclaredProfile {
     private static final String UNRESOLVED_REFERENCE = "${";
     private static final String DOCTYPE_FEATURE = "http://apache.org/xml/features/disallow-doctype-decl";
     private static final String NO_ACCESS = "";
+    /**
+     * The key that declares the profile in that file.
+     */
+    static final String FILE_KEY = "profile";
+    /**
+     * The file a project that does not build with Maven declares it in.
+     */
+    public static final String FILE_NAME = ".sheriff.properties";
 
     /**
      * Refuses to be instantiated: every member here is static.

@@ -19,7 +19,6 @@ public final class AntigravityPass implements AutoCloseable {
      * The temporary home, empty when the pass runs in the user's.
      */
     private final Optional<Path> home;
-
     /**
      * The variables the pass runs with.
      */

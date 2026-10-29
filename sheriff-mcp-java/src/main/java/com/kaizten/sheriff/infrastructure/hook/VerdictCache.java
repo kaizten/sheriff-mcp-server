@@ -83,7 +83,6 @@ public final class VerdictCache {
     private static final int FINGERPRINT_LENGTH = 16;
     private static final int FIRST = 0;
     private static final long MILLISECONDS_PER_SECOND = 1000L;
-
     private final Path directory;
     private final Duration lifetime;
     private final ObjectMapper json = new ObjectMapper();

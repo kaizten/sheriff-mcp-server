@@ -37,7 +37,6 @@ public final class CatalogFreshness {
     private static final String GENERATED_AT_FIELD = "generated_at";
     private static final String EMPTY = "";
     private static final int SHORT_ID_LENGTH = 19;
-
     /**
      * Names the two identifiers rather than the image twice: both sides are
      * normally the same tag, so saying "%s is not %s" about

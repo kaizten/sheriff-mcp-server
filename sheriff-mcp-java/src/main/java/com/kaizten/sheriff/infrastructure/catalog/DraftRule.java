@@ -26,7 +26,6 @@ final class DraftRule {
     private static final String FIXER_PREFIX = "fixer";
     private static final String MARK_SEPARATOR = "[·|,]";
     private static final String PROFILE_SEPARATOR = ",";
-
     final String code;
     final String language;
     final List<String> description = new ArrayList<>();

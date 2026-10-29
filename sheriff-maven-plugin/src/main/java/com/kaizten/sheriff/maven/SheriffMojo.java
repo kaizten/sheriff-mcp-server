@@ -40,22 +40,18 @@ public abstract class SheriffMojo extends AbstractMojo {
      * is unknown.
      */
     private static final String NO_IMAGE = "Sheriff's image is not available on this machine.";
-
     /**
      * The variable the agent reads the mounted directory from.
      */
     private static final String TARGET_REPOSITORY = "TARGET_REPO";
-
     /**
      * The variable the agent reads the analyzed component from.
      */
     private static final String COMPONENT = "SHERIFF_COMPONENT";
-
     /**
      * The variable the agent reads the rule profile from.
      */
     private static final String TEST_TYPE = "SHERIFF_TEST_TYPE";
-
     /**
      * The variable the agent reads the project from, whose
      * {@code .sheriff.properties} gives the settings; without it the agent
@@ -63,75 +59,62 @@ public abstract class SheriffMojo extends AbstractMojo {
      * project is the folder of its neighbours.
      */
     private static final String PROJECT_DIRECTORY = "CLAUDE_PROJECT_DIR";
-
     /**
      * The variable the agent reads the image from.
      */
     private static final String IMAGE = "SHERIFF_IMAGE";
-
     /**
      * The variable the agent reads the per-run timeout from.
      */
     private static final String TIMEOUT = "SHERIFF_TIMEOUT";
-
     /**
      * The profile applied when neither the build nor the project names one,
      * the same as the MCP server's default for Java.
      */
     private static final String DEFAULT_PROFILE = "JAVA";
-
     /**
      * The file a directory is recognized as a Maven project by.
      */
     private static final String MAVEN_BUILD = "pom.xml";
-
     /**
      * The directory whose presence means the module has code to analyze.
      */
     private static final String SOURCES = "src";
-
     /**
      * The variable the agent reads the export directory from.
      */
     private static final String EXPORT_DIRECTORY = "SHERIFF_EXPORT_DIR";
-
     /**
      * Where Sheriff's findings and tracked files are copied, under the
      * module's build directory, beside the unpacked catalog.
      */
     private static final String EXPORT_FOLDER = "sheriff";
-
     /**
      * The variable the agent finds the shared cache through, where a catalog
      * for a newer image than the bundled one is extracted.
      */
     private static final String CACHE_HOME = "XDG_CACHE_HOME";
-
     /**
      * What {@link #CACHE_HOME} is taken as when this machine does not set
      * it: the user's {@code .cache}.
      */
     private static final String DEFAULT_CACHE_HOME = "";
-
     /**
      * The catalog, carried inside this plugin's own jar. It is copied there
      * at build time from the agent module, so it is generated rather than a
      * fourth committed copy that could drift from the other two.
      */
     private static final String CATALOG_RESOURCE = "/rules_catalog.json";
-
     /**
      * Where the catalog is unpacked, under the module's build directory, so
      * nothing this plugin needs is ever written into the analyzed sources.
      */
     private static final String CATALOG_FILE = "sheriff/rules_catalog.json";
-
     /**
      * The module being built.
      */
     @Parameter(defaultValue = "${project.basedir}", readonly = true, required = true)
     protected File basedir;
-
     /**
      * The rule profile. {@code JAVA} is style and documentation;
      * {@code JAVA_HEXAGONAL} and {@code JAVA_DDD*} also check architecture and
@@ -142,26 +125,22 @@ public abstract class SheriffMojo extends AbstractMojo {
      */
     @Parameter(property = "sheriff.profile")
     protected String profile;
-
     /**
      * The Sheriff image to run; left unset, {@code kaizten/sheriff:latest}.
      */
     @Parameter(property = "sheriff.image")
     protected String image;
-
     /**
      * Seconds allowed for one Sheriff run; left unset, the project's
      * {@code SHERIFF_TIMEOUT}, else 300.
      */
     @Parameter(property = "sheriff.timeout")
     protected Integer timeoutSeconds;
-
     /**
      * Whether to do nothing at all.
      */
     @Parameter(property = "sheriff.skip", defaultValue = "false")
     protected boolean skip;
-
     /**
      * The module's build directory, which is where anything this plugin
      * needs to write goes.

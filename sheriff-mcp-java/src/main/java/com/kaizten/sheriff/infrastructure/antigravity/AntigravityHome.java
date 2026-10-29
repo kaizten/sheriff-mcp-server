@@ -42,67 +42,54 @@ public final class AntigravityHome {
      * The directory that holds Antigravity's configuration.
      */
     private static final String GEMINI_DIRECTORY = ".gemini";
-
     /**
      * The directory of the CLI's own configuration.
      */
     private static final String CLI_DIRECTORY = "antigravity-cli";
-
     /**
      * The CLI's settings file.
      */
     private static final String SETTINGS_FILE = "settings.json";
-
     /**
      * The settings key that holds the permission rules.
      */
     private static final String PERMISSIONS = "permissions";
-
     /**
      * The key of the rules that allow without asking.
      */
     private static final String ALLOW = "allow";
-
     /**
      * How a rule that allows a command is written.
      */
     private static final String COMMAND_RULE = "command(%s)";
-
     /**
      * The command that renames a file, which the loop follows as a rename.
      */
     private static final String RENAME_COMMAND = "git mv";
-
     /**
      * The variable {@code agy} finds its home through.
      */
     private static final String HOME_VARIABLE = "HOME";
-
     /**
      * How the temporary home is named.
      */
     private static final String TEMPORARY_PREFIX = "sheriff-agy-";
-
     /**
      * The test command when there is none to allow.
      */
     private static final String NO_TEST_COMMAND = "";
-
     /**
      * Reads and writes the settings.
      */
     private static final ObjectMapper JSON = new ObjectMapper();
-
     /**
      * The user's home, whose settings are copied, or empty to run in it.
      */
     private final Optional<Path> userHome;
-
     /**
      * The variables that point the build tools back to the user's home.
      */
     private final Map<String, String> buildToolHomes;
-
     /**
      * The test command the rules allow, empty for none.
      */

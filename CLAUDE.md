@@ -308,6 +308,11 @@ to be tried by hand.
 - **The TypeScript profile traces every checker on stdout**, one
   `COMMAND: node ...` line each, before any findings; the analyzer drops
   them, or a clean TypeScript run reads as "not JSON".
+- **Sheriff finds its TypeScript analyzer in `./node_modules`**, under `/`,
+  so `SheriffContainer` runs it with `--workdir /`. The image of 29 October
+  (`sha256:e03d9daf`) declares `WORKDIR /data`, and there every TypeScript
+  analysis reported 0 errors and exited 0, Node's "Cannot find module" on
+  stdout; `scripts/e2e.sh` scenarios 9 and 10 catch it.
 - **Every run drops three `sheriff_*.json` files at the root of the mount**,
   which is the component's state folder,
   `${XDG_CACHE_HOME:-~/.cache}/sheriff-mcp/state/<digest of its path>`
@@ -321,7 +326,10 @@ to be tried by hand.
   is the fallback) and `sheriff_tracked_files.json` gives
   `AnalysisResult.trackedFiles`, whose hashes name what a repair changed
   (`changedSince`); both can be exported. `sheriff_summary.json` is always
-  `{ }` and ignored.
+  `{ }` and ignored. Newer images also leave `sheriff_history.json` (every
+  run appended) and, since 29 October, `sheriff_tracked_components.json` (a
+  hash per component); they stay in the state folder, as a run with them
+  kept found the same errors (measured).
 - **Sheriff is incremental, so its state is cleared *before* every run too.**
   It skips every file whose hash is in `sheriff_tracked_files.json`, which
   records no profile and no rule version: state left by one profile makes the
@@ -468,8 +476,15 @@ A declaration applies only to components in its language, and a
 single-module project ignores its parent, which is its siblings' too. **No
 rule can be taken out**: an exclusion added on a model's claim of a conflict
 was measured and withdrawn. `KnownFalsePositives`, inside the one analyzer,
-drops only `FilenamePascalCase` on `package-info.java` and
-`module-info.java`, names Java requires.
+drops only findings measured wrong, each on what the source shows, never a
+rule: `FilenamePascalCase` on `package-info.java` and `module-info.java`,
+names Java requires; and, since the image of 29 October,
+`FourSpaceIndentation` on a comment's `*` lines and inside a text block,
+`JavaVariableName` on a `static final` constant and `UnusedImport` on an
+import used as an annotation. On this repository's code, clean under the
+image of 28 October, those three were 13,981 of 14,879 errors under the new
+one, and every `UnusedImport` of the plugin. A line it cannot read keeps
+its finding.
 
 ## The MCP's answers
 

@@ -44,7 +44,6 @@ public final class MetricsFile implements RunMetrics {
     private static final String CACHE_WRITE_TOKENS = "cache_write_tokens";
     private static final String TURNS = "turns";
     private static final String COST_USD = "cost_usd";
-
     private final Path file;
     private final ObjectMapper json = new ObjectMapper();
     private boolean announced;

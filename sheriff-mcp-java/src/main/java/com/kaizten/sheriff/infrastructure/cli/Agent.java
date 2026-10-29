@@ -41,21 +41,6 @@ import java.util.stream.Stream;
  */
 public final class Agent {
 
-    /**
-     * Everything asked for came out clean.
-     */
-    public static final int SUCCESS = 0;
-
-    /**
-     * The tool ran and the answer is no.
-     */
-    public static final int FAILURE = 1;
-
-    /**
-     * The invocation itself was wrong, which is not the same as a failure.
-     */
-    public static final int MISUSE = 2;
-
     private static final String CHECK_ONLY = "--check-only";
     private static final String RULES = "--rules";
     private static final String FIXER = "--fixer";
@@ -157,10 +142,21 @@ public final class Agent {
             No rule catalog at %s.
             Generate one with the extractor (it reads them out of the Sheriff image).
             """;
-
     private final Configuration configuration;
     private final Composition composition;
     private final ObjectMapper json = new ObjectMapper();
+    /**
+     * Everything asked for came out clean.
+     */
+    public static final int SUCCESS = 0;
+    /**
+     * The tool ran and the answer is no.
+     */
+    public static final int FAILURE = 1;
+    /**
+     * The invocation itself was wrong, which is not the same as a failure.
+     */
+    public static final int MISUSE = 2;
 
     /**
      * Wires the CLI to a composition.
@@ -456,7 +452,7 @@ public final class Agent {
             composition.ruleCatalogExtractor().extract(configuration.image(), catalog, markdown);
             return SUCCESS;
         } catch (IOException | IllegalStateException exception) {
-            System.out.println("error: " + exception.getMessage());
+            System.out.println(ERROR_PREFIX + exception.getMessage());
             return FAILURE;
         }
     }

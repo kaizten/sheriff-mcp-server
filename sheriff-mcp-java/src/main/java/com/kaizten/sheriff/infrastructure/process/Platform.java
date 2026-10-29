@@ -50,13 +50,6 @@ public final class Platform {
     private static final String NOTHING = "";
     private static final int FIRST = 0;
     private static final String DOCKER_VARIABLE = "SHERIFF_DOCKER";
-
-    /**
-     * The Java property that stands for {@code SHERIFF_DOCKER} where the
-     * variable cannot be set, as on a Codex hook's line.
-     */
-    public static final String DOCKER_PROPERTY = "sheriff.docker";
-
     private static final String DOCKER_EXECUTABLE = "docker";
     private static final String WSL_EXECUTABLE = "wsl.exe";
     private static final String WSL_VALUE = "wsl";
@@ -78,6 +71,11 @@ public final class Platform {
     private static final String BATCH_SCRIPT_EXTENSION = ".bat";
     private static final String EXECUTABLE_EXTENSION = ".exe";
     private static final String ERROR_UTILITY_CLASS = "This is a utility class and cannot be instantiated.";
+    /**
+     * The Java property that stands for {@code SHERIFF_DOCKER} where the
+     * variable cannot be set, as on a Codex hook's line.
+     */
+    public static final String DOCKER_PROPERTY = "sheriff.docker";
 
     /**
      * Refuses to be instantiated: every member here is static.

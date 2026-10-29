@@ -24,7 +24,6 @@ public final class PassMeter {
 
     private static final Set<String> WHOLE_COMPONENT = null;
     private static final int ONE_ERROR = 1;
-
     private final RunMetrics metrics;
     private String label;
     private String kind;

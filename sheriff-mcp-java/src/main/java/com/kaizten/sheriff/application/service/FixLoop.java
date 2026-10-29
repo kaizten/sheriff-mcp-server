@@ -22,7 +22,6 @@ import com.kaizten.sheriff.domain.valueobject.SheriffFinding;
 import com.kaizten.sheriff.domain.valueobject.SheriffRule;
 import com.kaizten.sheriff.domain.valueobject.VerificationResult;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -51,19 +50,6 @@ import java.util.stream.Collectors;
  */
 public final class FixLoop implements FixCodeUntilClean {
 
-    /**
-     * A prompt section, or nothing at all.
-     *
-     * <p>An empty section still costs a heading that promises something and
-     * then delivers none, which is worse than silence.
-     *
-     * @param body what the section says, possibly empty
-     * @return the section, or the empty string
-     */
-    private static String section(String body) {
-        return body.isEmpty() ? "" : System.lineSeparator() + body + System.lineSeparator();
-    }
-
     private static final String PROMPT_TEMPLATE = """
             Fix the following style/documentation errors that Sheriff reports in this repository.
 
@@ -85,7 +71,6 @@ public final class FixLoop implements FixCodeUntilClean {
             - No need to verify with Sheriff yourself when you're done -- the process
               that invoked you checks that, outside this conversation.
             """;
-
     private static final String REPAIR_PROMPT_TEMPLATE = """
             Sheriff is satisfied with this code (0 errors), but running the project's
             own test suite just failed:
@@ -101,7 +86,6 @@ public final class FixLoop implements FixCodeUntilClean {
             Fix the real problem so the tests pass again, without reintroducing any of
             the style/documentation/architecture issues Sheriff was checking for.
             """;
-
     private static final int OUTPUT_EXCERPT_LIMIT = 500;
     private static final String BRANCH_PREFIX = "sheriff-agent";
     private static final String ITERATION_LABEL = "iteration-%d";
@@ -119,7 +103,6 @@ public final class FixLoop implements FixCodeUntilClean {
     private static final AutomaticRepair NO_AUTOMATIC_REPAIR = () -> EMPTY;
     private static final RunMetrics NO_METRICS = pass -> { };
     private static final String AUTOMATIC_REPAIR_LABEL = "sheriff-fixers";
-
     private final CodeAnalyzer analyzer;
     private final CodeFixer fixer;
     private final VersionControl versionControl;
@@ -130,6 +113,19 @@ public final class FixLoop implements FixCodeUntilClean {
     private final LoopSettings settings;
     private final RunMetrics metrics;
     private PassMeter meter;
+
+    /**
+     * A prompt section, or nothing at all.
+     *
+     * <p>An empty section still costs a heading that promises something and
+     * then delivers none, which is worse than silence.
+     *
+     * @param body what the section says, possibly empty
+     * @return the section, or the empty string
+     */
+    private static String section(String body) {
+        return body.isEmpty() ? "" : System.lineSeparator() + body + System.lineSeparator();
+    }
 
     /**
      * Wires the loop to its collaborators, with no automatic repairs before

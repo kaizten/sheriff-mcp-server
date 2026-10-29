@@ -85,7 +85,6 @@ public final class ProjectLayout {
     private static final String ARGUMENT_SEPARATOR = " ";
     private static final int NONE = 0;
     private static final int ONLY_ONE = 1;
-
     private final Path mount;
     private final String ownComponent;
     private final boolean searchable;

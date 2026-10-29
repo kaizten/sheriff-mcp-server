@@ -76,7 +76,6 @@ public final class AntigravityInstaller {
     private static final String UNINSTALLED = "Sheriff is no longer in %s or %s.%n";
     private static final int SUCCESS = 0;
     private static final int FAILURE = 2;
-
     private final ObjectMapper json = new ObjectMapper();
     private final Path geminiHome;
     private final Path jar;

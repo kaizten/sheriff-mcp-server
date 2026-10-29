@@ -29,7 +29,6 @@ public final class JsonRuleCatalog implements RuleCatalog {
     private static final String FIXER_FIELD = "fixer";
     private static final String EXAMPLE_FIELD = "example";
     private static final String PROFILES_FIELD = "profiles";
-
     private final Path path;
     private final ObjectMapper json = new ObjectMapper();
 

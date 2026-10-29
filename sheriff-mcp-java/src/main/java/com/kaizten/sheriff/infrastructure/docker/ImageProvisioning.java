@@ -39,11 +39,13 @@ public final class ImageProvisioning {
     private static final String PULL_FAILED =
             "Sheriff's image (%s) is not on this machine and could not be downloaded: %s. Check that "
             + "Docker is running and the network is up, then restart the session.";
+    private static final String NEWER =
+            "Note: a newer %s has been published than the one on this machine, and its rules may ";
     private static final String OUTDATED =
-            "Note: a newer %s has been published than the one on this machine, and its rules may "
+            NEWER
             + "differ. SHERIFF_PULL=check keeps the one here: update it with `docker pull %s`.";
     private static final String NOT_UPDATED =
-            "Note: a newer %s has been published than the one on this machine, and its rules may "
+            NEWER
             + "differ, but it could not be downloaded (%s), so the one here is used. Update it with "
             + "`docker pull %s`.";
     private static final String UPDATING =
@@ -68,7 +70,6 @@ public final class ImageProvisioning {
     private static final String NEWER_PUBLISHED = "; a newer build of it has been published";
     private static final String NEWER_ARRIVING = "; a newer build of it is being downloaded";
     private static final int SHORT_DIGEST_LENGTH = 19;
-
     private final SheriffImage image;
     private final String policy;
     private final PrintStream log;

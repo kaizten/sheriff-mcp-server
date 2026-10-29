@@ -48,7 +48,6 @@ public final class TurnStart {
     private static final int COMPONENT_FIELD = 0;
     private static final int FINGERPRINT_FIELD = 1;
     private static final String REFUSED_SUFFIX = ".refused";
-
     private final Path directory;
 
     /**

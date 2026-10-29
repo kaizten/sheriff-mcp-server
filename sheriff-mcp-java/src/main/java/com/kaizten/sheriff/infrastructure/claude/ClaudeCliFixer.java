@@ -140,7 +140,6 @@ public final class ClaudeCliFixer implements CodeFixer {
             + "rule), run `git mv <old> <new>` rather than creating a new file and leaving "
             + "the old one in place -- a real git-tracked rename is the only version of that "
             + "change the scope check running after this will recognize as the same file.";
-
     private final ProcessRunner processes;
     private final PromptLog promptLog;
     private final Path repositoryRoot;

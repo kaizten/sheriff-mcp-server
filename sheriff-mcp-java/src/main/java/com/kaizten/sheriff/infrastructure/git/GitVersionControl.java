@@ -108,7 +108,6 @@ public final class GitVersionControl implements VersionControl {
             List.of(GIT, STATUS, STATUS_PORCELAIN, NUL_TERMINATED, EVERY_UNTRACKED_FILE);
     private static final List<String> STAGE_COMMAND = List.of(GIT, ADD, ALL);
     private static final List<String> TOPLEVEL_COMMAND = List.of(GIT, REV_PARSE, SHOW_TOPLEVEL);
-
     private final ProcessRunner processes;
     private final Path mountRoot;
     private final Path workingDirectory;

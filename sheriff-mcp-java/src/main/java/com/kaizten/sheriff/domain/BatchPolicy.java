@@ -22,23 +22,19 @@ import java.util.stream.Collectors;
  */
 public final class BatchPolicy {
 
+    private static final int ITERATION_MARGIN = 2;
+    private static final int NONE = 0;
+    private static final int ONE_PASS = 1;
+    private static final String RULE_IN_FILE = "%s in %s";
+    private static final String UTILITY_CLASS_MESSAGE = "This is a utility class and cannot be instantiated.";
     /**
      * The cap to use when the number of files gives no better answer.
      */
     public static final int FALLBACK_MAX_ITERATIONS = 8;
-
     /**
      * How many times the first estimate an automatic cap may grow to.
      */
     public static final int CEILING_FACTOR = 3;
-
-    private static final int ITERATION_MARGIN = 2;
-
-    private static final int NONE = 0;
-
-    private static final int ONE_PASS = 1;
-
-    private static final String RULE_IN_FILE = "%s in %s";
 
     /**
      * Never called: this class is a pair of pure functions and holds no state,
@@ -47,8 +43,6 @@ public final class BatchPolicy {
     private BatchPolicy() {
         throw new UnsupportedOperationException(UTILITY_CLASS_MESSAGE);
     }
-
-    private static final String UTILITY_CLASS_MESSAGE = "This is a utility class and cannot be instantiated.";
 
     /**
      * The default iteration cap when none was set, sized to how many distinct
