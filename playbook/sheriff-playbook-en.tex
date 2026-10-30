@@ -219,7 +219,7 @@ The MCP server & At the end it starts it once, as your assistant will, and
 It looks for \code{claude}, \code{codex} and \code{agy} on the \code{PATH}
 and in the folders npm, nvm, Homebrew and their own installers put them in.
 One it finds off the \code{PATH} it sets up all the same, and it prints the
-line that puts it on yours. It writes Claude Code's hooks even with no
+line that puts it on yours, except inside nvm's folder, where nvm does that. It writes Claude Code's hooks even with no
 \code{claude}, as long as the folder \path{~/.claude} exists, and sets Codex up
 with no \code{codex} as long as \path{~/.codex} does: they are only settings
 files, which the desktop apps and the editor extensions read too. It touches no
@@ -1356,7 +1356,8 @@ assistant. If not, install it and run the line again.}
 wrong: the installer found it in that folder and set it up. Sheriff does not
 need it on the \code{PATH}. If your terminal does not find the command either,
 the line printed below puts that folder on your \code{PATH}; open a new
-terminal after it.}
+terminal after it. When the folder is one of nvm's Node versions there is no
+such line: your terminal finds the command while nvm uses that version.}
 \problem{\code{No assistant was found}}{None of Claude Code, Codex or
 Antigravity is installed, so the installer wrote nothing into any assistant's
 configuration: Sheriff is there only as the CI check (\code{--check}) and the

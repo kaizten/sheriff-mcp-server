@@ -101,13 +101,15 @@ jobs:
           cat "$none"
           grep -q "No assistant was found" "$none"
           test ! -e "$HOME/.claude" && test ! -e "$HOME/.codex" && test ! -e "$HOME/.gemini"
-          # Codex installed with npm under nvm, whose folder only the user's
-          # rc file puts on the PATH: a piped install never reads it.
+          # Codex installed with npm under nvm, in a folder that is not on the
+          # installer's PATH. No PATH line is given for it, as it names one
+          # Node version.
           nvm="$temp/nvm"; mkdir -p "$nvm/versions/node/v22.0.0/bin"; cp "$tools/codex" "$nvm/versions/node/v22.0.0/bin/"
           NVM_DIR="$nvm" PATH="$build:$PATH" /bin/bash scripts/install.sh --no-pull > "$none" 2>&1 || { cat "$none"; exit 1; }
           cat "$none"
           grep -q "Sheriff is set up for Codex." "$none"
           grep -q "codex is not on this shell's PATH but is in $nvm/versions/node/v22.0.0/bin" "$none"
+          if grep -q "export PATH" "$none"; then echo "a PATH line was given for an nvm folder"; exit 1; fi
           rm -rf "$HOME/.codex"
           PATH="$tools:$build:$PATH" /bin/bash scripts/install.sh --no-pull > "$all" 2>&1 || { cat "$all"; exit 1; }
           cat "$all"
