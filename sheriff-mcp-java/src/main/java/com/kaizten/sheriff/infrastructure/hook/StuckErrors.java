@@ -54,8 +54,6 @@ public final class StuckErrors {
     private static final String KEY_SEPARATOR = "|";
     private static final int ONE_MORE = 1;
     private static final int NONE = 0;
-    private final Path directory;
-    private final ObjectMapper json = new ObjectMapper();
     /**
      * The attempts after which an error is left for the end.
      */
@@ -65,6 +63,8 @@ public final class StuckErrors {
      * worked on again.
      */
     public static final int LAST_AT = 3;
+    private final Path directory;
+    private final ObjectMapper json = new ObjectMapper();
 
     /**
      * The record in the user's own folder of the temporary directory.

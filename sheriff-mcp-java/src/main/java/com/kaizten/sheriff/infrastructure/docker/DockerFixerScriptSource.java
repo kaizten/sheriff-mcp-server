@@ -36,13 +36,13 @@ public final class DockerFixerScriptSource implements FixerScriptSource {
     private static final String SHELL = "sh";
     private static final String COMMAND_FLAG = "-c";
     private static final int SUCCESS_EXIT_CODE = 0;
-    private final ProcessRunner processes;
-    private final String image;
-    private final Duration timeout;
     /**
      * Where Sheriff keeps the scripts, inside the image.
      */
     public static final String FIXERS_ROOT = "/sheriff-fixers";
+    private final ProcessRunner processes;
+    private final String image;
+    private final Duration timeout;
 
     /**
      * Builds a source reading from one image.

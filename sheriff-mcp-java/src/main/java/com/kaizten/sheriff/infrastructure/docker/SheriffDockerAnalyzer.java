@@ -114,14 +114,6 @@ public final class SheriffDockerAnalyzer implements CodeAnalyzer {
     private static final int NONE_WITHHELD = 0;
     private static final int LAST_TO_FIRST = -1;
     private static final int FIRST_INDEX = 0;
-    private final SheriffContainer container;
-    private final ObjectMapper json = new ObjectMapper();
-    private final String testType;
-    private final String component;
-    private final Path repositoryRoot;
-    private final boolean cleanUpState;
-    private final Optional<Path> exportDirectory;
-    private final boolean failFast;
     /**
      * The state Sheriff writes at the root of the mounted volume.
      */
@@ -132,6 +124,14 @@ public final class SheriffDockerAnalyzer implements CodeAnalyzer {
      * summary has been empty in every run seen.
      */
     public static final List<String> EXPORTED_STATE_FILES = List.of(ERRORS_STATE_FILE, TRACKED_FILES_STATE_FILE);
+    private final SheriffContainer container;
+    private final ObjectMapper json = new ObjectMapper();
+    private final String testType;
+    private final String component;
+    private final Path repositoryRoot;
+    private final boolean cleanUpState;
+    private final Optional<Path> exportDirectory;
+    private final boolean failFast;
 
     /**
      * Wires the analyzer to one Sheriff image and one component.

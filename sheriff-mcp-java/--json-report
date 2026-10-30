@@ -1,0 +1,11 @@
+{
+  "ok" : false,
+  "total" : 1,
+  "errors" : [ {
+    "file" : "app/A.java",
+    "description" : "Method 'a' has no JavaDoc",
+    "howToSolve" : "Add one.",
+    "referenceCode" : "",
+    "type" : "ERROR"
+  } ]
+}

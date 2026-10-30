@@ -154,6 +154,10 @@ public final class SettingsPage implements AutoCloseable {
     private static final String DEFAULT_JAR = "sheriff-mcp.jar";
     private static final String QUOTE = "'";
     private static final String ESCAPED_QUOTE = "'\\''";
+    /**
+     * How long a page waits unused before it closes.
+     */
+    public static final Duration IDLE_LIMIT = Duration.ofMinutes(30);
     private final Map<String, String> environment;
     private final Path project;
     private final Duration idleLimit;
@@ -164,10 +168,6 @@ public final class SettingsPage implements AutoCloseable {
     private final AtomicBoolean closing = new AtomicBoolean();
     private final AtomicLong lastUse = new AtomicLong(System.nanoTime());
     private final byte[] page;
-    /**
-     * How long a page waits unused before it closes.
-     */
-    public static final Duration IDLE_LIMIT = Duration.ofMinutes(30);
 
     /**
      * Opens a page on a port of its own.

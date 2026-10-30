@@ -135,6 +135,7 @@ public final class AnthropicApiFixer implements CodeFixer {
     private static final double ONE_PER_SECOND = 1.0;
     private static final int EQUAL = 0;
     private static final long ONE = 1L;
+    private static final String DEFAULT_BASE_URL = "https://api.anthropic.com";
     private final String apiKey;
     private final String baseUrl;
     private final String model;
@@ -144,7 +145,6 @@ public final class AnthropicApiFixer implements CodeFixer {
     private final Path workspace;
     private final PromptLog promptLog;
     private final ObjectMapper json = new ObjectMapper();
-    private static final String DEFAULT_BASE_URL = "https://api.anthropic.com";
 
     /**
      * Wires the fixer to an API key and a repository.

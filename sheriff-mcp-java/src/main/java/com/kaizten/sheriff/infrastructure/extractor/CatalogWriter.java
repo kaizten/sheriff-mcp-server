@@ -81,7 +81,6 @@ public final class CatalogWriter {
     private static final String EXAMPLE_LABEL = "**Accepted code:**";
     private static final String FENCE_OPEN = "```python";
     private static final String FENCE = "```";
-    private final ObjectMapper json = new ObjectMapper();
     /**
      * What the profile map came from when the image has no tree to ask.
      */
@@ -97,6 +96,7 @@ public final class CatalogWriter {
      */
     public static final String BOTH_SOURCES =
             "sheriff tree --export-profile, with the bytecode for codes it does not name";
+    private final ObjectMapper json = new ObjectMapper();
 
     /**
      * The catalog as the agent reads it.

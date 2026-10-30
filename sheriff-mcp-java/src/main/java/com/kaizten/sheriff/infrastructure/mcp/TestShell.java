@@ -22,11 +22,6 @@ final class TestShell {
     private static final String GRADLE_WRAPPER_RUN_WINDOWS = "cd %1$s; ./gradlew.bat test";
     private static final String GRADLE_RUN_WINDOWS = "gradle -p %1$s test";
     private static final String NPM_RUN_WINDOWS = "npm --prefix %1$s test";
-    private final String mavenWrapper;
-    private final String maven;
-    private final String gradleWrapper;
-    private final String gradle;
-    private final String npm;
     /**
      * {@code /bin/sh}, Linux's and macOS's, where every command runs.
      */
@@ -55,6 +50,11 @@ final class TestShell {
      */
     static final TestShell ANY_WINDOWS_SHELL = new TestShell(MAVEN_WRAPPER_RUN_WINDOWS, MAVEN_RUN_WINDOWS,
             GRADLE_WRAPPER_RUN_WINDOWS, GRADLE_RUN_WINDOWS, NPM_RUN_WINDOWS);
+    private final String mavenWrapper;
+    private final String maven;
+    private final String gradleWrapper;
+    private final String gradle;
+    private final String npm;
 
     /**
      * A shell's way of writing a test command.

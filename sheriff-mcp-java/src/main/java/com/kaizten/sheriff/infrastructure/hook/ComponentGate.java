@@ -66,10 +66,6 @@ public final class ComponentGate {
     private static final String TESTS_STEP = "Next step: run %s and fix what fails until it passes, then call "
             + "the sheriff_test tool with component '%s' once more, as a fix can break a rule. If the tests "
             + "already failed before this turn, say so instead of leaving them.";
-    private final Configuration configuration;
-    private final Composition composition;
-    private final VerdictCache verdicts;
-    private StuckErrors stuck = new StuckErrors();
     /**
      * Extensions Sheriff actually analyzes.
      *
@@ -83,6 +79,10 @@ public final class ComponentGate {
             PERL_SCRIPT_SUFFIX,
             PERL_MODULE_SUFFIX,
             PYTHON_SUFFIX);
+    private final Configuration configuration;
+    private final Composition composition;
+    private final VerdictCache verdicts;
+    private StuckErrors stuck = new StuckErrors();
 
     /**
      * Wires the gate to the user's own record of verdicts, the one the MCP's
