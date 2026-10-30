@@ -53,6 +53,7 @@ public final class Configuration {
     private static final String GIT_SAFETY = "SHERIFF_AGENT_GIT_SAFETY";
     private static final String MAX_ITERATIONS = "SHERIFF_MAX_ITERATIONS";
     private static final String MAX_FILES_PER_BATCH = "SHERIFF_MAX_FILES_PER_BATCH";
+    private static final String MAX_ERRORS_PER_BATCH = "SHERIFF_MAX_ERRORS_PER_BATCH";
     private static final String BATCH_BY = "SHERIFF_BATCH_BY";
     private static final String BACKEND = "AI_BACKEND";
     private static final String CLAUDE_TIMEOUT = "SHERIFF_AGENT_CLAUDE_TIMEOUT";
@@ -111,6 +112,7 @@ public final class Configuration {
     private static final int DEFAULT_CLAUDE_TIMEOUT = 600;
     private static final int DEFAULT_VERIFICATION_TIMEOUT = 300;
     private static final int DEFAULT_BATCH = 5;
+    private static final int NO_ERROR_LIMIT = 0;
     private static final long DEFAULT_MAX_TOKENS = 8000L;
     private static final long DEFAULT_API_MAX_TOKENS = 16000L;
     private static final int DEFAULT_TOOL_ITERATIONS = 20;
@@ -442,7 +444,8 @@ public final class Configuration {
                 optionalPositive(MAX_ITERATIONS),
                 !environment.getOrDefault(GIT_SAFETY, ENABLED).equals(DISABLED),
                 number(MAX_FILES_PER_BATCH, DEFAULT_BATCH),
-                BatchGrouping.named(value(BATCH_BY, BatchGrouping.FILE.setting())));
+                BatchGrouping.named(value(BATCH_BY, BatchGrouping.FILE.setting())),
+                number(MAX_ERRORS_PER_BATCH, NO_ERROR_LIMIT));
     }
 
     /**

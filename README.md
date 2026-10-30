@@ -562,7 +562,9 @@ how it checks itself.
 
 Loop flags: `--max-iterations N`, `--max-files-per-batch N` (5),
 `--batch-by file|rule` (`file`: every error of those files; `rule`: one rule's
-errors in those files, the rule with most first), `--no-git-safety` (no branch, no commits, no scope check), `--json-report PATH`.
+errors in those files, the rule with most first), `--max-errors-per-batch N`
+(0, no cap: at most N errors a pass, whole files while they fit, and the first
+N of a file that alone has more), `--no-git-safety` (no branch, no commits, no scope check), `--json-report PATH`.
 With no `--max-iterations`, the cap is sized from the first analysis (one pass
 per five files with errors, and two to spare) and grows after every pass that
 lowers the errors, to what the files still with errors need, up to three times
@@ -724,6 +726,7 @@ which no tool reports.
 | `AI_BACKEND` | `claude_cli` | Who answers in the loop, below |
 | `SHERIFF_MAX_ITERATIONS`, `SHERIFF_MAX_FILES_PER_BATCH` | sized from the errors, `5` | The loop's passes, and the files a model is given at once |
 | `SHERIFF_BATCH_BY` | `file` | What a pass's errors have in common: `file`, every error of a few files; `rule`, one rule's errors in a few files |
+| `SHERIFF_MAX_ERRORS_PER_BATCH` | `0` | The errors a model is given at once, at most, whatever their files; `0` for no cap |
 | `SHERIFF_MAX_RULES_IN_PROMPT` | the loop's own limit | Rules of the profile put in one prompt |
 | `SHERIFF_AGENT_GIT_SAFETY` | `1` | `0` lets the loop edit the working tree as it is: no branch of its own, no commit per pass, no stop when a model edits a file outside its batch. Your file only |
 | `CODEX_COMMAND`, `ANTIGRAVITY_COMMAND` | `codex exec --sandbox workspace-write`, `agy --mode accept-edits` | How the loop starts `codex` and `agy`, without the prompt (to add `--model`). Your file only |

@@ -164,4 +164,14 @@ class LoopSettingsTests {
         assertNotEquals(new LoopSettings(1, true, 5), new LoopSettings(1, true, 5, BatchGrouping.RULE));
         assertThrows(IllegalArgumentException.class, () -> new LoopSettings(1, true, 5, null));
     }
+
+    @Test
+    void aPassHasNoCapOnItsErrorsUnlessGivenOne() {
+        assertEquals(0, new LoopSettings(1, true, 5).maxErrorsPerBatch());
+        assertEquals(0, LoopSettings.defaults().maxErrorsPerBatch());
+        assertEquals(20, new LoopSettings(1, true, 0, BatchGrouping.FILE, 20).maxErrorsPerBatch());
+        assertTrue(new LoopSettings(1, true, 0, BatchGrouping.FILE, 20).batches());
+        assertNotEquals(new LoopSettings(1, true, 5), new LoopSettings(1, true, 5, BatchGrouping.FILE, 20));
+        assertThrows(IllegalArgumentException.class, () -> new LoopSettings(1, true, 5, BatchGrouping.FILE, -1));
+    }
 }

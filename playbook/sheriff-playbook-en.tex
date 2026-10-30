@@ -1101,6 +1101,11 @@ these settings.
   error of a few files. \code{rule}: one rule's errors in a few files, so the
   model makes one kind of change at a time.}
 
+\setting{SHERIFF_MAX_ERRORS_PER_BATCH}{\code{0}}{errors, 0 or more}{How many
+  errors the model is given at once, at most, whatever files they are in.
+  \code{0}: no limit, only the files count. A number: whole files while their
+  errors fit, and the first errors of a file that alone has more.}
+
 \setting{SHERIFF_MAX_RULES_IN_PROMPT}{empty: the loop's own limit}{rules, 1 or
   more}{How many of the profile's rules go into each prompt. Fewer rules,
   shorter and cheaper prompts.}

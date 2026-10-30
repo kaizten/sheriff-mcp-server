@@ -47,6 +47,7 @@ public final class Agent {
     private static final String JSON_REPORT = "--json-report";
     private static final String MAX_ITERATIONS = "--max-iterations";
     private static final String MAX_FILES = "--max-files-per-batch";
+    private static final String MAX_ERRORS = "--max-errors-per-batch";
     private static final String BATCH_BY = "--batch-by";
     private static final String NO_GIT_SAFETY = "--no-git-safety";
     private static final String EXTRACT_RULES = "--extract-rules";
@@ -85,6 +86,7 @@ public final class Agent {
               --json-report PATH      also write the result as JSON
               --max-iterations N      cap the loop's iterations
               --max-files-per-batch N cap how many files one pass may touch
+              --max-errors-per-batch N cap how many errors one pass is given (0: no cap)
               --batch-by file|rule    a pass's errors: every one of some files, or one rule's
               --no-git-safety         no branch, no commits, no scope check
               --help                  this text
@@ -716,11 +718,13 @@ public final class Agent {
         String iterations = valueAfter(arguments, MAX_ITERATIONS);
         String files = valueAfter(arguments, MAX_FILES);
         String grouping = valueAfter(arguments, BATCH_BY);
+        String errors = valueAfter(arguments, MAX_ERRORS);
         return new LoopSettings(
                 iterations.isEmpty() ? configured.maxIterations() : flagNumber(MAX_ITERATIONS, iterations),
                 configured.useGitSafety() && !arguments.contains(NO_GIT_SAFETY),
                 files.isEmpty() ? configured.maxFilesPerBatch() : flagNumber(MAX_FILES, files),
-                grouping.isEmpty() ? configured.grouping() : BatchGrouping.named(grouping));
+                grouping.isEmpty() ? configured.grouping() : BatchGrouping.named(grouping),
+                errors.isEmpty() ? configured.maxErrorsPerBatch() : flagNumber(MAX_ERRORS, errors));
     }
 
     /**

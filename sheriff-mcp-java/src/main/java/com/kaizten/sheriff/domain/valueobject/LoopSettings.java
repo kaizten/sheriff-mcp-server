@@ -3,7 +3,7 @@ package com.kaizten.sheriff.domain.valueobject;
 import com.kaizten.sheriff.domain.BatchGrouping;
 
 /**
- * The four knobs of a fix-loop run, grouped so the loop's constructor stays
+ * The knobs of a fix-loop run, grouped so the loop's constructor stays
  * about its collaborators rather than about its configuration.
  *
  * @param maxIterations the cap on iterations, or {@code null} for "size it
@@ -14,11 +14,16 @@ import com.kaizten.sheriff.domain.BatchGrouping;
  *     {@code 0} for no limit
  * @param grouping what the errors of one pass have in common: their file,
  *     or their rule
+ * @param maxErrorsPerBatch how many errors one fixer call may be given,
+ *     {@code 0} for no limit: whole files while they fit, and the first of a
+ *     file's errors when that file alone has more
  */
-public record LoopSettings(Integer maxIterations, boolean useGitSafety, int maxFilesPerBatch, BatchGrouping grouping) {
+public record LoopSettings(Integer maxIterations, boolean useGitSafety, int maxFilesPerBatch, BatchGrouping grouping,
+        int maxErrorsPerBatch) {
 
     private static final int DEFAULT_MAX_FILES_PER_BATCH = 5;
     private static final String ERROR_BATCH_NEGATIVE = "Max files per batch cannot be negative";
+    private static final String ERROR_ERRORS_NEGATIVE = "Max errors per batch cannot be negative";
     private static final String ERROR_NO_GROUPING = "The grouping of a pass's errors is required";
     private static final String ERROR_NO_ITERATIONS =
             "Max iterations must be at least 1: a cap of 0 would run no pass and say nothing";
@@ -31,7 +36,7 @@ public record LoopSettings(Integer maxIterations, boolean useGitSafety, int maxF
      * already means no limit, so anything below it is a mistake worth
      * refusing at the boundary.
      *
-     * @throws IllegalArgumentException when the batch size is negative, the
+     * @throws IllegalArgumentException when a batch size is negative, the
      *     cap is below one, or there is no grouping
      */
     public LoopSettings {
@@ -43,6 +48,9 @@ public record LoopSettings(Integer maxIterations, boolean useGitSafety, int maxF
         }
         if (maxIterations != null && maxIterations < MINIMUM_ITERATIONS) {
             throw new IllegalArgumentException(ERROR_NO_ITERATIONS);
+        }
+        if (maxErrorsPerBatch < MINIMUM_FILES_PER_BATCH) {
+            throw new IllegalArgumentException(ERROR_ERRORS_NEGATIVE);
         }
     }
     private static final int NO_LIMIT = 0;
@@ -62,6 +70,19 @@ public record LoopSettings(Integer maxIterations, boolean useGitSafety, int maxF
     }
 
     /**
+     * Settings with no cap on the errors of a pass.
+     *
+     * @param maxIterations the cap on iterations, or {@code null} to size it
+     * @param useGitSafety whether to work on a branch of its own
+     * @param maxFilesPerBatch how many files one pass may cover, {@code 0}
+     *     for no limit
+     * @param grouping what the errors of one pass have in common
+     */
+    public LoopSettings(Integer maxIterations, boolean useGitSafety, int maxFilesPerBatch, BatchGrouping grouping) {
+        this(maxIterations, useGitSafety, maxFilesPerBatch, grouping, NO_LIMIT);
+    }
+
+    /**
      * The defaults the CLI uses when nothing is configured: automatic
      * iteration cap, git safety on, five files per pass, batched by file.
      *
@@ -77,6 +98,6 @@ public record LoopSettings(Integer maxIterations, boolean useGitSafety, int maxF
      * @return {@code true} when batching is in effect
      */
     public boolean batches() {
-        return maxFilesPerBatch > NO_LIMIT;
+        return maxFilesPerBatch > NO_LIMIT || maxErrorsPerBatch > NO_LIMIT;
     }
 }

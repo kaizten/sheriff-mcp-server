@@ -268,18 +268,20 @@ class AgentTests {
     @DisplayName("the command line overrides configuration, and nothing else does")
     void commandLineOverridesTheConfiguredSettings() {
         Configuration configuration = new Configuration(
-                Map.of("SHERIFF_MAX_FILES_PER_BATCH", "5"), workspace);
+                Map.of("SHERIFF_MAX_FILES_PER_BATCH", "5", "SHERIFF_MAX_ERRORS_PER_BATCH", "30"), workspace);
         Agent agent = new Agent(configuration,
                 new Composition(configuration, FakeProcessRunner.always(ProcessOutcome.completed(0, "", ""))));
         LoopSettings overridden = agent.settingsFor(
                 List.of("--max-iterations", "2", "--max-files-per-batch", "1", "--batch-by", "rule",
-                        "--no-git-safety"));
+                        "--max-errors-per-batch", "10", "--no-git-safety"));
         assertEquals(2, overridden.maxIterations());
         assertEquals(BatchGrouping.RULE, overridden.grouping());
         assertEquals(1, overridden.maxFilesPerBatch());
+        assertEquals(10, overridden.maxErrorsPerBatch());
         assertFalse(overridden.useGitSafety());
         LoopSettings untouched = agent.settingsFor(List.of());
         assertEquals(5, untouched.maxFilesPerBatch());
+        assertEquals(30, untouched.maxErrorsPerBatch());
         assertEquals(BatchGrouping.FILE, untouched.grouping());
         assertTrue(untouched.useGitSafety());
     }

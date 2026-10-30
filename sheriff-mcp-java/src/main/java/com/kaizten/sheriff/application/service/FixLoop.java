@@ -317,7 +317,7 @@ public final class FixLoop implements FixCodeUntilClean {
         }
         if (state.maxIterations() == null) {
             state.maxIterations(BatchPolicy.estimateMaxIterations(result.errors(), settings.grouping(),
-                    settings.maxFilesPerBatch()));
+                    settings.maxFilesPerBatch(), settings.maxErrorsPerBatch()));
             System.out.printf(
                     "  sizing the iteration cap to %d automatically, based on how many files have errors%n",
                     state.maxIterations());
@@ -332,7 +332,7 @@ public final class FixLoop implements FixCodeUntilClean {
         }
         state.recordTotal(total);
         List<SheriffFinding> batch = BatchPolicy.selectBatch(result.errors(), settings.grouping(),
-                settings.maxFilesPerBatch(), state.parkedFiles());
+                settings.maxFilesPerBatch(), settings.maxErrorsPerBatch(), state.parkedFiles());
         if (batch.isEmpty()) {
             System.out.printf(
                     "%nNothing left to try: every file that still has errors (%d of them) was already "
@@ -436,7 +436,8 @@ public final class FixLoop implements FixCodeUntilClean {
     private void extendCap(RunState state, AnalysisResult result) {
         int filesWithErrors = result.filesWithErrors().size();
         int extended = BatchPolicy.extendedMaxIterations(state.maxIterations(), state.iteration() - 1,
-                result.errors(), settings.grouping(), settings.maxFilesPerBatch(), state.firstEstimate());
+                result.errors(), settings.grouping(), settings.maxFilesPerBatch(), settings.maxErrorsPerBatch(),
+                state.firstEstimate());
         if (extended > state.maxIterations()) {
             System.out.printf("  extending the iteration cap to %d: the last pass lowered the errors, and %d file(s)"
                     + " still have them (at most %d, %d times the first estimate)%n", extended, filesWithErrors,

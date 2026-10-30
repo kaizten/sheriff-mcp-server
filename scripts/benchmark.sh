@@ -6,7 +6,7 @@
 #   scripts/benchmark.sh                          every project, claude_cli and codex_cli, both strategies, once
 #   scripts/benchmark.sh --runs 3                 three runs of each, to see how much they vary
 #   scripts/benchmark.sh --backend claude_cli:claude-sonnet-5-5 --backend codex_cli:gpt-5.5
-#   scripts/benchmark.sh --strategy file:5 --strategy rule:5 --strategy file:1 --strategy file:0
+#   scripts/benchmark.sh --strategy file:5 --strategy rule:5 --strategy file:1 --strategy file:0 --strategy file:0:20
 #   scripts/benchmark.sh --project spring-petclinic
 #   scripts/benchmark.sh --report DIR             the tables again, from runs already made
 #
@@ -33,6 +33,9 @@
 # takes: file:N is every error of N files, whatever its rule (the loop's
 # default, file:5); rule:N is one rule's errors in N files. 0 is no limit:
 # file:0 hands the model everything at once, rule:0 a whole rule at a time.
+# A third number caps the errors of a pass: file:0:20 is 20 errors a pass,
+# whole files while they fit, whatever their number; rule:5:10 is at most 10
+# of one rule's errors in at most 5 files.
 # Sheriff's own fixers run first in every strategy, so only the model's
 # passes differ.
 set -uo pipefail
@@ -53,7 +56,7 @@ corpus=(
   "gs-rest-service|https://github.com/spring-guides/gs-rest-service|3f4cef01152596c19bc4d37939409358812b1421|complete|"
 )
 
-usage() { sed -n '2,37p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,40p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
 
 while (( $# > 0 )); do
   case "$1" in
@@ -71,7 +74,8 @@ done
 (( ${#backends[@]} > 0 )) || backends=(claude_cli codex_cli)
 (( ${#strategies[@]} > 0 )) || strategies=(file:5 rule:5)
 for strategy in "${strategies[@]}"; do
-  [[ "$strategy" =~ ^(file|rule):[0-9]+$ ]] || { echo "A strategy is file:N or rule:N, not $strategy" >&2; exit 2; }
+  [[ "$strategy" =~ ^(file|rule):[0-9]+(:[0-9]+)?$ ]] || {
+    echo "A strategy is file:N or rule:N, with :E for at most E errors a pass, not $strategy" >&2; exit 2; }
 done
 
 # The tables, from every run under a folder.
@@ -247,7 +251,8 @@ summary = ["# Benchmark of the repair loop\n", f"{len(run_rows)} run(s) under `{
            "Cost is Claude Code's list price, also on a subscription, and Codex reports none; Codex names no "
            "model either, so its column is the one asked for or its configuration's. JavaPomOutdatedDependency "
            "asks the network, so what it finds changes with new releases anywhere. A strategy is file:N, every "
-           "error of N files a pass, or rule:N, one rule's errors in N files; 0 is no limit.\n"]
+           "error of N files a pass, or rule:N, one rule's errors in N files; 0 is no limit; a third number caps "
+           "the errors of a pass.\n"]
 (root / "summary.md").write_text("\n".join(summary))
 print((root / "summary.md").read_text())
 PYTHON
@@ -276,7 +281,7 @@ for entry in "${corpus[@]}"; do
     [[ "$backend" == *:* ]] && model="${backend#*:}"
     for strategy in "${strategies[@]}"; do
     for (( number = 1; number <= runs; number++ )); do
-      run="$out/$name/${backend//[:\/]/_}/${strategy/:/_}/$number"
+      run="$out/$name/${backend//[:\/]/_}/${strategy//:/_}/$number"
       mkdir -p "$run/logs" "$run/final"
       echo "$strategy" > "$run/strategy"
       work="$run/work"
@@ -301,11 +306,14 @@ for entry in "${corpus[@]}"; do
         claude_cli) [[ -n "$model" ]] && env_model=(ANTHROPIC_MODEL="$model") ;;
         codex_cli) [[ -n "$model" ]] && env_model=(CODEX_COMMAND="codex exec --sandbox workspace-write -m $model") ;;
       esac
+      IFS=: read -r grouping files errors <<< "$strategy"
+      errors="${errors:-0}"
       echo "== $name, $backend, $strategy, run $number"
       started=$(date +%s)
       env TARGET_REPO="$target" SHERIFF_COMPONENT="$module" AI_BACKEND="$ai" PROMPT_LOG_DIR="$run/logs" \
           ${env_model[@]+"${env_model[@]}"} java -jar "$jar" --agent --json-report "$run/report.json" \
-          --batch-by "${strategy%%:*}" --max-files-per-batch "${strategy#*:}" > "$run/agent.log" 2>&1
+          --batch-by "$grouping" --max-files-per-batch "$files" --max-errors-per-batch "$errors" \
+          > "$run/agent.log" 2>&1
       echo $(( $(date +%s) - started )) > "$run/elapsed_s"
       env TARGET_REPO="$target" SHERIFF_COMPONENT="$module" SHERIFF_EXPORT_DIR="$run/final" \
           java -jar "$jar" --agent --check-only > "$run/final/check.log" 2>&1

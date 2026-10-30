@@ -68,6 +68,7 @@ class ConfigurationTests {
         assertEquals("claude_cli", configuration.backend());
         assertEquals(5, configuration.loopSettings().maxFilesPerBatch());
         assertEquals(BatchGrouping.FILE, configuration.loopSettings().grouping());
+        assertEquals(0, configuration.loopSettings().maxErrorsPerBatch());
         assertTrue(configuration.loopSettings().useGitSafety());
         assertNull(configuration.loopSettings().maxIterations());
     }
@@ -108,6 +109,7 @@ class ConfigurationTests {
                 "SHERIFF_MAX_ITERATIONS", "3",
                 "SHERIFF_MAX_FILES_PER_BATCH", "0",
                 "SHERIFF_BATCH_BY", "rule",
+                "SHERIFF_MAX_ERRORS_PER_BATCH", "20",
                 "SHERIFF_AGENT_GIT_SAFETY", "0",
                 "SHERIFF_TIMEOUT", "42",
                 "SHERIFF_MAX_RULES_IN_PROMPT", "10",
@@ -115,6 +117,7 @@ class ConfigurationTests {
         assertEquals(3, configuration.loopSettings().maxIterations());
         assertEquals(0, configuration.loopSettings().maxFilesPerBatch());
         assertEquals(BatchGrouping.RULE, configuration.loopSettings().grouping());
+        assertEquals(20, configuration.loopSettings().maxErrorsPerBatch());
         assertFalse(configuration.loopSettings().useGitSafety());
         assertEquals(42, configuration.sheriffTimeout().toSeconds());
         assertEquals(10, configuration.maxRulesInPrompt());

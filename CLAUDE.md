@@ -897,6 +897,11 @@ benchmark, not a rule. By file, the default, a pass is every error of up to
 errors, in up to that many of its files, and what a pass that lowered nothing
 parks is the rule in each file, not the file, so the file's other rules are
 still offered; the cap is counted per rule's batches of files.
+`SHERIFF_MAX_ERRORS_PER_BATCH` (`--max-errors-per-batch`, 0 for none) caps a
+pass's errors on top of either: whole files while they fit, a file that alone
+has more giving its first ones, so a pass of one huge file is still small. The
+cap then counts the passes the errors need too, and with no cap on the files
+only those, as the fallback the grouping gives alone grew the cap every pass.
 
 **The iteration cap grows while the passes make progress**, unless one was
 given (`--max-iterations`, `max_iterations` in `sheriff_autofix`). The first
