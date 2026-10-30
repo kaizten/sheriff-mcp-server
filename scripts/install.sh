@@ -22,6 +22,9 @@ readonly docker_desktop="https://desktop.docker.com/mac/main"
 readonly minimum_java=17
 scratch=""
 java_bin=""
+found_command=""
+search_folders=""
+searched_folders=0
 
 usage() {
   cat <<'USAGE'
@@ -469,7 +472,7 @@ command_folders() {
     echo "$home/.volta/bin"
     echo "$home/.bun/bin"
     echo "${PNPM_HOME:-$home/.local/share/pnpm}"
-    ls -d "${NVM_DIR:-$home/.nvm}"/versions/node/*/bin 2>/dev/null | sort -r || true
+    nvm_folders "${NVM_DIR:-$home/.nvm}"
   fi
   if command -v npm >/dev/null 2>&1; then
     prefix="$(npm prefix -g 2>/dev/null </dev/null)" || prefix=""
@@ -487,21 +490,39 @@ command_folders() {
   echo /home/linuxbrew/.linuxbrew/bin
 }
 
-# Where a command is: on this shell's PATH, or else in one of those folders.
-# Prints nothing when it is nowhere.
+# The bin folder of every Node version nvm holds, newest first, by number:
+# v22.11.0 before v9.0.0.
+nvm_folders() {
+  local folder version
+  for folder in "$1"/versions/node/v*/bin; do
+    if [[ -d "$folder" ]]; then
+      version="${folder%/bin}"
+      echo "${version##*/v} $folder"
+    fi
+  done | sort -t. -k1,1nr -k2,2nr -k3,3nr | cut -d' ' -f2-
+}
+
+# Where a command is, in found_command: on this shell's PATH, or else in one of
+# those folders, worked out once for every command (npm is slow to answer).
+# Empty when it is nowhere.
 find_command() {
   local name="$1" folder suffix
-  if command -v "$name" 2>/dev/null; then
+  if found_command="$(command -v "$name" 2>/dev/null)"; then
     return 0
+  fi
+  found_command=""
+  if (( searched_folders == 0 )); then
+    search_folders="$(command_folders)"
+    searched_folders=1
   fi
   while IFS= read -r folder; do
     for suffix in "" .cmd .exe; do
       if [[ -f "$folder/$name$suffix" && -x "$folder/$name$suffix" ]]; then
-        echo "$folder/$name$suffix"
+        found_command="$folder/$name$suffix"
         return 0
       fi
     done
-  done < <(command_folders)
+  done <<< "$search_folders"
   return 0
 }
 
@@ -663,9 +684,12 @@ main() {
   # up writes its folder and never runs codex. With neither, nothing is
   # written: a settings file used to be created for an assistant nobody had.
   local claude_bin codex_bin agy_bin codex_home
-  claude_bin="$(find_command claude)"
-  codex_bin="$(find_command codex)"
-  agy_bin="$(find_command agy)"
+  find_command claude
+  claude_bin="$found_command"
+  find_command codex
+  codex_bin="$found_command"
+  find_command agy
+  agy_bin="$found_command"
   codex_home="$(posix_path "${CODEX_HOME:-$HOME/.codex}")"
   local claude_found=0
   if [[ -n "$claude_bin" || -d "${HOME:-}/.claude" ]]; then
