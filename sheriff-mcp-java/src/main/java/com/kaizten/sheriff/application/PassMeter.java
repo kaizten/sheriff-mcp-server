@@ -3,6 +3,7 @@ package com.kaizten.sheriff.application;
 import com.kaizten.sheriff.domain.port.RunMetrics;
 import com.kaizten.sheriff.domain.valueobject.AnalysisResult;
 import com.kaizten.sheriff.domain.valueobject.PassMetrics;
+import com.kaizten.sheriff.domain.valueobject.RunSummary;
 import com.kaizten.sheriff.domain.valueobject.SheriffFinding;
 import com.kaizten.sheriff.domain.valueobject.TokenUsage;
 import java.time.Duration;
@@ -19,6 +20,10 @@ import java.util.TreeMap;
  * pass costs no analysis of its own. A pass no analysis followed (the run cut
  * after it, or Sheriff not answering) is kept all the same, with nothing
  * measured after it, as what it cost was spent.
+ *
+ * <p>The run's metrics also see every analysis the passes are measured by,
+ * what each pass of the model's is given, and how the run ends, which a
+ * whole run's report needs and the passes alone do not say.
  */
 public final class PassMeter {
 
@@ -50,6 +55,7 @@ public final class PassMeter {
      * @param took how long they took
      */
     public void deterministicPassed(String label, AnalysisResult analyzedBefore, Duration took) {
+        metrics.analyzed(analyzedBefore);
         hold(label, PassMetrics.DETERMINISTIC, countByRule(analyzedBefore.errors(), WHOLE_COMPONENT),
                 WHOLE_COMPONENT, took, null);
     }
@@ -87,10 +93,34 @@ public final class PassMeter {
      *     measures nothing
      */
     public void measuredBy(AnalysisResult after) {
+        metrics.analyzed(after);
         if (!pending) {
             return;
         }
         keep(after.error() ? null : countByRule(after.errors(), scope));
+    }
+
+    /**
+     * Tells the run's metrics what a pass of the model's is given, before it
+     * runs.
+     *
+     * @param label the pass's name
+     * @param files the files it may change
+     * @param errors how many errors it is asked to fix
+     */
+    public void given(String label, Set<String> files, int errors) {
+        metrics.given(label, Set.copyOf(files), errors);
+    }
+
+    /**
+     * Keeps the pass held, if any, with nothing measured after it, and tells
+     * the run's metrics how the run ended.
+     *
+     * @param summary what the run did and why it stopped
+     */
+    public void finished(RunSummary summary) {
+        unmeasured();
+        metrics.finished(summary);
     }
 
     /**

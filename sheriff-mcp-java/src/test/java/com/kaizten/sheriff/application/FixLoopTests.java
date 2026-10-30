@@ -1103,4 +1103,25 @@ class FixLoopTests {
             assertEquals(4, summary.maxIterations());
         }
     }
+
+    @Nested
+    @DisplayName("what the run's metrics are told")
+    class WholeRun {
+
+        @Test
+        @DisplayName("every analysis, what each pass is given before it runs, each pass once measured, and the end")
+        void theMetricsSeeTheWholeRun() {
+            RecordingMetrics metrics = new RecordingMetrics();
+            new FixLoop(new FakeAnalyzer(List.of(
+                    FakeAnalyzer.multiFileResult("A.java", "B.java"),
+                    FakeAnalyzer.result(1, "B.java"),
+                    FakeAnalyzer.result(0, "a.py"))), new FakeFixer(), new FakeVersionControl(),
+                    new FakeTestRunner(), () -> "", RULES_CONTEXT, List.of(), new LoopSettings(8, false, 1),
+                    metrics).execute();
+            assertEquals(List.of("analysis 2", "given iteration-1 [A.java] 1", "analysis 1", "pass iteration-1",
+                    "given iteration-2 [B.java] 1", "analysis 0", "pass iteration-2", "finished success"),
+                    metrics.events());
+            assertEquals(StopReason.SUCCESS, metrics.summary().stoppedReason());
+        }
+    }
 }

@@ -268,4 +268,30 @@ class ConfigurationTests {
         assertEquals(300, Configuration.defaultSheriffTimeout(false, wsl), "Linux and macOS are never changed");
         assertEquals(300, Configuration.defaultSheriffTimeout(false, Map.of()));
     }
+
+    @Test
+    @DisplayName("reports go under the state home only with SHERIFF_REPORT on, and only where the environment says")
+    void reportsGoUnderTheStateHome() {
+        assertEquals(Optional.empty(), with(Map.of("HOME", "/home/a")).reportsDirectory());
+        assertEquals(Optional.of(Path.of("/home/a/.local/state/sheriff-mcp/reports")),
+                with(Map.of("SHERIFF_REPORT", "1", "HOME", "/home/a")).reportsDirectory());
+        assertEquals(Optional.of(Path.of("/state/sheriff-mcp/reports")),
+                with(Map.of("SHERIFF_REPORT", "1", "HOME", "/home/a", "XDG_STATE_HOME", "/state")).reportsDirectory());
+        assertEquals(Optional.empty(), with(Map.of("SHERIFF_REPORT", "1")).reportsDirectory(), "no home, no reports");
+    }
+
+    @Test
+    @DisplayName("the model asked for is each backend's own setting, or a model flag on its command")
+    void theModelAskedForIsEachBackendsOwn() {
+        assertEquals("", with(Map.of()).requestedModel(), "Claude Code with its own default");
+        assertEquals("claude-sonnet-5-5", with(Map.of("ANTHROPIC_MODEL", "claude-sonnet-5-5")).requestedModel());
+        assertEquals("gpt-5.5", with(Map.of("AI_BACKEND", "codex_cli", "CODEX_COMMAND",
+                "codex exec --sandbox workspace-write -m gpt-5.5")).requestedModel());
+        assertEquals("", with(Map.of("AI_BACKEND", "codex_cli")).requestedModel());
+        assertEquals("claude-sonnet-5-5-high", with(Map.of("AI_BACKEND", "antigravity_cli", "ANTIGRAVITY_COMMAND",
+                "agy --mode accept-edits --model claude-sonnet-5-5-high")).requestedModel());
+        assertEquals(with(Map.of()).apiModel(), with(Map.of("AI_BACKEND", "anthropic_api")).requestedModel());
+        assertEquals("qwen2.5-coder", with(Map.of("AI_BACKEND", "local", "OPENAI_MODEL", "qwen2.5-coder"))
+                .requestedModel());
+    }
 }

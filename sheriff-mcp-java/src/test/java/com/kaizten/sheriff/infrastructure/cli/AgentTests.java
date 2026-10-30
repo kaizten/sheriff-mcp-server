@@ -262,6 +262,12 @@ class AgentTests {
         JsonNode written = new ObjectMapper().readTree(Files.readString(report));
         assertEquals("iterations_exhausted", written.get("stopped_reason").asText());
         assertFalse(written.get("ok").asBoolean());
+        assertEquals(1, written.get("schema").asInt());
+        assertEquals("loop", written.get("kind").asText());
+        assertEquals(1, written.get("configuration").get("max_iterations").asInt());
+        assertEquals(false, written.get("configuration").get("git_safety").asBoolean());
+        assertTrue(written.get("initial").get("total").asInt() > 0, written.toString());
+        assertTrue(printed.contains("This run's report: " + report), printed);
     }
 
     @Test

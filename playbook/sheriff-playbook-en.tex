@@ -1142,6 +1142,12 @@ these settings.
 \setting{SHERIFF_AGENT_ANTIGRAVITY_TIMEOUT}{\code{600}}{seconds, 1 or more}{The
   same for \code{agy}. From your file only.}
 
+\setting{SHERIFF_REPORT}{\code{0}}{\code{1} or \code{0}}{For debugging:
+  \code{1} has every run of the loop write a JSON report of itself into
+  \path{~/.local/state/sheriff-mcp/reports/}: what it was asked to do with,
+  what it started from and left, every pass, and how it stopped. From your
+  file only.}
+
 \subsubsection*{The loop's APIs} Only with \code{AI_BACKEND} set to
 \code{anthropic_api}, \code{openai_api} or \code{local}. All from your file
 only: a cloned project does not choose where your code is sent, nor which

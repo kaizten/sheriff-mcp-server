@@ -103,13 +103,6 @@ public final class Agent {
     private static final String QUERY_FIELD = "query";
     private static final String TOTAL_IN_CATALOG_FIELD = "total_in_catalog";
     private static final String RULES_FIELD = "rules";
-    private static final String STOPPED_REASON_FIELD = "stopped_reason";
-    private static final String ITERATIONS_USED_FIELD = "iterations_used";
-    private static final String MAX_ITERATIONS_FIELD = "max_iterations";
-    private static final String REPAIR_PASS_USED_FIELD = "repair_pass_used";
-    private static final String PARKED_FILES_FIELD = "parked_files";
-    private static final String WORKING_BRANCH_FIELD = "working_branch";
-    private static final String TESTS_PASSED_FIELD = "tests_passed";
     private static final String CODE_FIELD = "code";
     private static final String DESCRIPTION_FIELD = "description";
     private static final String HOW_TO_SOLVE_FIELD = "how_to_solve";
@@ -607,7 +600,9 @@ public final class Agent {
     }
 
     /**
-     * Runs the full fix loop and reports what it did.
+     * Runs the full fix loop and reports what it did: as a whole run's
+     * report too, in the file {@code --json-report} names or, with
+     * {@code SHERIFF_REPORT} on, in the reports folder.
      *
      * <p>Sheriff's own fixers are part of the loop, run inside its branch,
      * unless {@code --no-sheriff-fix} says otherwise. They used to run here,
@@ -620,17 +615,8 @@ public final class Agent {
      */
     private int fix(List<String> arguments, Path report) {
         boolean automaticRepair = !arguments.contains(NO_SHERIFF_FIX);
-        RunSummary summary = composition.fixLoop(settingsFor(arguments), automaticRepair).execute();
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put(OK_FIELD, summary.ok());
-        body.put(STOPPED_REASON_FIELD, summary.stoppedReason().wireName());
-        body.put(ITERATIONS_USED_FIELD, summary.iterationsUsed());
-        body.put(MAX_ITERATIONS_FIELD, summary.maxIterations());
-        body.put(REPAIR_PASS_USED_FIELD, summary.repairPassUsed());
-        body.put(PARKED_FILES_FIELD, summary.parkedFiles());
-        body.put(WORKING_BRANCH_FIELD, summary.workingBranch());
-        body.put(TESTS_PASSED_FIELD, summary.testsPassed());
-        write(report, body);
+        Optional<Path> reportFile = composition.loopReportFile(Optional.ofNullable(report));
+        RunSummary summary = composition.fixLoop(settingsFor(arguments), automaticRepair, reportFile).execute();
         return summary.ok() ? SUCCESS : FAILURE;
     }
 

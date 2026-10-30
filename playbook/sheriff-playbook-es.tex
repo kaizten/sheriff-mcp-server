@@ -1153,6 +1153,12 @@ del \code{pom.xml} (\code{sheriff.coverage}, \code{sheriff.branches},
 \setting{SHERIFF_AGENT_ANTIGRAVITY_TIMEOUT}{\code{600}}{segundos, 1 o más}{Lo
   mismo para \code{agy}. Solo de tu fichero.}
 
+\setting{SHERIFF_REPORT}{\code{0}}{\code{1} o \code{0}}{Para depurar:
+  con \code{1}, cada ejecución del bucle escribe un informe JSON de sí misma
+  en \path{~/.local/state/sheriff-mcp/reports/}: con qué se le pidió trabajar,
+  de qué errores partió y cuáles dejó, cada pasada y por qué paró. Solo desde
+  tu fichero.}
+
 \subsubsection*{Las API del bucle} Solo con \code{AI_BACKEND} en
 \code{anthropic_api}, \code{openai_api} o \code{local}. Todas solo de tu
 fichero: un proyecto clonado no elige a dónde se manda tu código ni qué

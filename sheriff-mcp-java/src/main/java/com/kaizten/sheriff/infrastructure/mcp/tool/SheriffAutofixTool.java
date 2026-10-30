@@ -9,6 +9,7 @@ import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * {@code sheriff_autofix}: the agent's whole repair loop, run in the
@@ -46,6 +47,8 @@ final class SheriffAutofixTool {
     private static final String PROMPT_LOG_VARIABLE = "PROMPT_LOG_DIR";
     private static final String EXPORT_DIRECTORY_VARIABLE = "SHERIFF_EXPORT_DIR";
     private static final String LOGS_DIRECTORY = "logs";
+    private static final String REPORT_LINE = "%nThe run's report, for comparing runs: %s";
+    private static final String NO_REPORT = "";
     private static final String VERIFIED_WITH = "%nThe project's own tests were run with: %s";
     private static final String PROTOTYPE_TESTS = "%nSHERIFF_PROTOTYPE is 1, so the loop left them alone.";
     private static final String SUMMARY =
@@ -144,8 +147,11 @@ final class SheriffAutofixTool {
         }
         Path agentDirectory = catalogFile.toAbsolutePath().getParent();
         Configuration configuration = new Configuration(environment, agentDirectory);
-        RunSummary summary = Composition.real(configuration).fixLoop().execute();
+        Composition composition = Composition.real(configuration);
+        Optional<Path> report = composition.loopReportFile(Optional.empty());
+        RunSummary summary = composition.fixLoop(configuration.loopSettings(), true, report).execute();
         return renderSummary(component, profile, configuration.backend(), summary, tested)
+                + report.map(file -> String.format(REPORT_LINE, file)).orElse(NO_REPORT)
                 + testsTrailer(configuration.prototype(), configuration.verificationCommand());
     }
 

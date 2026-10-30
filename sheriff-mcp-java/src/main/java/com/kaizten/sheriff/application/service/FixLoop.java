@@ -367,6 +367,7 @@ public final class FixLoop implements FixCodeUntilClean {
                 String.format(ITERATION_LABEL, state.iteration()),
                 allowedFiles);
         System.out.println("  invoking the fixer...");
+        meter.given(request.label(), allowedFiles, batch.size());
         long started = System.nanoTime();
         FixResult fixResult = fixer.fix(request);
         Duration took = since(started);
@@ -563,9 +564,10 @@ public final class FixLoop implements FixCodeUntilClean {
      * @return that summary
      */
     private RunSummary finish(RunState state, boolean ok, StopReason reason, Boolean testsPassed) {
-        meter.unmeasured();
-        return new RunSummary(ok, reason, state.iteration(), state.maxIterations(), state.repairPassUsed(),
-                state.parkedFilesAsList(), state.workingBranch(), testsPassed);
+        RunSummary summary = new RunSummary(ok, reason, state.iteration(), state.maxIterations(),
+                state.repairPassUsed(), state.parkedFilesAsList(), state.workingBranch(), testsPassed);
+        meter.finished(summary);
+        return summary;
     }
 
     /**

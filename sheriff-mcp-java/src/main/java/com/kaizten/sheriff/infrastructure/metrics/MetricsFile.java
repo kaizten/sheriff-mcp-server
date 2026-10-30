@@ -102,6 +102,18 @@ public final class MetricsFile implements RunMetrics {
      * @return the object, with the errors in rule order
      */
     ObjectNode line(PassMetrics pass) {
+        return line(json, pass);
+    }
+
+    /**
+     * One pass as the object its line holds, with the mapper given: a run's
+     * report writes its passes the same way.
+     *
+     * @param json the mapper to build the object with
+     * @param pass what the pass did
+     * @return the object, with the errors in rule order
+     */
+    static ObjectNode line(ObjectMapper json, PassMetrics pass) {
         ObjectNode line = json.createObjectNode();
         line.put(LABEL, pass.label());
         line.put(KIND, pass.kind());
@@ -110,17 +122,18 @@ public final class MetricsFile implements RunMetrics {
         line.set(ERRORS_AFTER, pass.errorsAfter() == null ? json.nullNode()
                 : json.valueToTree(new TreeMap<>(pass.errorsAfter())));
         line.set(REPAIRED, json.valueToTree(pass.repaired()));
-        line.set(USAGE, pass.usage() == null ? json.nullNode() : usage(pass.usage()));
+        line.set(USAGE, pass.usage() == null ? json.nullNode() : usage(json, pass.usage()));
         return line;
     }
 
     /**
      * What a pass cost, as an object of its line.
      *
+     * @param json the mapper to build the object with
      * @param usage the cost
      * @return the object
      */
-    private ObjectNode usage(TokenUsage usage) {
+    static ObjectNode usage(ObjectMapper json, TokenUsage usage) {
         ObjectNode node = json.createObjectNode();
         node.set(MODELS, json.valueToTree(usage.models()));
         node.put(INPUT_TOKENS, usage.inputTokens());

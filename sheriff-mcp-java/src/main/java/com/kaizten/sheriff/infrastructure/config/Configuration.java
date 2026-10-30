@@ -49,6 +49,19 @@ public final class Configuration {
             GRADLE_USER_HOME, GRADLE_DIRECTORY, NPM_CACHE, NPM_CACHE_DIRECTORY, NPM_CONFIGURATION,
             NPM_CONFIGURATION_FILE);
     private static final String DEFAULT_CACHE_DIRECTORY = ".cache";
+    private static final String STATE_HOME = "XDG_STATE_HOME";
+    private static final String DEFAULT_STATE_DIRECTORY = ".local/state";
+    private static final String TOOLS_DIRECTORY = "sheriff-mcp";
+    private static final String REPORTS_DIRECTORY = "reports";
+    private static final String REPORT = "SHERIFF_REPORT";
+    private static final String CLAUDE_BACKEND = "claude_cli";
+    private static final String CODEX_BACKEND = "codex_cli";
+    private static final String ANTIGRAVITY_BACKEND = "antigravity_cli";
+    private static final String ANTHROPIC_BACKEND = "anthropic_api";
+    private static final String SHORT_MODEL_FLAG = "-m";
+    private static final String LONG_MODEL_FLAG = "--model";
+    private static final List<String> MODEL_FLAGS = List.of(SHORT_MODEL_FLAG, LONG_MODEL_FLAG);
+    private static final int NEXT = 1;
     private static final String MAX_RULES = "SHERIFF_MAX_RULES_IN_PROMPT";
     private static final String GIT_SAFETY = "SHERIFF_AGENT_GIT_SAFETY";
     private static final String MAX_ITERATIONS = "SHERIFF_MAX_ITERATIONS";
@@ -105,7 +118,7 @@ public final class Configuration {
     private static final String LOGS_DIRECTORY = "logs";
     private static final String ENABLED = "1";
     private static final String DISABLED = "0";
-    private static final String DEFAULT_BACKEND = "claude_cli";
+    private static final String DEFAULT_BACKEND = CLAUDE_BACKEND;
     private static final String NO_API_KEY = "";
     private static final int DEFAULT_SHERIFF_TIMEOUT = 300;
     private static final int WSL_SHERIFF_TIMEOUT = 900;
@@ -687,6 +700,64 @@ public final class Configuration {
      */
     public boolean prototype() {
         return ENABLED.equals(environment.get(PROTOTYPE));
+    }
+
+    /**
+     * Where a run's report goes when every run is reported, the debugging
+     * mode {@code SHERIFF_REPORT} turns on: {@code $XDG_STATE_HOME/sheriff-mcp/
+     * reports}, or the same under the user's {@code .local/state}.
+     *
+     * <p>From this environment only, as the catalog's cache: an environment
+     * that names no home has no reports, rather than some somewhere it was
+     * not asked to write.
+     *
+     * @return that folder, or empty when reports are off or there is no home
+     */
+    public Optional<Path> reportsDirectory() {
+        if (!ENABLED.equals(environment.get(REPORT))) {
+            return Optional.empty();
+        }
+        String stateHome = environment.get(STATE_HOME);
+        Optional<Path> base = stateHome != null && !stateHome.isBlank() ? Optional.of(Path.of(stateHome))
+                : userHome().map(home -> home.resolve(DEFAULT_STATE_DIRECTORY));
+        return base.map(folder -> folder.resolve(TOOLS_DIRECTORY).resolve(REPORTS_DIRECTORY));
+    }
+
+    /**
+     * The model the backend is asked for, as configured: what tells two runs
+     * of one backend apart. Claude Code takes {@code ANTHROPIC_MODEL} when it
+     * is set, Codex and Antigravity a {@code -m} or {@code --model} on their
+     * command, the APIs their own setting.
+     *
+     * @return that model, or empty when the backend uses its own default
+     */
+    public String requestedModel() {
+        String backend = backend();
+        if (CLAUDE_BACKEND.equals(backend)) {
+            return value(API_MODEL, NOT_CONFIGURED);
+        }
+        if (CODEX_BACKEND.equals(backend)) {
+            return modelIn(codexCommand());
+        }
+        if (ANTIGRAVITY_BACKEND.equals(backend)) {
+            return modelIn(antigravityCommand());
+        }
+        return ANTHROPIC_BACKEND.equals(backend) ? apiModel() : openAiModel();
+    }
+
+    /**
+     * The model a command line names after {@code -m} or {@code --model}.
+     *
+     * @param command the command, split into words
+     * @return that model, or empty when it names none
+     */
+    private static String modelIn(List<String> command) {
+        for (int index = 0; index + NEXT < command.size(); index++) {
+            if (MODEL_FLAGS.contains(command.get(index))) {
+                return command.get(index + NEXT);
+            }
+        }
+        return NOT_CONFIGURED;
     }
 
     /**

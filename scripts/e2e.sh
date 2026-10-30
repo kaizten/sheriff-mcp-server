@@ -576,6 +576,23 @@ check "without running Sheriff again on the same files" '(( runs_for_stop == 0 )
 check "and no state file of Sheriff's is in the component or the folder beside it" \
   '(( $(find "$work/shared" -maxdepth 2 -name "sheriff_*.json" | wc -l) == 0 ))'
 
+echo "22. A run's report, with SHERIFF_REPORT on and a cap on each pass's errors"
+reported="$work/reported"
+component "$reported/app"
+repository "$reported"
+TARGET_REPO="$reported" SHERIFF_COMPONENT=app SHERIFF_REPORT=1 XDG_STATE_HOME="$work/state" \
+  SHERIFF_MAX_ERRORS_PER_BATCH=2 loop >"$work/22.out"
+report=$(ls "$work/state/sheriff-mcp/reports"/loop-*-app-claude_cli.json 2>/dev/null | head -1)
+check "a report of the run is written where the state goes, and the run says where" \
+  '[[ -n "$report" ]] && grep -qF "This run'"'"'s report: $report" "$work/22.out"'
+check "it names the cap, and no pass of the model's was given more errors than it" \
+  'python3 -I -c "import json,sys; r=json.load(open(sys.argv[1])); m=[p for p in r[\"passes\"] if p[\"kind\"]==\"model\"];
+assert r[\"configuration\"][\"max_errors_per_batch\"]==2 and m and all(0<p[\"given\"]<=2 for p in m)" "$report"'
+left=$(TARGET_REPO="$reported" SHERIFF_COMPONENT=app java -jar "$mcp_jar" --agent --check-only 2>&1 \
+  | sed -n 's/^Sheriff reports \([0-9]*\) error.*/\1/p')
+check "what it says it left is what Sheriff finds after it" \
+  'python3 -I -c "import json,sys; assert json.load(open(sys.argv[1]))[\"final\"][\"total\"]==int(sys.argv[2])" "$report" "$left"'
+
 echo
 if (( failures > 0 )); then
   echo "$failures check(s) failed. The repositories and outputs are kept in $work."

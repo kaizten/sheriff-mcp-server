@@ -8,6 +8,7 @@ import com.kaizten.sheriff.domain.port.CodeAnalyzer;
 import com.kaizten.sheriff.domain.port.CodeFixer;
 import com.kaizten.sheriff.domain.port.FixerScriptSource;
 import com.kaizten.sheriff.domain.port.RuleCatalog;
+import com.kaizten.sheriff.domain.port.RunMetrics;
 import com.kaizten.sheriff.domain.port.TestRunner;
 import com.kaizten.sheriff.domain.port.VersionControl;
 import com.kaizten.sheriff.domain.valueobject.LoopSettings;
@@ -36,19 +37,27 @@ import com.kaizten.sheriff.infrastructure.hook.ComponentGate;
 import com.kaizten.sheriff.infrastructure.hook.SheriffStopHook;
 import com.kaizten.sheriff.infrastructure.hook.StopBlocks;
 import com.kaizten.sheriff.infrastructure.hook.TurnStart;
+import com.kaizten.sheriff.infrastructure.mcp.ServerVersion;
+import com.kaizten.sheriff.infrastructure.metrics.BothMetrics;
+import com.kaizten.sheriff.infrastructure.metrics.LoopReport;
 import com.kaizten.sheriff.infrastructure.metrics.MetricsFile;
 import com.kaizten.sheriff.infrastructure.mock.MockSheriffAnalyzer;
 import com.kaizten.sheriff.infrastructure.process.Platform;
+import com.kaizten.sheriff.infrastructure.process.ProcessOutcome;
 import com.kaizten.sheriff.infrastructure.process.ProcessRunner;
 import com.kaizten.sheriff.infrastructure.process.SystemProcessRunner;
 import com.kaizten.sheriff.infrastructure.shell.ShellTestRunner;
+import java.io.OutputStream;
 import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
 import java.util.function.UnaryOperator;
@@ -87,6 +96,35 @@ public final class Composition {
     private static final String NOTHING_REPAIRED = "";
     private static final String NO_BRANCH_STAMP = "";
     private static final AutomaticRepair NO_AUTOMATIC_REPAIR = () -> NOTHING_REPAIRED;
+    private static final String REPORT_NAME = "loop-%s-%s-%s.json";
+    private static final String NAME_UNSAFE = "[^A-Za-z0-9._-]";
+    private static final String NAME_SAFE = "_";
+    private static final String GIT = "git";
+    private static final String REV_PARSE = "rev-parse";
+    private static final String HEAD = "HEAD";
+    private static final List<String> HEAD_COMMAND = List.of(GIT, REV_PARSE, HEAD);
+    private static final Duration HEAD_TIMEOUT = Duration.ofSeconds(10);
+    private static final String TOOLS_SECTION = "tools";
+    private static final String SHERIFF_SECTION = "sheriff";
+    private static final String PROJECT_SECTION = "project";
+    private static final String CONFIGURATION_SECTION = "configuration";
+    private static final String VERSION_FIELD = "version";
+    private static final String REPOSITORY_FIELD = "repository";
+    private static final String COMPONENT_FIELD = "component";
+    private static final String PROFILE_FIELD = "profile";
+    private static final String COMMIT_FIELD = "commit";
+    private static final String BACKEND_FIELD = "backend";
+    private static final String MODEL_FIELD = "model";
+    private static final String GROUPING_FIELD = "batch_by";
+    private static final String MAX_FILES_FIELD = "max_files_per_batch";
+    private static final String MAX_ERRORS_FIELD = "max_errors_per_batch";
+    private static final String MAX_ITERATIONS_FIELD = "max_iterations";
+    private static final String GIT_SAFETY_FIELD = "git_safety";
+    private static final String SHERIFF_FIXERS_FIELD = "sheriff_fixers";
+    private static final String REPAIR_ROUNDS_FIELD = "repair_rounds";
+    private static final String RULES_IN_PROMPT_FIELD = "max_rules_in_prompt";
+    private static final String PROTOTYPE_FIELD = "prototype";
+    private static final String MOCK_FIELD = "mock";
     private final Configuration configuration;
     private final ProcessRunner processes;
     private final UnaryOperator<String> profiles;
@@ -608,10 +646,96 @@ public final class Composition {
      * @return the fix loop, ready to run
      */
     public FixCodeUntilClean fixLoop(LoopSettings settings, boolean automaticRepair) {
+        return fixLoop(settings, automaticRepair, Optional.empty());
+    }
+
+    /**
+     * The use case, writing a report of the whole run when it ends.
+     *
+     * @param settings the iteration cap, git safety and batch size to use
+     * @param automaticRepair whether Sheriff's own fixers run first
+     * @param report where the run's report goes, empty for none
+     * @return the fix loop, ready to run
+     */
+    public FixCodeUntilClean fixLoop(LoopSettings settings, boolean automaticRepair, Optional<Path> report) {
         AutomaticRepair repair = automaticRepair && !configuration.mockMode()
                 ? deterministicFixer()
                 : NO_AUTOMATIC_REPAIR;
-        return new FixLoop(analyzer(), fixer(), versionControl(), testRunner(), repair, rulesContext(),
-                ruleCatalog().allRules(), settings, new MetricsFile(configuration.promptLogDirectory()));
+        CodeAnalyzer analyzer = analyzer();
+        RunMetrics metrics = new MetricsFile(configuration.promptLogDirectory());
+        if (report.isPresent()) {
+            metrics = new BothMetrics(metrics,
+                    new LoopReport(report.get(), reportContext(settings, automaticRepair), analyzer::analyze));
+        }
+        return new FixLoop(analyzer, fixer(), versionControl(), testRunner(), repair, rulesContext(),
+                ruleCatalog().allRules(), settings, metrics);
+    }
+
+    /**
+     * Where a run's report goes: the file asked for, or else, with
+     * {@code SHERIFF_REPORT} on, a file of its own in the reports folder,
+     * named after when, what and who.
+     *
+     * @param asked the file the command line named, empty for none
+     * @return that file, or empty when no report is wanted
+     */
+    public Optional<Path> loopReportFile(Optional<Path> asked) {
+        if (asked.isPresent()) {
+            return asked;
+        }
+        String name = String.format(REPORT_NAME, LocalDateTime.now().format(BRANCH_STAMP),
+                configuration.component(), configuration.backend()).replaceAll(NAME_UNSAFE, NAME_SAFE);
+        return configuration.reportsDirectory().map(folder -> folder.resolve(name));
+    }
+
+    /**
+     * What a run's report says it was asked to do with, section by section.
+     *
+     * @param settings the loop's settings
+     * @param automaticRepair whether Sheriff's own fixers run first
+     * @return the sections, each a map
+     */
+    Map<String, Object> reportContext(LoopSettings settings, boolean automaticRepair) {
+        Map<String, Object> tools = new LinkedHashMap<>();
+        tools.put(VERSION_FIELD, ServerVersion.current());
+        Map<String, Object> project = new LinkedHashMap<>();
+        project.put(REPOSITORY_FIELD, configuration.targetRepository().toString());
+        project.put(COMPONENT_FIELD, configuration.component());
+        project.put(PROFILE_FIELD, configuration.testType());
+        project.put(COMMIT_FIELD, headCommit().orElse(null));
+        Map<String, Object> knobs = new LinkedHashMap<>();
+        knobs.put(BACKEND_FIELD, configuration.backend());
+        knobs.put(MODEL_FIELD, configuration.requestedModel().isEmpty() ? null : configuration.requestedModel());
+        knobs.put(GROUPING_FIELD, settings.grouping().setting());
+        knobs.put(MAX_FILES_FIELD, settings.maxFilesPerBatch());
+        knobs.put(MAX_ERRORS_FIELD, settings.maxErrorsPerBatch());
+        knobs.put(MAX_ITERATIONS_FIELD, settings.maxIterations());
+        knobs.put(GIT_SAFETY_FIELD, settings.useGitSafety());
+        knobs.put(SHERIFF_FIXERS_FIELD, automaticRepair && !configuration.mockMode());
+        knobs.put(REPAIR_ROUNDS_FIELD, configuration.repairRounds());
+        knobs.put(RULES_IN_PROMPT_FIELD, configuration.maxRulesInPrompt());
+        knobs.put(PROTOTYPE_FIELD, configuration.prototype());
+        knobs.put(MOCK_FIELD, configuration.mockMode());
+        Map<String, Object> sections = new LinkedHashMap<>();
+        sections.put(TOOLS_SECTION, tools);
+        sections.put(SHERIFF_SECTION, configuration.mockMode() ? Map.of()
+                : imageProvisioning(new PrintStream(OutputStream.nullOutputStream())).identity());
+        sections.put(PROJECT_SECTION, project);
+        sections.put(CONFIGURATION_SECTION, knobs);
+        return sections;
+    }
+
+    /**
+     * The commit the component's repository is at, which says what code a
+     * run started from.
+     *
+     * @return its hash, or empty when git cannot say
+     */
+    private Optional<String> headCommit() {
+        Path mount = configuration.targetRepository();
+        Path component = mount.resolve(configuration.component());
+        Path workingDirectory = Files.isDirectory(component) ? component : mount;
+        ProcessOutcome outcome = processes.run(HEAD_COMMAND, workingDirectory, Map.of(), HEAD_TIMEOUT);
+        return outcome.succeeded() ? Optional.of(outcome.standardOutput().strip()) : Optional.empty();
     }
 }

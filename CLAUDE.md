@@ -890,6 +890,19 @@ none yet. `scripts/benchmark.sh` adds the lines of many runs up, per backend
 and strategy; a pass's tokens are shared among the rules it repaired by their
 errors, which is an approximation, and it says so.
 
+**A whole run is reported too, on request** (`LoopReport`, beside
+`MetricsFile` through `BothMetrics`): `SHERIFF_REPORT=1`, a user's setting
+only, as a cloned project must not decide what a machine records, or
+`--json-report PATH`. `RunMetrics` has default methods for what the passes
+alone do not say (each analysis, what a pass is given, the end), so its
+lambdas still compile; `PassMeter` forwards them. The report keeps the old
+`--json-report` fields at its top, adds the configuration, versions, project
+and commit (`Composition.reportContext`), the first and last analyses, the
+passes and their totals, and is written whole when the run ends. Counts,
+codes and paths only: a finding's description quotes code. When the last
+pass was never measured it analyzes once more, so `final` is what the tree
+holds. `scripts/e2e.sh` scenario 22 checks `final` against a check after.
+
 **A pass's errors are grouped by file or by rule** (`BatchGrouping`,
 `SHERIFF_BATCH_BY`, `--batch-by`), as which costs less is a question for the
 benchmark, not a rule. By file, the default, a pass is every error of up to

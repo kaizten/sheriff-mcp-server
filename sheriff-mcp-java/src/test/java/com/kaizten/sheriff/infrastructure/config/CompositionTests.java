@@ -8,6 +8,8 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.kaizten.sheriff.domain.BatchGrouping;
+import com.kaizten.sheriff.domain.valueobject.LoopSettings;
 import com.kaizten.sheriff.infrastructure.antigravity.AntigravityCliFixer;
 import com.kaizten.sheriff.infrastructure.api.AnthropicApiFixer;
 import com.kaizten.sheriff.infrastructure.api.OpenAiApiFixer;
@@ -23,6 +25,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
+import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -202,5 +205,33 @@ class CompositionTests {
         assertFalse(composition.testRunner().run().ran(), "the repair loop leaves the tests alone");
         assertTrue(new Composition(checking, FakeProcessRunner.always(ProcessOutcome.completed(0, "", "")))
                 .testRunner().run().ran());
+    }
+
+    @Test
+    @DisplayName("a run's report goes where it was asked, or with SHERIFF_REPORT to a file of its own, or nowhere")
+    void theReportGoesWhereItWasAskedOrToTheReportsFolder() {
+        Path asked = Path.of("/tmp/run.json");
+        assertEquals(Optional.of(asked), with(Map.of()).loopReportFile(Optional.of(asked)));
+        assertEquals(Optional.empty(), with(Map.of("HOME", "/home/a")).loopReportFile(Optional.empty()));
+        Path own = with(Map.of("SHERIFF_REPORT", "1", "HOME", "/home/a", "SHERIFF_COMPONENT", "web/app",
+                "AI_BACKEND", "codex_cli")).loopReportFile(Optional.empty()).orElseThrow();
+        assertEquals(Path.of("/home/a/.local/state/sheriff-mcp/reports"), own.getParent());
+        assertTrue(own.getFileName().toString().matches("loop-\\d{8}-\\d{6}-web_app-codex_cli\\.json"),
+                own.toString());
+    }
+
+    @Test
+    @DisplayName("a report says what the run was asked to do with, the mock's run included")
+    void theReportsContextNamesTheRunsKnobs() {
+        Map<String, Object> context = with(Map.of("SHERIFF_MOCK", "1", "SHERIFF_MAX_ERRORS_PER_BATCH", "20"))
+                .reportContext(new LoopSettings(null, true, 0, BatchGrouping.RULE, 20), true);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> knobs = (Map<String, Object>) context.get("configuration");
+        assertEquals("rule", knobs.get("batch_by"));
+        assertEquals(20, knobs.get("max_errors_per_batch"));
+        assertEquals(false, knobs.get("sheriff_fixers"), "the mock has no fixers");
+        assertEquals(true, knobs.get("mock"));
+        assertEquals(Map.of(), context.get("sheriff"));
+        assertTrue(context.containsKey("project"));
     }
 }
