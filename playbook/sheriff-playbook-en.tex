@@ -624,6 +624,16 @@ spreadsheet.
 your project.
 \end{play}
 
+\begin{note}
+With \code{SHERIFF_REPORT=1} every session of the MCP server leaves a report
+too, \path{session-<when>-<project>.json}: which assistant connected
+(Claude Code, Codex), every call it made and the errors before and after.
+\code{--compare-reports} puts sessions side by side by assistant, so the
+same task done in Claude Code and in Codex can be compared: how many calls,
+how many repairs, how many errors left. What the assistant's model spent is
+not visible to Sheriff.
+\end{note}
+
 \begin{warning}
 Every run spends tokens, as \tool{sheriff_autofix} does. From a clone of the
 tools, \code{scripts/benchmark.sh --repo PATH} runs every configuration and
@@ -1205,8 +1215,9 @@ these settings.
 \setting{SHERIFF_REPORT}{\code{0}}{\code{1} or \code{0}}{For debugging:
   \code{1} has every run of the loop write a JSON report of itself into
   \path{~/.local/state/sheriff-mcp/reports/}: what it was asked to do with,
-  what it started from and left, every pass, and how it stopped. From your
-  file only.}
+  what it started from and left, every pass, and how it stopped. Every
+  session of the MCP server writes one too: which assistant connected and
+  every call it made. From your file only.}
 
 \subsubsection*{The loop's APIs} Only with \code{AI_BACKEND} set to
 \code{anthropic_api}, \code{openai_api} or \code{local}. All from your file

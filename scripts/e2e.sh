@@ -593,6 +593,22 @@ left=$(TARGET_REPO="$reported" SHERIFF_COMPONENT=app java -jar "$mcp_jar" --agen
 check "what it says it left is what Sheriff finds after it" \
   'python3 -I -c "import json,sys; assert json.load(open(sys.argv[1]))[\"final\"][\"total\"]==int(sys.argv[2])" "$report" "$left"'
 
+echo "23. A session of the MCP server, reported with SHERIFF_REPORT on"
+session="$work/session"
+component "$session/app"
+printf '%s\n' \
+  '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientInfo":{"name":"e2e-client","version":"9.9"}}}' \
+  '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"sheriff_test","arguments":{"component":"app"}}}' \
+  | (cd "$session" && SHERIFF_REPO="$session" SHERIFF_REPORT=1 XDG_STATE_HOME="$work/session-state" \
+      java -jar "$mcp_jar" >"$work/23.out" 2>"$work/23.err")
+session_report=$(ls "$work/session-state/sheriff-mcp/reports"/session-*-session.json 2>/dev/null | head -1)
+check "a report of the session is written where the state goes" '[[ -n "$session_report" ]]'
+check "it names the client, and the call with the errors Sheriff found" \
+  'python3 -I -c "import json,sys; r=json.load(open(sys.argv[1])); c=r[\"calls\"][0][\"analyses\"][0];
+assert r[\"client\"][\"name\"]==\"e2e-client\" and r[\"calls\"][0][\"tool\"]==\"sheriff_test\" and c[\"after\"][\"total\"]>0" "$session_report"'
+check "and the comparison reads it" \
+  'java -jar "$mcp_jar" --agent --compare-reports "$work/session-state/sheriff-mcp/reports" | grep -q "| e2e-client 9.9 | session |"'
+
 echo
 if (( failures > 0 )); then
   echo "$failures check(s) failed. The repositories and outputs are kept in $work."

@@ -34,12 +34,14 @@ import java.util.function.Predicate;
  */
 public final class SheriffRunner {
 
+    private static final int NO_ROUNDS = 0;
     private final ProcessRunner processes;
     private final String image;
     private final Path repository;
     private final Duration timeout;
     private final SheriffContainer container;
     private final Optional<Path> exportDirectory;
+    private final Optional<SessionReport> report;
     private final VerdictCache verdicts = new VerdictCache();
 
     /**
@@ -51,11 +53,12 @@ public final class SheriffRunner {
      * @param timeout how long one invocation is given
      */
     public SheriffRunner(ProcessRunner processes, String image, Path repository, Duration timeout) {
-        this(processes, image, repository, timeout, Optional.empty());
+        this(processes, image, repository, timeout, Optional.empty(), Optional.empty());
     }
 
     /**
-     * Every field, for the constructor above and for {@link #exportingTo}.
+     * Every field, for the constructor above, {@link #exportingTo} and
+     * {@link #reportingTo}.
      *
      * @param processes how to run Docker
      * @param image the Sheriff image to run
@@ -63,15 +66,18 @@ public final class SheriffRunner {
      * @param timeout how long one invocation is given
      * @param exportDirectory where each analysis copies Sheriff's JSON, if
      *     anywhere
+     * @param report the session's report each analysis and repair is told
+     *     to, if any
      */
-    private SheriffRunner(
-            ProcessRunner processes, String image, Path repository, Duration timeout, Optional<Path> exportDirectory) {
+    private SheriffRunner(ProcessRunner processes, String image, Path repository, Duration timeout,
+            Optional<Path> exportDirectory, Optional<SessionReport> report) {
         this.processes = processes;
         this.image = image;
         this.repository = repository;
         this.timeout = timeout;
         this.container = new SheriffContainer(processes, image, repository, timeout);
         this.exportDirectory = exportDirectory;
+        this.report = report;
     }
 
     /**
@@ -83,7 +89,18 @@ public final class SheriffRunner {
      * @return that runner
      */
     public SheriffRunner exportingTo(Path directory) {
-        return new SheriffRunner(processes, image, repository, timeout, Optional.of(directory));
+        return new SheriffRunner(processes, image, repository, timeout, Optional.of(directory), report);
+    }
+
+    /**
+     * The same runner, telling a session's report of every full analysis and
+     * every repair it makes.
+     *
+     * @param session the report
+     * @return that runner
+     */
+    public SheriffRunner reportingTo(SessionReport session) {
+        return new SheriffRunner(processes, image, repository, timeout, exportDirectory, Optional.of(session));
     }
 
     /**
@@ -117,6 +134,7 @@ public final class SheriffRunner {
         }
         if (!keepState) {
             verdicts.rememberAnalyzed(repository, component, profile, result);
+            report.ifPresent(session -> session.analyzed(component, profile, null, result, NO_ROUNDS));
         }
         return result;
     }
@@ -186,6 +204,8 @@ public final class SheriffRunner {
             throw new SheriffUnavailableException(outcome.failure().get());
         }
         verdicts.rememberAnalyzed(repository, component, profile, outcome.after());
+        report.ifPresent(session -> session.analyzed(component, profile, outcome.before(), outcome.after(),
+                outcome.rounds()));
         return new FixRun(outcome.before(), outcome.after(), outcome.fixerFailures(), outcome.rounds());
     }
 }

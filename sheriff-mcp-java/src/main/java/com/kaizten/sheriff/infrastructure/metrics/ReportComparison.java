@@ -32,8 +32,12 @@ import java.util.stream.Stream;
  * one run that repaired nothing does not count as an infinite cost. A
  * project with no tests leaves its runs' tests empty rather than failed.
  *
- * <p>A file that is no loop report of a schema this reads is passed over
- * and counted, so a folder can be given whole.
+ * <p>Reports of the MCP server's sessions are read too, and compared apart:
+ * by session, and by client and project, the mean of its sessions. A
+ * session's tokens are its client's, which the server does not see.
+ *
+ * <p>A file that is no report of a schema this reads is passed over and
+ * counted, so a folder can be given whole.
  */
 public final class ReportComparison {
 
@@ -127,6 +131,38 @@ public final class ReportComparison {
     private static final String DETECTED_COLUMN = "detected";
     private static final String RULE_LEFT_COLUMN = "left";
     private static final String PASS_COLUMN = "pass";
+    private static final String SESSION_KIND = "session";
+    private static final int SESSION_SCHEMA = 1;
+    private static final String CLIENT_FIELD = "client";
+    private static final String NAME_FIELD = "name";
+    private static final String VERSION_FIELD = "version";
+    private static final String REPOSITORY_FIELD = "repository";
+    private static final String CALLS_FIELD = "calls";
+    private static final String BY_TOOL_FIELD = "by_tool";
+    private static final String FAILED_CALLS_FIELD = "failed_calls";
+    private static final String CALLS_MS_FIELD = "calls_ms";
+    private static final String FIRST_ERRORS_FIELD = "first_errors";
+    private static final String LAST_ERRORS_FIELD = "last_errors";
+    private static final String AFTER_FIELD = "after";
+    private static final String TEST_TOOL = "sheriff_test";
+    private static final String FIX_TOOL = "sheriff_fix";
+    private static final String UNKNOWN_CLIENT = "(unnamed client)";
+    private static final String CLIENT_WITH_VERSION = "%s %s";
+    private static final int NOTHING_ANALYZED = -1;
+    private static final String SESSIONS_FILE = "sessions.csv";
+    private static final String SESSIONS_HEADING = "# Sessions of the MCP server compared%n%n%d session(s).%n%n";
+    private static final String CLIENTS_HEADING = "## By client and project (the mean of its sessions)\n\n";
+    private static final String BY_SESSION_HEADING = "## By session\n\n";
+    private static final String SESSION_NOTE = "\nA session is the server from one client's start to its end. Its "
+            + "first errors are what its first analysis found, its errors left the last analysis of each component "
+            + "it analyzed, added up; the time is the time in its calls. What the client's model spent the server "
+            + "does not see.\n";
+    private static final String CLIENT_COLUMN = CLIENT_FIELD;
+    private static final String SESSIONS_COLUMN = "sessions";
+    private static final String TESTS_COLUMN = TEST_TOOL;
+    private static final String FIXES_COLUMN = FIX_TOOL;
+    private static final String FIRST_COLUMN = FIRST_ERRORS_FIELD;
+    private static final String CALLS_S_COLUMN = "calls_s";
     private static final List<String> KEY = List.of(PROJECT_FIELD, BACKEND_FIELD, MODEL_FIELD, STRATEGY_COLUMN);
     private static final List<String> RUN_COLUMNS = Stream.concat(KEY.stream(), Stream.of(REPORT_COLUMN, OK_FIELD,
             STOPPED_FIELD, TESTS_FIELD, ELAPSED_S_COLUMN, BEFORE_COLUMN, LEFT_COLUMN, SHERIFF_REPAIRED,
@@ -141,9 +177,17 @@ public final class ReportComparison {
     private static final List<String> PASS_COLUMNS = Stream.concat(KEY.stream(), Stream.of(REPORT_COLUMN,
             PASS_COLUMN, KIND_FIELD, ELAPSED_FIELD, FILES_FIELD, GIVEN_FIELD, REPAIRED_FIELD, INTRODUCED_FIELD,
             TOKENS_COLUMN)).toList();
+    private static final List<String> SESSION_KEY = List.of(CLIENT_COLUMN, PROJECT_FIELD);
+    private static final List<String> SESSION_COLUMNS = Stream.concat(SESSION_KEY.stream(), Stream.of(REPORT_COLUMN,
+            CALLS_FIELD, TESTS_COLUMN, FIXES_COLUMN, FAILED_CALLS_FIELD, FIRST_COLUMN, LEFT_COLUMN,
+            CALLS_S_COLUMN)).toList();
+    private static final List<String> CLIENT_COLUMNS = Stream.concat(SESSION_KEY.stream(), Stream.of(
+            SESSIONS_COLUMN, CALLS_FIELD, FIXES_COLUMN, FIRST_COLUMN, LEFT_COLUMN, CALLS_S_COLUMN)).toList();
     private final ObjectMapper json = new ObjectMapper();
     private final List<JsonNode> reports = new ArrayList<>();
     private final List<String> names = new ArrayList<>();
+    private final List<JsonNode> sessions = new ArrayList<>();
+    private final List<String> sessionNames = new ArrayList<>();
     private int passedOver;
 
     /**
@@ -187,6 +231,10 @@ public final class ReportComparison {
                 && report.path(SCHEMA_FIELD).asInt() == LoopReport.SCHEMA) {
             reports.add(report);
             names.add(file.getFileName().toString());
+        } else if (report != null && SESSION_KIND.equals(report.path(KIND_FIELD).asText())
+                && report.path(SCHEMA_FIELD).asInt() == SESSION_SCHEMA) {
+            sessions.add(report);
+            sessionNames.add(file.getFileName().toString());
         } else {
             passedOver++;
         }
@@ -202,6 +250,15 @@ public final class ReportComparison {
     }
 
     /**
+     * How many sessions of the MCP server were read.
+     *
+     * @return that number
+     */
+    public int sessions() {
+        return sessions.size();
+    }
+
+    /**
      * The comparison as a Markdown page: by configuration, by run, by rule.
      *
      * @param where what was read, for the page to say when nothing was
@@ -212,15 +269,23 @@ public final class ReportComparison {
         if (passedOver > START) {
             page.append(String.format(NOT_A_REPORT, passedOver, LoopReport.SCHEMA));
         }
-        if (reports.isEmpty()) {
+        if (reports.isEmpty() && sessions.isEmpty()) {
             return page.append(String.format(NO_REPORTS, where)).toString();
         }
-        List<List<String>> configurations = configurations();
-        page.append(String.format(HEADING, reports.size(), configurations.size()));
-        page.append(CONFIGURATIONS_HEADING).append(table(CONFIGURATION_COLUMNS, configurations)).append(LINE_END);
-        page.append(RUNS_HEADING).append(table(RUN_COLUMNS, runRows())).append(LINE_END);
-        page.append(RULES_HEADING).append(table(RULE_COLUMNS, rules()));
-        return page.append(NOTE).toString();
+        if (!reports.isEmpty()) {
+            List<List<String>> configurations = configurations();
+            page.append(String.format(HEADING, reports.size(), configurations.size()));
+            page.append(CONFIGURATIONS_HEADING).append(table(CONFIGURATION_COLUMNS, configurations))
+                    .append(LINE_END);
+            page.append(RUNS_HEADING).append(table(RUN_COLUMNS, runRows())).append(LINE_END);
+            page.append(RULES_HEADING).append(table(RULE_COLUMNS, rules())).append(NOTE);
+        }
+        if (!sessions.isEmpty()) {
+            page.append(String.format(SESSIONS_HEADING, sessions.size()));
+            page.append(CLIENTS_HEADING).append(table(CLIENT_COLUMNS, clients())).append(LINE_END);
+            page.append(BY_SESSION_HEADING).append(table(SESSION_COLUMNS, sessionRows())).append(SESSION_NOTE);
+        }
+        return page.toString();
     }
 
     /**
@@ -237,6 +302,102 @@ public final class ReportComparison {
         Files.writeString(folder.resolve(RUNS_FILE), csv(RUN_COLUMNS, runRows()), StandardCharsets.UTF_8);
         Files.writeString(folder.resolve(RULES_FILE), csv(RULE_COLUMNS, rules()), StandardCharsets.UTF_8);
         Files.writeString(folder.resolve(PASSES_FILE), csv(PASS_COLUMNS, passRows()), StandardCharsets.UTF_8);
+        if (!sessions.isEmpty()) {
+            Files.writeString(folder.resolve(SESSIONS_FILE), csv(SESSION_COLUMNS, sessionRows()),
+                    StandardCharsets.UTF_8);
+        }
+    }
+
+    /**
+     * Every session as a row: its client, project, calls, and the errors it
+     * started from and left.
+     *
+     * @return the rows, in the order the sessions were read
+     */
+    private List<List<String>> sessionRows() {
+        List<List<String>> rows = new ArrayList<>();
+        for (int index = START; index < sessions.size(); index++) {
+            JsonNode session = sessions.get(index);
+            JsonNode totals = session.path(TOTALS_FIELD);
+            List<String> row = new ArrayList<>(sessionKey(session));
+            row.add(sessionNames.get(index));
+            row.add(totals.path(CALLS_FIELD).asText());
+            row.add(Integer.toString(totals.path(BY_TOOL_FIELD).path(TEST_TOOL).asInt()));
+            row.add(Integer.toString(totals.path(BY_TOOL_FIELD).path(FIX_TOOL).asInt()));
+            row.add(totals.path(FAILED_CALLS_FIELD).asText());
+            row.add(count(totals.path(FIRST_ERRORS_FIELD).path(AFTER_FIELD)));
+            row.add(sessionLeft(session) < START ? NOTHING : whole(sessionLeft(session)));
+            row.add(decimal(totals.path(CALLS_MS_FIELD).asDouble() / MILLIS));
+            rows.add(row);
+        }
+        return rows;
+    }
+
+    /**
+     * Every client and project as a row, its figures the mean of its
+     * sessions.
+     *
+     * @return the rows, in key order
+     */
+    private List<List<String>> clients() {
+        Map<List<String>, List<JsonNode>> groups = new TreeMap<>(Comparator.comparing(key -> String.join(
+                CSV_SEPARATOR, key)));
+        for (JsonNode session : sessions) {
+            groups.computeIfAbsent(sessionKey(session), key -> new ArrayList<>()).add(session);
+        }
+        List<List<String>> rows = new ArrayList<>();
+        groups.forEach((key, group) -> {
+            List<String> row = new ArrayList<>(key);
+            row.add(Integer.toString(group.size()));
+            row.add(decimal(mean(group, session -> session.path(TOTALS_FIELD).path(CALLS_FIELD).asDouble())));
+            row.add(decimal(mean(group, session -> session.path(TOTALS_FIELD).path(BY_TOOL_FIELD).path(FIX_TOOL)
+                    .asDouble())));
+            row.add(decimal(mean(group, session -> session.path(TOTALS_FIELD).path(FIRST_ERRORS_FIELD)
+                    .path(AFTER_FIELD).path(TOTAL_FIELD).asDouble())));
+            row.add(decimal(mean(group, session -> Math.max(START, sessionLeft(session)))));
+            row.add(decimal(mean(group, session -> session.path(TOTALS_FIELD).path(CALLS_MS_FIELD).asDouble())
+                    / MILLIS));
+            rows.add(row);
+        });
+        return rows;
+    }
+
+    /**
+     * What a session is grouped by: its client, with its version, and its
+     * project's folder.
+     *
+     * @param session the session's report
+     * @return client and project
+     */
+    static List<String> sessionKey(JsonNode session) {
+        JsonNode client = session.path(CLIENT_FIELD);
+        String name = client.path(NAME_FIELD).asText(NOTHING);
+        String version = client.path(VERSION_FIELD).asText(NOTHING);
+        String who = name.isEmpty() ? UNKNOWN_CLIENT : version.isEmpty() ? name
+                : String.format(CLIENT_WITH_VERSION, name, version);
+        Path repository = Path.of(session.path(PROJECT_FIELD).path(REPOSITORY_FIELD).asText(NOTHING));
+        String project = repository.getFileName() == null ? repository.toString()
+                : repository.getFileName().toString();
+        return List.of(who, project);
+    }
+
+    /**
+     * The errors a session left: the last analysis of each component it
+     * analyzed, added up.
+     *
+     * @param session the session's report
+     * @return that sum, or -1 when it analyzed nothing
+     */
+    private static double sessionLeft(JsonNode session) {
+        JsonNode last = session.path(TOTALS_FIELD).path(LAST_ERRORS_FIELD);
+        if (last.isEmpty()) {
+            return NOTHING_ANALYZED;
+        }
+        double left = START;
+        for (JsonNode component : last) {
+            left += component.path(TOTAL_FIELD).asDouble();
+        }
+        return left;
     }
 
     /**

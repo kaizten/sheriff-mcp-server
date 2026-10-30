@@ -11,6 +11,7 @@ import com.kaizten.sheriff.domain.valueobject.PassMetrics;
 import com.kaizten.sheriff.domain.valueobject.RunSummary;
 import com.kaizten.sheriff.domain.valueobject.SheriffFinding;
 import com.kaizten.sheriff.domain.valueobject.TokenUsage;
+import com.kaizten.sheriff.infrastructure.mcp.SessionReport;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -71,7 +72,7 @@ class ReportComparisonTests {
         run("a.json", "claude_cli", 0, 2, 1000, true);
         run("b.json", "claude_cli", 0, 1, 2000, false);
         run("c.json", "codex_cli", 20, 2, 500, true);
-        Files.writeString(folder.resolve("other.json"), "{\"kind\": \"session\", \"schema\": 1}");
+        Files.writeString(folder.resolve("other.json"), "{\"kind\": \"other\", \"schema\": 1}");
         Files.writeString(folder.resolve("broken.json"), "not json");
         ReportComparison comparison = ReportComparison.of(List.of(folder));
         assertEquals(3, comparison.runs());
@@ -130,5 +131,49 @@ class ReportComparisonTests {
                 Map.of("backend", "codex_cli")))).get(2));
         assertFalse(ReportComparison.key(json.valueToTree(Map.of("project", Map.of("component", "x", "commit",
                 "abc")))).get(0).contains("@"), "a commit too short to be one is left out");
+    }
+
+    private void session(String name, String client, int before, int left) {
+        SessionReport report = new SessionReport(folder.resolve(name), Map.of("project",
+                Map.of("repository", "/code/shop")));
+        report.client(client, "1.0");
+        List<SheriffFinding> found = new java.util.ArrayList<>();
+        for (int index = 0; index < before; index++) {
+            found.add(error("A", "R1"));
+        }
+        report.analyzed("app", "JAVA", null, AnalysisResult.of(found), 0);
+        report.called("sheriff_test", Map.of(), Duration.ofSeconds(2), false);
+        report.analyzed("app", "JAVA", AnalysisResult.of(found), AnalysisResult.of(found.subList(0, left)), 1);
+        report.called("sheriff_fix", Map.of(), Duration.ofSeconds(8), false);
+    }
+
+    @Test
+    @DisplayName("sessions are compared apart, by client and project and by session, beside the runs")
+    void sessionsAreComparedApart() throws IOException {
+        run("a.json", "claude_cli", 0, 2, 1000, true);
+        session("s1.json", "claude-code", 4, 1);
+        session("s2.json", "claude-code", 4, 3);
+        session("s3.json", "codex-mcp-client", 6, 0);
+        ReportComparison comparison = ReportComparison.of(List.of(folder));
+        assertEquals(1, comparison.runs());
+        assertEquals(3, comparison.sessions());
+        String page = comparison.markdown(folder.toString());
+        assertTrue(page.contains("1 run(s) in 1 configuration(s)"), page);
+        assertTrue(page.contains("# Sessions of the MCP server compared"), page);
+        assertTrue(page.contains("| claude-code 1.0 | shop | 2 | 2.0 | 1.0 | 4.0 | 2.0 | 10.0 |"), page);
+        assertTrue(page.contains("| codex-mcp-client 1.0 | shop | s3.json | 2 | 1 | 1 | 0 | 6 | 0 | 10.0 |"), page);
+        Path csv = folder.resolve("csv");
+        comparison.writeCsv(csv);
+        assertTrue(Files.readString(csv.resolve("sessions.csv")).startsWith("client,project,report,calls,"));
+    }
+
+    @Test
+    @DisplayName("sessions alone are enough to compare")
+    void sessionsAloneAreCompared() throws IOException {
+        session("s1.json", "claude-code", 2, 0);
+        ReportComparison comparison = ReportComparison.of(List.of(folder));
+        String page = comparison.markdown(folder.toString());
+        assertFalse(page.contains("Runs of the repair loop"), page);
+        assertTrue(page.contains("1 session(s)."), page);
     }
 }

@@ -25,6 +25,8 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -169,6 +171,16 @@ public final class McpServer {
             those answers.
             """;
     private static final String ERROR_UTILITY_CLASS = "This is a utility class and cannot be instantiated.";
+    private static final String SESSION_REPORT_NAME = "session-%s-%s.json";
+    private static final String SESSION_STAMP_PATTERN = "yyyyMMdd-HHmmss";
+    private static final DateTimeFormatter SESSION_STAMP = DateTimeFormatter.ofPattern(SESSION_STAMP_PATTERN);
+    private static final String NAME_UNSAFE = "[^A-Za-z0-9._-]";
+    private static final String NAME_SAFE = "_";
+    private static final String TOOLS_SECTION = "tools";
+    private static final String SHERIFF_SECTION = "sheriff";
+    private static final String PROJECT_SECTION = "project";
+    private static final String VERSION_FIELD = "version";
+    private static final String REPOSITORY_FIELD = "repository";
     private static final String SHUTDOWN_THREAD = "sheriff-shutdown";
     /**
      * What {@link #settingsCommand} answers when the command line is not
@@ -272,13 +284,38 @@ public final class McpServer {
         }
         ImageProvisioning image = imageFor(config, processes).inBackground();
         ProvisionedCatalog catalog = ProvisionedCatalog.forServer(config, processes, image.ready());
-        Tools tools = serverTools(config, runner, catalog, image, ownJar(), new GitHubReleases(GitHubReleases.REPOSITORY));
+        Optional<SessionReport> session = sessionReport(config, image);
+        Tools tools = serverTools(config, session.map(runner::reportingTo).orElse(runner), catalog, image, ownJar(),
+                new GitHubReleases(GitHubReleases.REPOSITORY));
+        session.ifPresent(tools::reportingTo);
         JsonRpcServer server = new JsonRpcServer(tools::definitions, tools::call, tools::answersAtOnce,
                 config.serverName(), instructions());
+        session.ifPresent(report -> server.onClient(report::client));
         Runtime.getRuntime().addShutdownHook(new Thread(tools::interruptUnfinished, SHUTDOWN_THREAD));
         try (tools; BufferedReader input = new BufferedReader(new InputStreamReader(System.in, StandardCharsets.UTF_8))) {
             server.serve(input, protocol);
         }
+    }
+
+    /**
+     * The report of this session, when {@code SHERIFF_REPORT} is on: a file
+     * of its own in the reports folder, named after when it started and the
+     * project's folder, with this jar's version, Sheriff's image and the
+     * project in it.
+     *
+     * @param config where the project is, and whether reports are on
+     * @param image Sheriff's image, which names its digest
+     * @return the report, or empty when reports are off
+     */
+    static Optional<SessionReport> sessionReport(McpConfig config, ImageProvisioning image) {
+        Path project = config.repository().toAbsolutePath().normalize();
+        String folder = project.getFileName() == null ? project.toString() : project.getFileName().toString();
+        String name = String.format(SESSION_REPORT_NAME, LocalDateTime.now().format(SESSION_STAMP), folder)
+                .replaceAll(NAME_UNSAFE, NAME_SAFE);
+        return config.reportsDirectory().map(reports -> new SessionReport(reports.resolve(name), Map.of(
+                TOOLS_SECTION, Map.of(VERSION_FIELD, ServerVersion.current()),
+                SHERIFF_SECTION, image.identity(),
+                PROJECT_SECTION, Map.of(REPOSITORY_FIELD, project.toString()))));
     }
 
     /**

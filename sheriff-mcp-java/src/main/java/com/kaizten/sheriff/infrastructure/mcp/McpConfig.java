@@ -47,6 +47,8 @@ public final class McpConfig {
     private static final String STATE_HOME = "XDG_STATE_HOME";
     private static final String DEFAULT_STATE_DIRECTORY = ".local/state";
     private static final String TASKS_SUBDIRECTORY = "tasks";
+    private static final String REPORTS_SUBDIRECTORY = "reports";
+    private static final String REPORT = "SHERIFF_REPORT";
     private static final String USER_DIRECTORY = "user.dir";
     private static final String USER_HOME = "user.home";
     private static final String CACHE_SUBDIRECTORY = "sheriff-mcp";
@@ -318,11 +320,34 @@ public final class McpConfig {
      *     {@code ~/.local/state}
      */
     public Path tasksDirectory() {
+        return stateDirectory().resolve(TASKS_SUBDIRECTORY);
+    }
+
+    /**
+     * Where a session's report goes when every session is reported, the
+     * debugging mode {@code SHERIFF_REPORT} turns on, beside the reports of
+     * the loop's runs.
+     *
+     * @return {@code $XDG_STATE_HOME/sheriff-mcp/reports}, or the same under
+     *     {@code ~/.local/state}, or empty when reports are off
+     */
+    public Optional<Path> reportsDirectory() {
+        return ENABLED.equals(value(REPORT, NO_VALUE).strip())
+                ? Optional.of(stateDirectory().resolve(REPORTS_SUBDIRECTORY)) : Optional.empty();
+    }
+
+    /**
+     * This tools' folder of state: tasks and reports.
+     *
+     * @return {@code $XDG_STATE_HOME/sheriff-mcp}, or the same under
+     *     {@code ~/.local/state}
+     */
+    private Path stateDirectory() {
         String stateHome = value(STATE_HOME, NOT_CONFIGURED);
         Path base = stateHome.isEmpty()
                 ? Path.of(System.getProperty(USER_HOME), DEFAULT_STATE_DIRECTORY)
                 : Path.of(stateHome);
-        return base.resolve(CACHE_SUBDIRECTORY).resolve(TASKS_SUBDIRECTORY);
+        return base.resolve(CACHE_SUBDIRECTORY);
     }
 
     /**

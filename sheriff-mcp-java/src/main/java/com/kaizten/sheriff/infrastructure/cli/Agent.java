@@ -90,7 +90,7 @@ public final class Agent {
               --hook-stop             Claude Code Stop hook: a turn can't end dirty
               --hook-turn             Claude Code UserPromptSubmit hook: records the turn's start
               --json-report PATH      also write the result as JSON (the loop: its whole run's report)
-              --compare-reports PATH  compare loop reports, files or folders (several), as Markdown
+              --compare-reports PATH  compare reports of runs and sessions, files or folders (several), as Markdown
               --csv DIR               with --compare-reports, also write its tables as CSV files
               --max-iterations N      cap the loop's iterations
               --max-files-per-batch N cap how many files one pass may touch
@@ -639,7 +639,8 @@ public final class Agent {
      * With no path it reads the current folder.
      *
      * @param arguments the command line, with the paths after the option
-     * @return success when at least one report was read
+     * @return success when at least one report, of a run or of a session,
+     *     was read
      */
     private int compareReports(List<String> arguments) {
         List<Path> paths = valuesAfter(arguments, COMPARE_REPORTS).stream().map(Path::of).toList();
@@ -650,10 +651,11 @@ public final class Agent {
             ReportComparison comparison = ReportComparison.of(paths);
             System.out.print(comparison.markdown(paths.toString()));
             Path csv = pathAfter(arguments, CSV);
-            if (csv != null && comparison.runs() > NO_ERRORS) {
+            boolean found = comparison.runs() + comparison.sessions() > NO_ERRORS;
+            if (csv != null && found) {
                 comparison.writeCsv(csv);
             }
-            return comparison.runs() > NO_ERRORS ? SUCCESS : FAILURE;
+            return found ? SUCCESS : FAILURE;
         } catch (IOException exception) {
             System.out.printf(COULD_NOT_COMPARE, exception.getMessage());
             return FAILURE;

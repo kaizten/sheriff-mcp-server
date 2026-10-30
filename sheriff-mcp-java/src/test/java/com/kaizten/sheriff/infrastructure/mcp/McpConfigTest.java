@@ -13,6 +13,7 @@ import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import java.util.Optional;
 
 /**
  * Every default and every environment override {@link McpConfig} reads, one
@@ -335,5 +336,15 @@ final class McpConfigTest {
         assertEquals(1, new McpConfig(Map.of("SHERIFF_REPAIR_ROUNDS", "1"), module).repairRounds());
         assertEquals(Integer.MAX_VALUE, new McpConfig(Map.of("SHERIFF_REPAIR_ROUNDS", "0"), module).repairRounds());
         assertEquals(Integer.MAX_VALUE, new McpConfig(Map.of("SHERIFF_REPAIR_ROUNDS", "many"), module).repairRounds());
+    }
+
+    @Test
+    @DisplayName("sessions are reported beside the tasks only with SHERIFF_REPORT on")
+    void sessionReportsGoBesideTheTasks() {
+        Path state = workspace.resolve("state");
+        assertEquals(Optional.of(state.resolve("sheriff-mcp").resolve("reports")), new McpConfig(Map.of(
+                "SHERIFF_REPORT", "1", "XDG_STATE_HOME", state.toString()), workspace).reportsDirectory());
+        assertEquals(Optional.empty(), new McpConfig(Map.of("XDG_STATE_HOME", state.toString()), workspace)
+                .reportsDirectory());
     }
 }
