@@ -16,10 +16,12 @@ import com.kaizten.sheriff.infrastructure.docker.DockerFixerScriptSource;
 import com.kaizten.sheriff.infrastructure.docker.ImageProvisioning;
 import com.kaizten.sheriff.infrastructure.hook.HookExit;
 import com.kaizten.sheriff.infrastructure.hook.SheriffGateHook;
+import com.kaizten.sheriff.infrastructure.metrics.ReportComparison;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -48,6 +50,10 @@ public final class Agent {
     private static final String MAX_ITERATIONS = "--max-iterations";
     private static final String MAX_FILES = "--max-files-per-batch";
     private static final String MAX_ERRORS = "--max-errors-per-batch";
+    private static final String COMPARE_REPORTS = "--compare-reports";
+    private static final String CSV = "--csv";
+    private static final String CURRENT_FOLDER = ".";
+    private static final String COULD_NOT_COMPARE = "Could not read the reports: %s%n";
     private static final String BATCH_BY = "--batch-by";
     private static final String NO_GIT_SAFETY = "--no-git-safety";
     private static final String EXTRACT_RULES = "--extract-rules";
@@ -83,7 +89,9 @@ public final class Agent {
               --hook-gate             Claude Code PreToolUse hook: reads the call on stdin
               --hook-stop             Claude Code Stop hook: a turn can't end dirty
               --hook-turn             Claude Code UserPromptSubmit hook: records the turn's start
-              --json-report PATH      also write the result as JSON
+              --json-report PATH      also write the result as JSON (the loop: its whole run's report)
+              --compare-reports PATH  compare loop reports, files or folders (several), as Markdown
+              --csv DIR               with --compare-reports, also write its tables as CSV files
               --max-iterations N      cap the loop's iterations
               --max-files-per-batch N cap how many files one pass may touch
               --max-errors-per-batch N cap how many errors one pass is given (0: no cap)
@@ -309,6 +317,9 @@ public final class Agent {
         }
         if (arguments.contains(HOOK_GATE) || arguments.contains(HOOK_STOP) || arguments.contains(HOOK_TURN)) {
             return hook(arguments);
+        }
+        if (arguments.contains(COMPARE_REPORTS)) {
+            return compareReports(arguments);
         }
         if (needsImage(arguments) && !imageReady()) {
             return FAILURE;
@@ -618,6 +629,57 @@ public final class Agent {
         Optional<Path> reportFile = composition.loopReportFile(Optional.ofNullable(report));
         RunSummary summary = composition.fixLoop(settingsFor(arguments), automaticRepair, reportFile).execute();
         return summary.ok() ? SUCCESS : FAILURE;
+    }
+
+    /**
+     * Compares the loop reports under some files and folders, printing the
+     * comparison as Markdown, and writing its tables as CSV when asked.
+     *
+     * <p>No Sheriff and no catalog: it only reads what runs already wrote.
+     * With no path it reads the current folder.
+     *
+     * @param arguments the command line, with the paths after the option
+     * @return success when at least one report was read
+     */
+    private int compareReports(List<String> arguments) {
+        List<Path> paths = valuesAfter(arguments, COMPARE_REPORTS).stream().map(Path::of).toList();
+        if (paths.isEmpty()) {
+            paths = List.of(Path.of(CURRENT_FOLDER));
+        }
+        try {
+            ReportComparison comparison = ReportComparison.of(paths);
+            System.out.print(comparison.markdown(paths.toString()));
+            Path csv = pathAfter(arguments, CSV);
+            if (csv != null && comparison.runs() > NO_ERRORS) {
+                comparison.writeCsv(csv);
+            }
+            return comparison.runs() > NO_ERRORS ? SUCCESS : FAILURE;
+        } catch (IOException exception) {
+            System.out.printf(COULD_NOT_COMPARE, exception.getMessage());
+            return FAILURE;
+        }
+    }
+
+    /**
+     * Every value after an option that takes several, up to the next option.
+     *
+     * @param arguments the command line
+     * @param option the option to look for
+     * @return the values, empty when there are none
+     */
+    static List<String> valuesAfter(List<String> arguments, String option) {
+        int index = arguments.indexOf(option);
+        if (index == NOT_PRESENT) {
+            return List.of();
+        }
+        List<String> values = new ArrayList<>();
+        for (String next : arguments.subList(index + 1, arguments.size())) {
+            if (next.startsWith(OPTION_PREFIX)) {
+                break;
+            }
+            values.add(next);
+        }
+        return values;
     }
 
     /**

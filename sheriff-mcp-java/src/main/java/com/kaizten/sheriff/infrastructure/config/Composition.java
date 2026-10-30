@@ -30,6 +30,7 @@ import com.kaizten.sheriff.infrastructure.docker.DockerFixerScriptSource;
 import com.kaizten.sheriff.infrastructure.docker.ImageProvisioning;
 import com.kaizten.sheriff.infrastructure.docker.SheriffDockerAnalyzer;
 import com.kaizten.sheriff.infrastructure.docker.SheriffImage;
+import com.kaizten.sheriff.infrastructure.docker.SheriffRepair;
 import com.kaizten.sheriff.infrastructure.extractor.RuleCatalogExtractor;
 import com.kaizten.sheriff.infrastructure.git.GitVersionControl;
 import com.kaizten.sheriff.infrastructure.git.UntestedMethods;
@@ -712,7 +713,8 @@ public final class Composition {
         knobs.put(MAX_ITERATIONS_FIELD, settings.maxIterations());
         knobs.put(GIT_SAFETY_FIELD, settings.useGitSafety());
         knobs.put(SHERIFF_FIXERS_FIELD, automaticRepair && !configuration.mockMode());
-        knobs.put(REPAIR_ROUNDS_FIELD, configuration.repairRounds());
+        knobs.put(REPAIR_ROUNDS_FIELD,
+                configuration.repairRounds() == SheriffRepair.NO_LIMIT ? null : configuration.repairRounds());
         knobs.put(RULES_IN_PROMPT_FIELD, configuration.maxRulesInPrompt());
         knobs.put(PROTOTYPE_FIELD, configuration.prototype());
         knobs.put(MOCK_FIELD, configuration.mockMode());

@@ -886,9 +886,7 @@ line of `metrics-*.jsonl` beside the prompt logs with its time and its
 `TokenUsage`. Claude Code's comes from its JSON, at list price; Codex's from
 the events of `codex exec --json`, which `CodexCliFixer` adds, with its cached
 input taken out of its input so the two count alike. The API backends report
-none yet. `scripts/benchmark.sh` adds the lines of many runs up, per backend
-and strategy; a pass's tokens are shared among the rules it repaired by their
-errors, which is an approximation, and it says so.
+none yet.
 
 **A whole run is reported too, on request** (`LoopReport`, beside
 `MetricsFile` through `BothMetrics`): `SHERIFF_REPORT=1`, a user's setting
@@ -902,6 +900,16 @@ passes and their totals, and is written whole when the run ends. Counts,
 codes and paths only: a finding's description quotes code. When the last
 pass was never measured it analyzes once more, so `final` is what the tree
 holds. `scripts/e2e.sh` scenario 22 checks `final` against a check after.
+
+**Runs are compared in the jar, not in a script** (`ReportComparison`,
+`--compare-reports PATH... [--csv DIR]`): reports grouped by project
+(component and commit), backend, model and strategy, the mean of the runs,
+with cost per repair as totals divided, by run, and by rule. One
+implementation, as `scripts/benchmark.sh` hands its runs to it instead of its
+own Python, which had drifted (its false-positive filter knew one of the
+four `KnownFalsePositives` drops) and needed a final `--check-only` the report
+now makes unnecessary. `--repo PATH[:COMPONENT]` benchmarks a local project,
+cloned at its HEAD for every run.
 
 **A pass's errors are grouped by file or by rule** (`BatchGrouping`,
 `SHERIFF_BATCH_BY`, `--batch-by`), as which costs less is a question for the

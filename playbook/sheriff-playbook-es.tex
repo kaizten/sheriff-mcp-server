@@ -578,6 +578,66 @@ Ollama).
 \done El resumen final dice cuántos errores quedan y si los tests pasan.
 \end{play}
 
+\begin{play}{Comparar configuraciones, backends y modelos}
+\when Quieres saber qué forma de reparar le va mejor a tu proyecto: pocos
+ficheros por pasada o pocos errores por pasada, Claude Code o Codex, un modelo
+u otro.
+\asks Enciende los informes (\code{SHERIFF_REPORT=1}, en tus ajustes o para la
+orden) y lanza el bucle una vez por configuración desde la carpeta del módulo,
+volviendo a tu rama entre una y otra para que todas partan del mismo código.
+Después compáralas:
+\begin{command}[basicstyle=\ttfamily\footnotesize]{bash}
+export SHERIFF_REPORT=1
+jar=~/.local/share/sheriff-agent/sheriff-mcp.jar
+java -jar $jar --agent --max-files-per-batch 5
+git switch -
+java -jar $jar --agent --max-files-per-batch 0 --max-errors-per-batch 2
+git switch -
+AI_BACKEND=codex_cli java -jar $jar --agent
+git switch -
+java -jar $jar --agent --compare-reports ~/.local/state/sheriff-mcp/reports
+\end{command}
+\happens Cada ejecución acaba diciendo dónde ha dejado su informe, con el
+nombre de cuándo empezó, el componente y el backend:
+\begin{answer}[El final de una ejecución]
+This run's report: /home/ana/.local/state/sheriff-mcp/reports/loop-20261030-123325-app-local.json
+\end{answer}
+El informe recoge con qué se le pidió trabajar, los errores de los que partió
+y los que dejó regla a regla, cada pasada y lo que costó. La comparación pone
+las ejecuciones una al lado de otra, por configuración (la media de sus
+ejecuciones), por ejecución y por regla:
+\begin{answer}[Las primeras líneas de la comparación]
+# Runs of the repair loop compared
+
+4 run(s) in 4 configuration(s).
+\end{answer}
+Algunas de sus columnas, de una prueba sobre una clase con 8 errores:
+
+\begin{center}
+\rowcolors{2}{pbcode}{white}
+\begin{tabularx}{0.95\linewidth}{@{\hspace{6pt}}>{\ttfamily}p{16mm}>{\ttfamily}p{18mm}LLLL}
+\headrow \thead{Estrategia} & \thead{Backend} & \thead{Errores que quedan} & \thead{Reparados por el modelo} & \thead{Pasadas del modelo} & \thead{Tokens por reparación} \\
+file:0:2 & claude\_cli & 2.0 & 6.0 & 3.0 & 37996 \\
+file:5 & claude\_cli & 0.0 & 8.0 & 2.0 & 19085 \\
+file:0:2 & codex\_cli & 0.0 & 6.0 & 3.0 & 73927 \\
+file:5 & codex\_cli & 0.0 & 6.0 & 1.0 & 29844 \\
+\end{tabularx}
+\end{center}
+Una estrategia es la agrupación, los ficheros que se dan en una pasada y, si
+se limitan, sus errores: \code{file:5} son todos los errores de cinco
+ficheros, \code{file:0:2} dos errores por pasada. Con \code{--csv DIR} las
+tablas van también a ficheros CSV, para una hoja de cálculo.
+\done Sabes qué configuración deja menos errores con menos tokens en tu
+proyecto.
+\end{play}
+
+\begin{warning}
+Cada ejecución gasta tokens, como \tool{sheriff_autofix}. Desde un clon de las
+herramientas, \code{scripts/benchmark.sh --repo RUTA} ejecuta cada
+configuración y backend que se le pida, tantas veces como se le pida, cada una
+desde una copia nueva de tu repositorio, y escribe la comparación él mismo.
+\end{warning}
+
 \begin{play}{Impedir que entren errores en CI}
 \when Quieres que la integración continua falle si el código no cumple.
 \asks Desde la raíz del proyecto:

@@ -559,6 +559,7 @@ how it checks itself.
 | `--rules [QUERY]` | The rules a profile enforces, or a search |
 | `--fixer CODE` | The script Sheriff runs to repair `CODE` |
 | `--extract-rules` | Rebuilds the rule catalog from the image |
+| `--compare-reports PATH...` | Loop reports side by side (*Comparing runs*, below); `--csv DIR` writes the tables too |
 
 Loop flags: `--max-iterations N`, `--max-files-per-batch N` (5),
 `--batch-by file|rule` (`file`: every error of those files; `rule`: one rule's
@@ -583,13 +584,7 @@ in the pass's files (the whole component for Sheriff's fixers; `null` when no
 analysis followed), `repaired`, and `usage`: the models, the input, output and
 prompt-cache tokens, the turns and the cost. Claude Code's cost is at list
 price, also on a subscription; Codex reports none, and its fixer adds `--json`
-to a `codex exec` so that it reports its tokens. `scripts/benchmark.sh` runs the
-loop over a few public projects at pinned commits, with each backend and model
-asked for, and with each strategy: `file:N` (every error of N files a pass)
-and `rule:N` (one rule's errors in N files), `0` for no limit. It adds those
-lines up into which strategy leaves least for least, which rules Sheriff
-finds, which its fixers and which the model repair, what is left, and the time
-and tokens per repair:
+to a `codex exec` so that it reports its tokens.
 
 **A run's report.** With `SHERIFF_REPORT=1`, a setting of your own file (or a
 variable), every run of the loop, `sheriff_autofix`'s included, ends by
@@ -614,9 +609,34 @@ and paths, never a finding's text, which can quote code:
 A run cut right after a pass (its fixer failed, or it changed a file outside
 its batch) is analyzed once more, so `final` is what is in the tree.
 
+**Comparing runs.** `--compare-reports` reads the loop reports in the files
+and folders it is given (with none, the current folder), at any depth, and
+prints them side by side as Markdown: by configuration, the mean of its runs;
+by run; and by rule, what was found, repaired by Sheriff and by the model,
+introduced and left. A configuration is a project (its component and the
+commit it started from), a backend, a model and a strategy, written as the
+benchmark writes one (`file:5`, `rule:5`, `file:0:20`). `--csv DIR` also
+writes `configurations.csv`, `runs.csv`, `rules.csv` and `passes.csv`. It runs
+no Sheriff, and passes over, and counts, any file that is no loop report:
+
+```bash
+java -jar ~/.local/share/sheriff-agent/sheriff-mcp.jar --agent --compare-reports ~/.local/state/sheriff-mcp/reports
+java -jar ~/.local/share/sheriff-agent/sheriff-mcp.jar --agent --compare-reports a.json b.json --csv tables/
+```
+
+**The benchmark.** `scripts/benchmark.sh` runs the loop over a few public
+projects at pinned commits, or over your own with `--repo PATH[:COMPONENT]`
+(cloned at its HEAD for every run, so each starts from the same code and the
+repository is never touched), with each backend and model asked for, each
+strategy, `file:N` (every error of N files a pass), `rule:N` (one rule's
+errors in N files) and either with `:E`, at most E errors a pass (`0` is no
+limit), and as many runs of each as asked. Every run writes its report, and
+the comparison above makes the tables, in `summary.md` and the CSV files:
+
 ```bash
 scripts/benchmark.sh --runs 3 --backend claude_cli:claude-sonnet-5-5 --backend codex_cli
-scripts/benchmark.sh --strategy file:5 --strategy rule:5 --strategy file:0
+scripts/benchmark.sh --strategy file:5 --strategy rule:5 --strategy file:0:20
+scripts/benchmark.sh --repo ~/code/shop --repo ~/code/monorepo:api --strategy file:5 --strategy file:0:10
 scripts/benchmark.sh --report ~/.local/state/sheriff-mcp/benchmark/<run>   # the tables again
 ```
 

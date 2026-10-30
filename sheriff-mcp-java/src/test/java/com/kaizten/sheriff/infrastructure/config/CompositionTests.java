@@ -231,6 +231,7 @@ class CompositionTests {
         assertEquals(20, knobs.get("max_errors_per_batch"));
         assertEquals(false, knobs.get("sheriff_fixers"), "the mock has no fixers");
         assertEquals(true, knobs.get("mock"));
+        assertEquals(null, knobs.get("repair_rounds"), "no limit");
         assertEquals(Map.of(), context.get("sheriff"));
         assertTrue(context.containsKey("project"));
     }

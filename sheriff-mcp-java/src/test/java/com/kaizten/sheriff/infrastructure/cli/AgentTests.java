@@ -271,6 +271,32 @@ class AgentTests {
     }
 
     @Test
+    @DisplayName("loop reports are compared from a folder, with no Sheriff, and their tables can go to CSV")
+    void loopReportsAreCompared() throws IOException {
+        Path reports = Files.createDirectories(workspace.resolve("reports"));
+        run(Map.of("SHERIFF_AGENT_GIT_SAFETY", "0", "SHERIFF_MAX_ITERATIONS", "1"),
+                ProcessOutcome.completed(0, SHERIFF_OUTPUT, ""),
+                List.of("--json-report", reports.resolve("run.json").toString()));
+        Path csv = workspace.resolve("csv");
+        assertEquals(Agent.SUCCESS, run(Map.of(), ProcessOutcome.unavailable("no docker"),
+                List.of("--compare-reports", reports.toString(), "--csv", csv.toString())));
+        assertTrue(printed.contains("1 run(s) in 1 configuration(s)"), printed);
+        assertTrue(Files.exists(csv.resolve("configurations.csv")));
+        Path empty = Files.createDirectories(workspace.resolve("empty"));
+        assertEquals(Agent.FAILURE, run(Map.of(), ProcessOutcome.unavailable("no docker"),
+                List.of("--compare-reports", empty.toString())));
+        assertTrue(printed.contains("No loop report found"), printed);
+    }
+
+    @Test
+    @DisplayName("an option that takes several values takes them up to the next option")
+    void severalValuesUpToTheNextOption() {
+        assertEquals(List.of("a", "b"), Agent.valuesAfter(List.of("--compare-reports", "a", "b", "--csv", "c"),
+                "--compare-reports"));
+        assertEquals(List.of(), Agent.valuesAfter(List.of("--csv", "c"), "--compare-reports"));
+    }
+
+    @Test
     @DisplayName("the command line overrides configuration, and nothing else does")
     void commandLineOverridesTheConfiguredSettings() {
         Configuration configuration = new Configuration(
