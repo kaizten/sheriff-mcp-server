@@ -13,6 +13,7 @@ import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
@@ -78,6 +79,8 @@ public final class JsonRpcServer {
     private static final String SERVER_INFO_FIELD = "serverInfo";
     private static final String NAME_FIELD = "name";
     private static final String VERSION_FIELD = "version";
+    private static final String CLIENT_INFO_FIELD = "clientInfo";
+    private static final String UNNAMED = "";
     private static final String CONTENT_FIELD = "content";
     private static final String TYPE_FIELD = "type";
     private static final String TEXT_TYPE = "text";
@@ -103,6 +106,7 @@ public final class JsonRpcServer {
     private final String instructions;
     private final ObjectMapper json = new ObjectMapper();
     private final Object writing = new Object();
+    private volatile BiConsumer<String, String> clientNamed = (name, version) -> { };
 
     /**
      * Wires the protocol layer to what actually answers the calls.
@@ -191,6 +195,19 @@ public final class JsonRpcServer {
     }
 
     /**
+     * This server, telling someone the name and version of the client each
+     * {@code initialize} gives, which a session's report keeps.
+     *
+     * @param listener what is told, the name first; each is empty when the
+     *     client gave none
+     * @return this server
+     */
+    public JsonRpcServer onClient(BiConsumer<String, String> listener) {
+        this.clientNamed = listener;
+        return this;
+    }
+
+    /**
      * The {@code initialize} handshake's result.
      *
      * <p>The version is the client's only when this server knows it; any
@@ -202,6 +219,8 @@ public final class JsonRpcServer {
      * @return the protocol version, capabilities and identity to answer with
      */
     private ObjectNode initializeResult(JsonNode params) {
+        JsonNode client = params.path(CLIENT_INFO_FIELD);
+        clientNamed.accept(client.path(NAME_FIELD).asText(UNNAMED), client.path(VERSION_FIELD).asText(UNNAMED));
         JsonNode requested = params.path(PROTOCOL_VERSION_FIELD);
         String version = SUPPORTED_PROTOCOL_VERSIONS.contains(requested.asText())
                 ? requested.asText()

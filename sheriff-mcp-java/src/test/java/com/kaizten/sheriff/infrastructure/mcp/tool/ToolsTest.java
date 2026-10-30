@@ -37,6 +37,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import com.kaizten.sheriff.infrastructure.mcp.SessionReport;
 
 /**
  * The read-only/deterministic tools end to end, without Docker: {@link
@@ -1643,5 +1644,19 @@ final class ToolsTest {
             assertTrue(outcome.text().contains("'" + name + "' is not a component"), outcome.text());
             assertFalse(outcome.text().contains("could not run"), outcome.text());
         }
+    }
+
+    @Test
+    @DisplayName("every call is told to the session's report when it ends, a refused one as failed")
+    void everyCallIsToldToTheSessionsReport() throws IOException {
+        SessionReport report = new SessionReport(state.resolve("session.json"), Map.of());
+        Tools tools = tools(List.of()).reportingTo(report);
+        tools.call("sheriff_guidelines", Map.of("query", "javadoc"));
+        tools.call("no_such_tool", null);
+        com.fasterxml.jackson.databind.JsonNode session = new com.fasterxml.jackson.databind.ObjectMapper()
+                .readTree(Files.readString(state.resolve("session.json")));
+        assertEquals(2, session.get("totals").get("calls").asInt());
+        assertEquals("javadoc", session.get("calls").get(0).get("arguments").get("query").asText());
+        assertTrue(session.get("calls").get(1).get("failed").asBoolean());
     }
 }

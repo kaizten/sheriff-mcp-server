@@ -8,6 +8,7 @@ import com.kaizten.sheriff.infrastructure.git.UntestedMethods;
 import com.kaizten.sheriff.infrastructure.hook.StuckErrors;
 import com.kaizten.sheriff.infrastructure.mcp.McpConfig;
 import com.kaizten.sheriff.infrastructure.mcp.ServerVersion;
+import com.kaizten.sheriff.infrastructure.mcp.SessionReport;
 import com.kaizten.sheriff.infrastructure.mcp.SheriffRunner;
 import com.kaizten.sheriff.infrastructure.mcp.SheriffUnavailableException;
 import com.kaizten.sheriff.infrastructure.mcp.protocol.ToolOutcome;
@@ -17,6 +18,7 @@ import com.kaizten.sheriff.infrastructure.mcp.task.TaskRegistry;
 import com.kaizten.sheriff.infrastructure.process.SystemProcessRunner;
 import com.kaizten.sheriff.infrastructure.shell.ShellTestRunner;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -78,6 +80,7 @@ public final class Tools implements AutoCloseable {
     private final AtomicBoolean updateNoticeGiven = new AtomicBoolean();
     private volatile Supplier<Optional<String>> updates = Optional::empty;
     private final AtomicBoolean settingsNoticeGiven = new AtomicBoolean();
+    private volatile Optional<SessionReport> session = Optional.empty();
 
     /**
      * Wires the tools to what actually runs Sheriff and reads its rules.
@@ -280,6 +283,33 @@ public final class Tools implements AutoCloseable {
      * @return the text to answer with, and whether it is a failure
      */
     public ToolOutcome call(String name, Map<String, Object> arguments) {
+        long started = System.nanoTime();
+        ToolOutcome outcome = answer(name, arguments);
+        session.ifPresent(report -> report.called(name, arguments == null ? Map.of() : arguments,
+                Duration.ofNanos(System.nanoTime() - started), outcome.isError()));
+        return outcome;
+    }
+
+    /**
+     * The tools, telling a session's report of every call when it ends.
+     *
+     * @param report the report
+     * @return these tools
+     */
+    public Tools reportingTo(SessionReport report) {
+        this.session = Optional.of(report);
+        return this;
+    }
+
+    /**
+     * Runs one tool by name, as {@link #call} does, before the call is
+     * reported.
+     *
+     * @param name the tool to run
+     * @param arguments its arguments, {@code null} treated as none
+     * @return the text to answer with, and whether it is a failure
+     */
+    private ToolOutcome answer(String name, Map<String, Object> arguments) {
         Tool tool = byName.get(name);
         if (tool == null) {
             return ToolOutcome.failure(String.format(NO_TOOL, name, String.join(NAME_SEPARATOR, byName.keySet())));

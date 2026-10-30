@@ -282,4 +282,15 @@ final class JsonRpcServerTest {
             assertTrue(answered.get(call - 1).contains("\"id\":" + call), answered.toString());
         }
     }
+
+    @Test
+    @DisplayName("the client's name and version, from initialize, are told to whoever asked")
+    void theClientIsToldOnInitialize() throws Exception {
+        List<String> told = new CopyOnWriteArrayList<>();
+        JsonRpcServer named = server("", false).onClient((name, version) -> told.add(name + " " + version));
+        named.handle(request("initialize", Map.of("clientInfo", Map.of("name", "codex-mcp-client", "version",
+                "0.160.0"))));
+        named.handle(request("initialize", Map.of()));
+        assertEquals(List.of("codex-mcp-client 0.160.0", " "), told);
+    }
 }

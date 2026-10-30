@@ -559,7 +559,7 @@ how it checks itself.
 | `--rules [QUERY]` | The rules a profile enforces, or a search |
 | `--fixer CODE` | The script Sheriff runs to repair `CODE` |
 | `--extract-rules` | Rebuilds the rule catalog from the image |
-| `--compare-reports PATH...` | Loop reports side by side (*Comparing runs*, below); `--csv DIR` writes the tables too |
+| `--compare-reports PATH...` | Reports of runs and sessions side by side (*Comparing runs and sessions*, below); `--csv DIR` writes the tables too |
 
 Loop flags: `--max-iterations N`, `--max-files-per-batch N` (5),
 `--batch-by file|rule` (`file`: every error of those files; `rule`: one rule's
@@ -609,15 +609,32 @@ and paths, never a finding's text, which can quote code:
 A run cut right after a pass (its fixer failed, or it changed a file outside
 its batch) is analyzed once more, so `final` is what is in the tree.
 
-**Comparing runs.** `--compare-reports` reads the loop reports in the files
+**A session's report.** With the same setting, every session of the MCP
+server writes `session-<when>-<project folder>.json` beside them, rewritten
+after every call, so a session a client stops without warning (Codex does)
+still has it. It says which assistant connected (`client`: the name and
+version its `initialize` gave),
+this jar's version, Sheriff's image and the project, and every call: its
+`tool` and `arguments`, `elapsed_ms`, whether it `failed`, and the
+`analyses` it made, rule by rule, `before` and `after` for a repair. Its
+`totals` add up the calls, by tool and failed, their time, the errors the
+first analysis found (`first_errors`) and the last analysis of each component
+(`last_errors`). What the assistant's model spent is not visible to the
+server, and is not in it.
+
+**Comparing runs and sessions.** `--compare-reports` reads the reports in the files
 and folders it is given (with none, the current folder), at any depth, and
 prints them side by side as Markdown: by configuration, the mean of its runs;
 by run; and by rule, what was found, repaired by Sheriff and by the model,
 introduced and left. A configuration is a project (its component and the
 commit it started from), a backend, a model and a strategy, written as the
 benchmark writes one (`file:5`, `rule:5`, `file:0:20`). `--csv DIR` also
-writes `configurations.csv`, `runs.csv`, `rules.csv` and `passes.csv`. It runs
-no Sheriff, and passes over, and counts, any file that is no loop report:
+writes `configurations.csv`, `runs.csv`, `rules.csv` and `passes.csv`.
+Sessions are compared apart, by client and project (the mean of its
+sessions) and by session, with their calls, `sheriff_fix` calls, the errors
+they started from and left, and the time in their calls; `--csv` adds
+`sessions.csv`. It runs no Sheriff, and passes over, and counts, any file
+that is no report:
 
 ```bash
 java -jar ~/.local/share/sheriff-agent/sheriff-mcp.jar --agent --compare-reports ~/.local/state/sheriff-mcp/reports
@@ -770,7 +787,7 @@ which no tool reports.
 | `SHERIFF_MAX_ITERATIONS`, `SHERIFF_MAX_FILES_PER_BATCH` | sized from the errors, `5` | The loop's passes, and the files a model is given at once |
 | `SHERIFF_BATCH_BY` | `file` | What a pass's errors have in common: `file`, every error of a few files; `rule`, one rule's errors in a few files |
 | `SHERIFF_MAX_ERRORS_PER_BATCH` | `0` | The errors a model is given at once, at most, whatever their files; `0` for no cap |
-| `SHERIFF_REPORT` | `0` | `1`: every run of the loop writes its report (see *A run's report*); from your own file only |
+| `SHERIFF_REPORT` | `0` | `1`: every run of the loop and every session of the MCP server writes its report (see *A run's report*); from your own file only |
 | `SHERIFF_MAX_RULES_IN_PROMPT` | the loop's own limit | Rules of the profile put in one prompt |
 | `SHERIFF_AGENT_GIT_SAFETY` | `1` | `0` lets the loop edit the working tree as it is: no branch of its own, no commit per pass, no stop when a model edits a file outside its batch. Your file only |
 | `CODEX_COMMAND`, `ANTIGRAVITY_COMMAND` | `codex exec --sandbox workspace-write`, `agy --mode accept-edits` | How the loop starts `codex` and `agy`, without the prompt (to add `--model`). Your file only |

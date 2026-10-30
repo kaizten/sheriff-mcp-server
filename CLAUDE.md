@@ -911,6 +911,16 @@ four `KnownFalsePositives` drops) and needed a final `--check-only` the report
 now makes unnecessary. `--repo PATH[:COMPONENT]` benchmarks a local project,
 cloned at its HEAD for every run.
 
+**A session of the MCP server is reported too**, with the same setting
+(`SessionReport`, `McpServer.sessionReport`): `JsonRpcServer.onClient` hands
+it the name and version `initialize` gives, `SheriffRunner.reportingTo` every
+full analysis and repair, and `Tools.call` each call when it ends. It is
+rewritten whole after every call, as Codex stops the server without letting
+it end, and holds the client, the calls and their counts, never a model's
+tokens, which the server does not see. `--compare-reports` reads sessions
+too and compares them apart, by client and project. `scripts/e2e.sh`
+scenario 23 runs a session with a named client.
+
 **A pass's errors are grouped by file or by rule** (`BatchGrouping`,
 `SHERIFF_BATCH_BY`, `--batch-by`), as which costs less is a question for the
 benchmark, not a rule. By file, the default, a pass is every error of up to

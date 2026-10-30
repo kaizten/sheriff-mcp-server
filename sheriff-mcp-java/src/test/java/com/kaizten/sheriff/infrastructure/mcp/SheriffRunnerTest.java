@@ -256,4 +256,17 @@ final class SheriffRunnerTest {
             return outcome;
         }
     }
+
+    @Test
+    @DisplayName("a full analysis is told to the session's report, a repair with what it started from")
+    void anAnalysisIsToldToTheSessionsReport() {
+        String stdout = "app has 1 error(s) under JAVA\n"
+                + "[{\"file\":\"/data/Converter.java\",\"description\":\"bad name\","
+                + "\"howToSolve\":\"rename it\",\"referenceCode\":\"RULE_A\",\"type\":\"ERROR\"}]";
+        SessionReport report = new SessionReport(repository.resolve("session.json"), java.util.Map.of());
+        runner(ProcessOutcome.completed(0, stdout, "")).reportingTo(report).test("app", "JAVA");
+        com.fasterxml.jackson.databind.JsonNode totals = report.document().get("totals");
+        assertEquals(1, totals.get("first_errors").get("after").get("total").asInt());
+        assertEquals("JAVA", totals.get("last_errors").get("app").get("profile").asText());
+    }
 }

@@ -373,4 +373,19 @@ final class McpServerTest {
         assertTrue(McpServer.imageFor(new McpConfig(Map.of(), workspace), docker).now());
         assertTrue(commands.stream().noneMatch(command -> command.contains("pull")), commands.toString());
     }
+
+    @Test
+    @DisplayName("a session's report is named after when it started and the project, only with reports on")
+    void aSessionReportIsNamedAfterTheProject() {
+        Path state = workspace.resolve("state");
+        McpConfig on = new McpConfig(Map.of("SHERIFF_REPORT", "1", "XDG_STATE_HOME", state.toString(),
+                "SHERIFF_REPO", workspace.toString()), workspace);
+        SessionReport report = McpServer.sessionReport(on,
+                com.kaizten.sheriff.infrastructure.docker.ImageProvisioning.alreadyReady()).orElseThrow();
+        assertEquals(state.resolve("sheriff-mcp").resolve("reports"), report.file().getParent());
+        assertTrue(report.file().getFileName().toString().matches("session-\\d{8}-\\d{6}-.+\\.json"),
+                report.file().toString());
+        assertTrue(McpServer.sessionReport(new McpConfig(Map.of(), workspace),
+                com.kaizten.sheriff.infrastructure.docker.ImageProvisioning.alreadyReady()).isEmpty());
+    }
 }
