@@ -103,8 +103,9 @@ jobs:
           test ! -e "$HOME/.claude" && test ! -e "$HOME/.codex" && test ! -e "$HOME/.gemini"
           # Codex installed with npm under nvm, in a folder that is not on the
           # installer's PATH. No PATH line is given for it, as it names one
-          # Node version.
-          nvm="$temp/nvm"; mkdir -p "$nvm/versions/node/v22.0.0/bin"; cp "$tools/codex" "$nvm/versions/node/v22.0.0/bin/"
+          # Node version. Of two versions the newer is taken, by number.
+          nvm="$temp/nvm"
+          for version in v9.0.0 v22.0.0; do mkdir -p "$nvm/versions/node/$version/bin"; cp "$tools/codex" "$nvm/versions/node/$version/bin/"; done
           NVM_DIR="$nvm" PATH="$build:$PATH" /bin/bash scripts/install.sh --no-pull > "$none" 2>&1 || { cat "$none"; exit 1; }
           cat "$none"
           grep -q "Sheriff is set up for Codex." "$none"
