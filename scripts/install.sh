@@ -506,7 +506,9 @@ find_command() {
 }
 
 # A command found off this shell's PATH, said once: where it is, that it is set
-# up all the same, and the line that puts its folder on the user's PATH.
+# up all the same, and the line that puts its folder on the user's PATH. None
+# for a folder of one of nvm's Node versions: a PATH naming one version breaks
+# when the version changes, and nvm puts the version in use there itself.
 off_path() {
   local name="$1" path="$2" folder
   if command -v "$name" >/dev/null 2>&1; then
@@ -514,6 +516,12 @@ off_path() {
   fi
   folder="$(dirname "$path")"
   echo "$name is not on this shell's PATH but is in $folder, so it is set up all the same."
+  case "$folder" in
+    "${NVM_DIR:-${HOME:-}/.nvm}"/versions/node/*)
+      echo "That is one of nvm's Node versions: your terminal finds $name while nvm uses that version."
+      return 0
+      ;;
+  esac
   echo "If your terminal does not find $name either, this puts it on its PATH:"
   case "${SHELL##*/}" in
     fish) echo "  fish_add_path '$folder'" ;;

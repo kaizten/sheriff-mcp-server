@@ -55,7 +55,7 @@ is a `codex` command or a `~/.codex` folder (`CODEX_HOME`), and Antigravity
 when there is an `agy` command. A command is looked for on the PATH and then in
 the folders npm, nvm, Homebrew and the assistants' own installers put it in;
 one found off the PATH is set up all the same, and the installer prints the line that puts it on
-yours. It ends saying which it set up, and for each assistant it did not find,
+yours, except for one in a folder of one of nvm's Node versions, which nvm puts on the PATH itself. It ends saying which it set up, and for each assistant it did not find,
 the command that sets it up by hand. With none of them it writes no assistant's configuration and
 says so: the jar is still the CI gate (`--check`) and the Maven plugin's, and
 running the line again once an assistant is installed sets it up. A release

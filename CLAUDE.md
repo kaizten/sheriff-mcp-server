@@ -133,7 +133,8 @@ it. A command is looked for on the PATH and then where npm, nvm, Homebrew and
 the assistants' installers put it (`find_command`, `Find-Assistant`), as an assistant installed
 is not always on the PATH the installer is given. One found off the
 PATH is set up all the same, and named with the line that puts it on the
-user's; one not found gets the command that sets it up without looking.
+user's, but for a folder of one of nvm's Node versions, which that line would
+pin; one not found gets the command that sets it up without looking.
 
 - **Claude Code** (a `claude` command, or `~/.claude`, which the desktop
   app and the IDE extensions read without putting `claude` on the PATH): the

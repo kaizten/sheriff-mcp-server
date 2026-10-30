@@ -222,7 +222,8 @@ El servidor MCP & Al final lo arranca una vez, como lo arrancará tu asistente,
 Busca \code{claude}, \code{codex} y \code{agy} en el \code{PATH} y en las
 carpetas donde los dejan npm, nvm, Homebrew y sus propios instaladores. El
 que encuentra fuera del \code{PATH} lo configura igualmente, y te imprime la
-línea que lo pone en el tuyo. Los hooks de Claude Code los escribe aunque no
+línea que lo pone en el tuyo, salvo dentro de la carpeta de nvm, donde eso lo
+hace nvm. Los hooks de Claude Code los escribe aunque no
 haya \code{claude}, si existe la carpeta \path{~/.claude}, y configura Codex
 aunque no haya \code{codex}, si existe \path{~/.codex}: son solo archivos de
 ajustes, y las aplicaciones de escritorio y las extensiones de los editores
@@ -1369,7 +1370,8 @@ Si no, instálalo y repite la línea.}
 el instalador lo ha encontrado en esa carpeta y lo ha configurado. Sheriff no
 necesita que esté en el \code{PATH}. Si tu terminal tampoco encuentra el
 comando, la línea que imprime debajo pone esa carpeta en tu \code{PATH}; abre
-una terminal nueva después.}
+una terminal nueva después. Si la carpeta es de una versión de Node de nvm, no
+hay tal línea: tu terminal encuentra el comando mientras nvm use esa versión.}
 \problem{\code{No assistant was found}}{No hay instalado ninguno de Claude
 Code, Codex ni Antigravity, así que el instalador no ha escrito nada en la
 configuración de ningún asistente: Sheriff queda solo como comprobación de CI
