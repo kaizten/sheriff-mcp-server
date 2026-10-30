@@ -22,10 +22,6 @@ import java.util.Map;
 public final class ShellTestRunner implements TestRunner {
 
     private static final String DISABLED_MESSAGE = "No verification command configured; skipping the test gate.";
-    private final ProcessRunner processes;
-    private final String command;
-    private final Path workingDirectory;
-    private final Duration timeout;
     /**
      * Why a component with no build tool had no tests run, as it is reported.
      */
@@ -37,6 +33,10 @@ public final class ShellTestRunner implements TestRunner {
      * default on its way through the environment.
      */
     public static final String NO_TESTS_COMMAND = "echo '" + NO_TESTS_REASON + "'";
+    private final ProcessRunner processes;
+    private final String command;
+    private final Path workingDirectory;
+    private final Duration timeout;
 
     /**
      * Wires the runner to one command.

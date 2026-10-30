@@ -37,6 +37,8 @@
         <jackson.version>2.22.4</jackson.version>
         <surefire.version>3.2.5</surefire.version>
         <shade.version>3.5.3</shade.version>
+        <!-- The version ChangeCoverage measures a change with, so both agree. -->
+        <jacoco.version>0.8.15</jacoco.version>
     </properties>
 
     <dependencyManagement>
@@ -112,6 +114,30 @@
                         <sheriff.temp.home>${project.build.directory}/sheriff-temp</sheriff.temp.home>
                     </systemPropertyVariables>
                 </configuration>
+            </plugin>
+            <!--
+              Coverage of the tests, in target/site/jacoco after mvn verify.
+              The agent goes in through surefire's argLine, which nothing
+              else here sets.
+            -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>${jacoco.version}</version>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>report</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

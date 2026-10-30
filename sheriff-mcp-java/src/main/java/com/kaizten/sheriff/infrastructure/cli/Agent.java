@@ -142,9 +142,6 @@ public final class Agent {
             No rule catalog at %s.
             Generate one with the extractor (it reads them out of the Sheriff image).
             """;
-    private final Configuration configuration;
-    private final Composition composition;
-    private final ObjectMapper json = new ObjectMapper();
     /**
      * Everything asked for came out clean.
      */
@@ -157,6 +154,9 @@ public final class Agent {
      * The invocation itself was wrong, which is not the same as a failure.
      */
     public static final int MISUSE = 2;
+    private final Configuration configuration;
+    private final Composition composition;
+    private final ObjectMapper json = new ObjectMapper();
 
     /**
      * Wires the CLI to a composition.

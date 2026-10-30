@@ -26,13 +26,13 @@ public final class GitHubReleases implements ReleaseSource {
     private static final int REDIRECTS_TO = 400;
     private static final int OK = 200;
     private static final String NOT_DOWNLOADED = "%s answered %d.";
-    private final URI repository;
-    private final HttpClient asking;
-    private final HttpClient downloading;
     /**
      * This repository on GitHub.
      */
     public static final URI REPOSITORY = URI.create(REPOSITORY_ADDRESS);
+    private final URI repository;
+    private final HttpClient asking;
+    private final HttpClient downloading;
 
     /**
      * The releases of a repository on GitHub, or of a server that answers the

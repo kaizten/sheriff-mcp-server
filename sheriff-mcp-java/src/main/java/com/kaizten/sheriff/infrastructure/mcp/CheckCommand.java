@@ -38,9 +38,6 @@ public final class CheckCommand {
     private static final String UNAVAILABLE = "%s: Sheriff could not analyze it: %s%n";
     private static final String LINE_BREAK = "\\s*\\R\\s*";
     private static final String SPACE = " ";
-    private final McpConfig config;
-    private final SheriffRunner runner;
-    private final PrintStream output;
     /**
      * The options this command reads, each followed by its value.
      */
@@ -48,6 +45,9 @@ public final class CheckCommand {
     public static final int PASSED = 0;
     public static final int ERRORS_FOUND = 1;
     public static final int NOT_ANALYZED = 2;
+    private final McpConfig config;
+    private final SheriffRunner runner;
+    private final PrintStream output;
 
     /**
      * Wires the check to a project and to Sheriff.
