@@ -262,24 +262,58 @@ class AgentTests {
         JsonNode written = new ObjectMapper().readTree(Files.readString(report));
         assertEquals("iterations_exhausted", written.get("stopped_reason").asText());
         assertFalse(written.get("ok").asBoolean());
+        assertEquals(1, written.get("schema").asInt());
+        assertEquals("loop", written.get("kind").asText());
+        assertEquals(1, written.get("configuration").get("max_iterations").asInt());
+        assertEquals(false, written.get("configuration").get("git_safety").asBoolean());
+        assertTrue(written.get("initial").get("total").asInt() > 0, written.toString());
+        assertTrue(printed.contains("This run's report: " + report), printed);
+    }
+
+    @Test
+    @DisplayName("loop reports are compared from a folder, with no Sheriff, and their tables can go to CSV")
+    void loopReportsAreCompared() throws IOException {
+        Path reports = Files.createDirectories(workspace.resolve("reports"));
+        run(Map.of("SHERIFF_AGENT_GIT_SAFETY", "0", "SHERIFF_MAX_ITERATIONS", "1"),
+                ProcessOutcome.completed(0, SHERIFF_OUTPUT, ""),
+                List.of("--json-report", reports.resolve("run.json").toString()));
+        Path csv = workspace.resolve("csv");
+        assertEquals(Agent.SUCCESS, run(Map.of(), ProcessOutcome.unavailable("no docker"),
+                List.of("--compare-reports", reports.toString(), "--csv", csv.toString())));
+        assertTrue(printed.contains("1 run(s) in 1 configuration(s)"), printed);
+        assertTrue(Files.exists(csv.resolve("configurations.csv")));
+        Path empty = Files.createDirectories(workspace.resolve("empty"));
+        assertEquals(Agent.FAILURE, run(Map.of(), ProcessOutcome.unavailable("no docker"),
+                List.of("--compare-reports", empty.toString())));
+        assertTrue(printed.contains("No loop report found"), printed);
+    }
+
+    @Test
+    @DisplayName("an option that takes several values takes them up to the next option")
+    void severalValuesUpToTheNextOption() {
+        assertEquals(List.of("a", "b"), Agent.valuesAfter(List.of("--compare-reports", "a", "b", "--csv", "c"),
+                "--compare-reports"));
+        assertEquals(List.of(), Agent.valuesAfter(List.of("--csv", "c"), "--compare-reports"));
     }
 
     @Test
     @DisplayName("the command line overrides configuration, and nothing else does")
     void commandLineOverridesTheConfiguredSettings() {
         Configuration configuration = new Configuration(
-                Map.of("SHERIFF_MAX_FILES_PER_BATCH", "5"), workspace);
+                Map.of("SHERIFF_MAX_FILES_PER_BATCH", "5", "SHERIFF_MAX_ERRORS_PER_BATCH", "30"), workspace);
         Agent agent = new Agent(configuration,
                 new Composition(configuration, FakeProcessRunner.always(ProcessOutcome.completed(0, "", ""))));
         LoopSettings overridden = agent.settingsFor(
                 List.of("--max-iterations", "2", "--max-files-per-batch", "1", "--batch-by", "rule",
-                        "--no-git-safety"));
+                        "--max-errors-per-batch", "10", "--no-git-safety"));
         assertEquals(2, overridden.maxIterations());
         assertEquals(BatchGrouping.RULE, overridden.grouping());
         assertEquals(1, overridden.maxFilesPerBatch());
+        assertEquals(10, overridden.maxErrorsPerBatch());
         assertFalse(overridden.useGitSafety());
         LoopSettings untouched = agent.settingsFor(List.of());
         assertEquals(5, untouched.maxFilesPerBatch());
+        assertEquals(30, untouched.maxErrorsPerBatch());
         assertEquals(BatchGrouping.FILE, untouched.grouping());
         assertTrue(untouched.useGitSafety());
     }

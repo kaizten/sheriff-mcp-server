@@ -3,6 +3,7 @@ package com.kaizten.sheriff.domain;
 import com.kaizten.sheriff.domain.valueobject.SheriffFinding;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -126,6 +127,57 @@ public final class BatchPolicy {
     }
 
     /**
+     * The cap when none was set, sized to the passes the grouping needs for
+     * these errors and to the passes a cap on each pass's errors needs, the
+     * larger of the two. By file with no cap on the files, only the errors
+     * size it: the grouping alone would give its fixed fallback, which says
+     * nothing about these errors and would grow the cap on every pass.
+     *
+     * @param errors every error the analyzer reported
+     * @param grouping what the errors of one pass have in common
+     * @param maxFilesPerBatch how many files one pass covers
+     * @param maxErrorsPerBatch how many errors one pass covers, zero or less
+     *     for no limit
+     * @return the cap to use
+     */
+    public static int estimateMaxIterations(List<SheriffFinding> errors, BatchGrouping grouping, int maxFilesPerBatch,
+            int maxErrorsPerBatch) {
+        int byGrouping = estimateMaxIterations(errors, grouping, maxFilesPerBatch);
+        if (maxErrorsPerBatch <= NONE || errors.isEmpty()) {
+            return byGrouping;
+        }
+        int byErrors = (errors.size() + maxErrorsPerBatch - 1) / maxErrorsPerBatch + ITERATION_MARGIN;
+        if (grouping == BatchGrouping.FILE && maxFilesPerBatch <= NONE) {
+            return byErrors;
+        }
+        return Math.max(byGrouping, byErrors);
+    }
+
+    /**
+     * The automatic cap after a pass that lowered the errors, with the passes
+     * still needed counted by the grouping and by the cap on each pass's
+     * errors.
+     *
+     * @param cap the cap in force
+     * @param passesRun the passes already run
+     * @param errors the errors still there
+     * @param grouping what the errors of one pass have in common
+     * @param maxFilesPerBatch how many files one pass covers
+     * @param maxErrorsPerBatch how many errors one pass covers, zero or less
+     *     for no limit
+     * @param firstEstimate the cap the first analysis gave
+     * @return the cap to use from now on
+     */
+    public static int extendedMaxIterations(int cap, int passesRun, List<SheriffFinding> errors,
+            BatchGrouping grouping, int maxFilesPerBatch, int maxErrorsPerBatch, int firstEstimate) {
+        if (maxErrorsPerBatch <= NONE || errors.isEmpty()) {
+            return extendedMaxIterations(cap, passesRun, errors, grouping, maxFilesPerBatch, firstEstimate);
+        }
+        int needed = passesRun + estimateMaxIterations(errors, grouping, maxFilesPerBatch, maxErrorsPerBatch);
+        return Math.max(cap, Math.min(needed, firstEstimate * CEILING_FACTOR));
+    }
+
+    /**
      * The automatic cap after a pass that lowered the errors, as
      * {@link #extendedMaxIterations(int, int, int, int, int)} grows it, with
      * the passes still needed counted by the grouping.
@@ -181,6 +233,44 @@ public final class BatchPolicy {
                 .map(chosen -> selectBatch(candidates.stream()
                         .filter(finding -> finding.referenceCode().equals(chosen.getKey())).toList(), maxFiles, Set.of()))
                 .orElse(List.of());
+    }
+
+    /**
+     * The errors of the next pass, grouped as
+     * {@link #selectBatch(List, BatchGrouping, int, Set)} groups them, and at
+     * most {@code maxErrors} of them.
+     *
+     * <p>Whole files are taken while they fit, in the order the grouping put
+     * them, so a model still reads each file's errors together. A file whose
+     * errors alone are more than the cap gives its first ones, as Sheriff
+     * listed them: a pass of a file that big would otherwise be no smaller.
+     *
+     * @param errors every error the analyzer reported
+     * @param grouping what the errors of one pass have in common
+     * @param maxFiles the cap on files, zero or less for none
+     * @param maxErrors the cap on errors, zero or less for none
+     * @param parked what earlier passes could not improve
+     * @return the errors that make up this pass
+     */
+    public static List<SheriffFinding> selectBatch(List<SheriffFinding> errors, BatchGrouping grouping, int maxFiles,
+            int maxErrors, Set<String> parked) {
+        List<SheriffFinding> batch = selectBatch(errors, grouping, maxFiles, parked);
+        if (maxErrors <= NONE || batch.size() <= maxErrors) {
+            return batch;
+        }
+        Map<String, List<SheriffFinding>> byFile = new LinkedHashMap<>();
+        for (SheriffFinding finding : batch) {
+            byFile.computeIfAbsent(finding.file(), file -> new ArrayList<>()).add(finding);
+        }
+        List<SheriffFinding> capped = new ArrayList<>();
+        for (List<SheriffFinding> fileErrors : byFile.values()) {
+            if (capped.size() + fileErrors.size() <= maxErrors) {
+                capped.addAll(fileErrors);
+            } else if (capped.isEmpty()) {
+                capped.addAll(fileErrors.subList(NONE, maxErrors));
+            }
+        }
+        return capped;
     }
 
     /**

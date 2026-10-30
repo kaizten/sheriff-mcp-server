@@ -31,7 +31,7 @@ final class LoopSettingsMother {
      */
     public static LoopSettings equalTo(LoopSettings value) {
         return new LoopSettings(value.maxIterations(), value.useGitSafety(), value.maxFilesPerBatch(),
-                value.grouping());
+                value.grouping(), value.maxErrorsPerBatch());
     }
 
     /**

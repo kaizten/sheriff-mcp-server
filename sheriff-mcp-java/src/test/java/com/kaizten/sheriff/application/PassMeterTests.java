@@ -3,8 +3,10 @@ package com.kaizten.sheriff.application;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
+import com.kaizten.sheriff.domain.enumerate.StopReason;
 import com.kaizten.sheriff.domain.valueobject.AnalysisResult;
 import com.kaizten.sheriff.domain.valueobject.PassMetrics;
+import com.kaizten.sheriff.domain.valueobject.RunSummary;
 import com.kaizten.sheriff.domain.valueobject.SheriffFinding;
 import com.kaizten.sheriff.domain.valueobject.TokenUsage;
 import java.time.Duration;
@@ -98,5 +100,20 @@ class PassMeterTests {
         assertEquals(Map.of("R1", 2, "R2", 1), PassMeter.countByRule(findings, null));
         assertEquals(Map.of("R2", 1), PassMeter.countByRule(findings, Set.of("B")));
         assertEquals(Map.of(), PassMeter.countByRule(List.of(), Set.of("A")));
+    }
+
+    @Test
+    @DisplayName("the run's metrics see every analysis, what a pass is given, and the end")
+    void theRunsMetricsSeeTheWholeRun() {
+        RecordingMetrics run = new RecordingMetrics();
+        PassMeter measured = new PassMeter(run);
+        measured.deterministicPassed("sheriff-fixers", errors(error("A", "R1"), error("B", "R1")), TOOK);
+        measured.measuredBy(errors(error("A", "R1")));
+        measured.given("iteration-1", Set.of("A"), 1);
+        measured.modelPassed("iteration-1", errors(error("A", "R1")), Set.of("A"), TOOK, USAGE);
+        measured.finished(new RunSummary(false, StopReason.FIXER_FAILED, 1, 3, false, List.of(), "", null));
+        assertEquals(List.of("analysis 2", "analysis 1", "pass sheriff-fixers", "given iteration-1 [A] 1",
+                "pass iteration-1", "finished fixer_failed"), run.events());
+        assertNull(run.passes().get(1).errorsAfter());
     }
 }

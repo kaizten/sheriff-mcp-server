@@ -1076,4 +1076,52 @@ class FixLoopTests {
                     output);
         }
     }
+
+    @Nested
+    @DisplayName("a pass's errors capped")
+    class CappedErrors {
+
+        private SheriffFinding error(String file, String rule) {
+            return new SheriffFinding(file, rule + " broken in " + file, "fix " + rule, rule, SheriffFinding.ERROR,
+                    Map.of());
+        }
+
+        @Test
+        @DisplayName("each pass is given at most the cap, whole files while they fit, and the cap sizes the passes")
+        void eachPassIsGivenAtMostTheCap() {
+            FakeFixer fixer = new FakeFixer();
+            RunSummary summary = new FixLoop(new FakeAnalyzer(List.of(
+                    AnalysisResult.of(List.of(error("A.java", "R1"), error("A.java", "R2"), error("B.java", "R1"),
+                            error("C.java", "R1"))),
+                    AnalysisResult.of(List.of(error("C.java", "R1"))),
+                    FakeAnalyzer.result(0, "a.py"))), fixer, new FakeVersionControl(), new FakeTestRunner(),
+                    RULES_CONTEXT, List.of(), new LoopSettings(null, false, 0, BatchGrouping.FILE, 3)).execute();
+            assertTrue(summary.ok());
+            assertEquals(List.of(List.of("A.java", "B.java"), List.of("C.java")),
+                    fixer.requests().stream().map(FixLoopTests::scopeOf).toList());
+            assertTrue(fixer.requests().get(0).prompt().contains("Errors to fix in this pass (3 total)"));
+            assertEquals(4, summary.maxIterations());
+        }
+    }
+
+    @Nested
+    @DisplayName("what the run's metrics are told")
+    class WholeRun {
+
+        @Test
+        @DisplayName("every analysis, what each pass is given before it runs, each pass once measured, and the end")
+        void theMetricsSeeTheWholeRun() {
+            RecordingMetrics metrics = new RecordingMetrics();
+            new FixLoop(new FakeAnalyzer(List.of(
+                    FakeAnalyzer.multiFileResult("A.java", "B.java"),
+                    FakeAnalyzer.result(1, "B.java"),
+                    FakeAnalyzer.result(0, "a.py"))), new FakeFixer(), new FakeVersionControl(),
+                    new FakeTestRunner(), () -> "", RULES_CONTEXT, List.of(), new LoopSettings(8, false, 1),
+                    metrics).execute();
+            assertEquals(List.of("analysis 2", "given iteration-1 [A.java] 1", "analysis 1", "pass iteration-1",
+                    "given iteration-2 [B.java] 1", "analysis 0", "pass iteration-2", "finished success"),
+                    metrics.events());
+            assertEquals(StopReason.SUCCESS, metrics.summary().stoppedReason());
+        }
+    }
 }

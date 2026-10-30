@@ -571,6 +571,66 @@ as Ollama).
 pass.
 \end{play}
 
+\begin{play}{Compare configurations, backends and models}
+\when You want to know which way of repairing suits your project best: a few
+files a pass or a few errors a pass, Claude Code or Codex, one model or
+another.
+\asks Turn the reports on (\code{SHERIFF_REPORT=1}, in your settings or for
+the command) and run the loop once per configuration from the module's folder,
+going back to your branch between runs so that every one starts from the same
+code. Then compare them:
+\begin{command}[basicstyle=\ttfamily\footnotesize]{bash}
+export SHERIFF_REPORT=1
+jar=~/.local/share/sheriff-agent/sheriff-mcp.jar
+java -jar $jar --agent --max-files-per-batch 5
+git switch -
+java -jar $jar --agent --max-files-per-batch 0 --max-errors-per-batch 2
+git switch -
+AI_BACKEND=codex_cli java -jar $jar --agent
+git switch -
+java -jar $jar --agent --compare-reports ~/.local/state/sheriff-mcp/reports
+\end{command}
+\happens Each run ends saying where its report went, named after when it
+started, the component and the backend:
+\begin{answer}[The end of a run]
+This run's report: /home/ana/.local/state/sheriff-mcp/reports/loop-20261030-123325-app-local.json
+\end{answer}
+The report holds what the run was asked to do with, the errors it started
+from and left rule by rule, every pass and what it cost. The comparison puts
+the runs side by side, by configuration (the mean of its runs), by run and by
+rule:
+\begin{answer}[The comparison's first lines]
+# Runs of the repair loop compared
+
+4 run(s) in 4 configuration(s).
+\end{answer}
+Some of its columns, from a trial on a class with 8 errors:
+
+\begin{center}
+\rowcolors{2}{pbcode}{white}
+\begin{tabularx}{0.95\linewidth}{@{\hspace{6pt}}>{\ttfamily}p{16mm}>{\ttfamily}p{18mm}LLLL}
+\headrow \thead{Strategy} & \thead{Backend} & \thead{Errors left} & \thead{Repaired by the model} & \thead{Model passes} & \thead{Tokens per repair} \\
+file:0:2 & claude\_cli & 2.0 & 6.0 & 3.0 & 37996 \\
+file:5 & claude\_cli & 0.0 & 8.0 & 2.0 & 19085 \\
+file:0:2 & codex\_cli & 0.0 & 6.0 & 3.0 & 73927 \\
+file:5 & codex\_cli & 0.0 & 6.0 & 1.0 & 29844 \\
+\end{tabularx}
+\end{center}
+A strategy is the grouping, the files a pass is given and, when capped, its
+errors: \code{file:5} is every error of five files, \code{file:0:2} two
+errors a pass. With \code{--csv DIR} the tables also go to CSV files, for a
+spreadsheet.
+\done You know which configuration leaves fewest errors for fewest tokens on
+your project.
+\end{play}
+
+\begin{warning}
+Every run spends tokens, as \tool{sheriff_autofix} does. From a clone of the
+tools, \code{scripts/benchmark.sh --repo PATH} runs every configuration and
+backend asked, as many times as asked, each from a fresh copy of your
+repository, and writes the comparison itself.
+\end{warning}
+
 \begin{play}{Keep errors out in CI}
 \when You want continuous integration to fail when the code does not comply.
 \asks From the project's root:
@@ -1101,6 +1161,11 @@ these settings.
   error of a few files. \code{rule}: one rule's errors in a few files, so the
   model makes one kind of change at a time.}
 
+\setting{SHERIFF_MAX_ERRORS_PER_BATCH}{\code{0}}{errors, 0 or more}{How many
+  errors the model is given at once, at most, whatever files they are in.
+  \code{0}: no limit, only the files count. A number: whole files while their
+  errors fit, and the first errors of a file that alone has more.}
+
 \setting{SHERIFF_MAX_RULES_IN_PROMPT}{empty: the loop's own limit}{rules, 1 or
   more}{How many of the profile's rules go into each prompt. Fewer rules,
   shorter and cheaper prompts.}
@@ -1136,6 +1201,12 @@ these settings.
 
 \setting{SHERIFF_AGENT_ANTIGRAVITY_TIMEOUT}{\code{600}}{seconds, 1 or more}{The
   same for \code{agy}. From your file only.}
+
+\setting{SHERIFF_REPORT}{\code{0}}{\code{1} or \code{0}}{For debugging:
+  \code{1} has every run of the loop write a JSON report of itself into
+  \path{~/.local/state/sheriff-mcp/reports/}: what it was asked to do with,
+  what it started from and left, every pass, and how it stopped. From your
+  file only.}
 
 \subsubsection*{The loop's APIs} Only with \code{AI_BACKEND} set to
 \code{anthropic_api}, \code{openai_api} or \code{local}. All from your file

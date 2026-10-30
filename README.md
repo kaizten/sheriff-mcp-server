@@ -559,10 +559,13 @@ how it checks itself.
 | `--rules [QUERY]` | The rules a profile enforces, or a search |
 | `--fixer CODE` | The script Sheriff runs to repair `CODE` |
 | `--extract-rules` | Rebuilds the rule catalog from the image |
+| `--compare-reports PATH...` | Loop reports side by side (*Comparing runs*, below); `--csv DIR` writes the tables too |
 
 Loop flags: `--max-iterations N`, `--max-files-per-batch N` (5),
 `--batch-by file|rule` (`file`: every error of those files; `rule`: one rule's
-errors in those files, the rule with most first), `--no-git-safety` (no branch, no commits, no scope check), `--json-report PATH`.
+errors in those files, the rule with most first), `--max-errors-per-batch N`
+(0, no cap: at most N errors a pass, whole files while they fit, and the first
+N of a file that alone has more), `--no-git-safety` (no branch, no commits, no scope check), `--json-report PATH`.
 With no `--max-iterations`, the cap is sized from the first analysis (one pass
 per five files with errors, and two to spare) and grows after every pass that
 lowers the errors, to what the files still with errors need, up to three times
@@ -581,17 +584,59 @@ in the pass's files (the whole component for Sheriff's fixers; `null` when no
 analysis followed), `repaired`, and `usage`: the models, the input, output and
 prompt-cache tokens, the turns and the cost. Claude Code's cost is at list
 price, also on a subscription; Codex reports none, and its fixer adds `--json`
-to a `codex exec` so that it reports its tokens. `scripts/benchmark.sh` runs the
-loop over a few public projects at pinned commits, with each backend and model
-asked for, and with each strategy: `file:N` (every error of N files a pass)
-and `rule:N` (one rule's errors in N files), `0` for no limit. It adds those
-lines up into which strategy leaves least for least, which rules Sheriff
-finds, which its fixers and which the model repair, what is left, and the time
-and tokens per repair:
+to a `codex exec` so that it reports its tokens.
+
+**A run's report.** With `SHERIFF_REPORT=1`, a setting of your own file (or a
+variable), every run of the loop, `sheriff_autofix`'s included, ends by
+writing one JSON document of itself to
+`~/.local/state/sheriff-mcp/reports/loop-<when>-<component>-<backend>.json`
+(under `XDG_STATE_HOME` when it is set), and says where; `--json-report PATH`
+writes the same to `PATH` with the setting off. It holds counts, rule codes
+and paths, never a finding's text, which can quote code:
+
+| Field | What it holds |
+|---|---|
+| `schema`, `kind` | `1` and `loop`: a field added keeps the schema, one changed raises it |
+| `ok`, `stopped_reason`, `iterations_used`, `max_iterations`, `repair_pass_used`, `parked_files`, `working_branch`, `tests_passed` | How the run ended, as `--json-report` has always said |
+| `started`, `finished`, `elapsed_ms` | When, and for how long |
+| `tools`, `sheriff` | This jar's version; Sheriff's image, the digest it was pulled by and its build date |
+| `project` | The repository, the component, the profile and the commit it started from |
+| `configuration` | `backend`, `model` asked for (`null`: the backend's own), `batch_by`, `max_files_per_batch`, `max_errors_per_batch`, `max_iterations` (`null`: sized from the errors), `git_safety`, `sheriff_fixers`, `repair_rounds`, `max_rules_in_prompt`, `prototype` |
+| `initial`, `final` | The errors it started from and left: `total`, `files`, `by_rule`; `final.after_last_pass` is `false` when no analysis could follow the last pass |
+| `totals` | `passes`, `model_passes`, `repaired_by_sheriff`, `repaired_by_model`, `introduced_by_model`, `model_ms`, `sheriff_fixers_ms`, `models` and the tokens and cost |
+| `passes` | Every pass as its `metrics-*.jsonl` line, with `files` and `given` (what a model's pass was handed) and `introduced` (what each rule gained) |
+
+A run cut right after a pass (its fixer failed, or it changed a file outside
+its batch) is analyzed once more, so `final` is what is in the tree.
+
+**Comparing runs.** `--compare-reports` reads the loop reports in the files
+and folders it is given (with none, the current folder), at any depth, and
+prints them side by side as Markdown: by configuration, the mean of its runs;
+by run; and by rule, what was found, repaired by Sheriff and by the model,
+introduced and left. A configuration is a project (its component and the
+commit it started from), a backend, a model and a strategy, written as the
+benchmark writes one (`file:5`, `rule:5`, `file:0:20`). `--csv DIR` also
+writes `configurations.csv`, `runs.csv`, `rules.csv` and `passes.csv`. It runs
+no Sheriff, and passes over, and counts, any file that is no loop report:
+
+```bash
+java -jar ~/.local/share/sheriff-agent/sheriff-mcp.jar --agent --compare-reports ~/.local/state/sheriff-mcp/reports
+java -jar ~/.local/share/sheriff-agent/sheriff-mcp.jar --agent --compare-reports a.json b.json --csv tables/
+```
+
+**The benchmark.** `scripts/benchmark.sh` runs the loop over a few public
+projects at pinned commits, or over your own with `--repo PATH[:COMPONENT]`
+(cloned at its HEAD for every run, so each starts from the same code and the
+repository is never touched), with each backend and model asked for, each
+strategy, `file:N` (every error of N files a pass), `rule:N` (one rule's
+errors in N files) and either with `:E`, at most E errors a pass (`0` is no
+limit), and as many runs of each as asked. Every run writes its report, and
+the comparison above makes the tables, in `summary.md` and the CSV files:
 
 ```bash
 scripts/benchmark.sh --runs 3 --backend claude_cli:claude-sonnet-5-5 --backend codex_cli
-scripts/benchmark.sh --strategy file:5 --strategy rule:5 --strategy file:0
+scripts/benchmark.sh --strategy file:5 --strategy rule:5 --strategy file:0:20
+scripts/benchmark.sh --repo ~/code/shop --repo ~/code/monorepo:api --strategy file:5 --strategy file:0:10
 scripts/benchmark.sh --report ~/.local/state/sheriff-mcp/benchmark/<run>   # the tables again
 ```
 
@@ -724,6 +769,8 @@ which no tool reports.
 | `AI_BACKEND` | `claude_cli` | Who answers in the loop, below |
 | `SHERIFF_MAX_ITERATIONS`, `SHERIFF_MAX_FILES_PER_BATCH` | sized from the errors, `5` | The loop's passes, and the files a model is given at once |
 | `SHERIFF_BATCH_BY` | `file` | What a pass's errors have in common: `file`, every error of a few files; `rule`, one rule's errors in a few files |
+| `SHERIFF_MAX_ERRORS_PER_BATCH` | `0` | The errors a model is given at once, at most, whatever their files; `0` for no cap |
+| `SHERIFF_REPORT` | `0` | `1`: every run of the loop writes its report (see *A run's report*); from your own file only |
 | `SHERIFF_MAX_RULES_IN_PROMPT` | the loop's own limit | Rules of the profile put in one prompt |
 | `SHERIFF_AGENT_GIT_SAFETY` | `1` | `0` lets the loop edit the working tree as it is: no branch of its own, no commit per pass, no stop when a model edits a file outside its batch. Your file only |
 | `CODEX_COMMAND`, `ANTIGRAVITY_COMMAND` | `codex exec --sandbox workspace-write`, `agy --mode accept-edits` | How the loop starts `codex` and `agy`, without the prompt (to add `--model`). Your file only |

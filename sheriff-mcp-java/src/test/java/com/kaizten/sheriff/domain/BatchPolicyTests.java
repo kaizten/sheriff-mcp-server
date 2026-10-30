@@ -110,6 +110,66 @@ class BatchPolicyTests {
     }
 
     @Nested
+    @DisplayName("capping a pass's errors")
+    class CappingErrors {
+
+        @Test
+        @DisplayName("whole files while their errors fit")
+        void takesWholeFilesWhileTheyFit() {
+            assertEquals(List.of(error("A", "R1"), error("A", "R2"), error("B", "R2")),
+                    BatchPolicy.selectBatch(ERRORS, BatchGrouping.FILE, 0, 3, Set.of()));
+        }
+
+        @Test
+        @DisplayName("a file whose errors alone are more gives its first ones")
+        void splitsAFileThatAloneIsMore() {
+            assertEquals(List.of(error("A", "R1")), BatchPolicy.selectBatch(ERRORS, BatchGrouping.FILE, 0, 1, Set.of()));
+        }
+
+        @Test
+        @DisplayName("a file that does not fit is passed over for a later one that does")
+        void passesOverAFileThatDoesNotFit() {
+            List<SheriffFinding> errors = List.of(error("A", "R1"), error("B", "R1"), error("B", "R2"),
+                    error("B", "R3"), error("C", "R1"));
+            assertEquals(List.of(error("A", "R1"), error("C", "R1")),
+                    BatchPolicy.selectBatch(errors, BatchGrouping.FILE, 0, 2, Set.of()));
+        }
+
+        @Test
+        @DisplayName("no cap, or one the pass is within, changes nothing")
+        void noCapChangesNothing() {
+            assertEquals(BatchPolicy.selectBatch(ERRORS, BatchGrouping.FILE, 2, Set.of()),
+                    BatchPolicy.selectBatch(ERRORS, BatchGrouping.FILE, 2, 0, Set.of()));
+            assertEquals(BatchPolicy.selectBatch(ERRORS, BatchGrouping.FILE, 2, Set.of()),
+                    BatchPolicy.selectBatch(ERRORS, BatchGrouping.FILE, 2, 3, Set.of()));
+        }
+
+        @Test
+        @DisplayName("by rule, the cap applies to the rule's errors too")
+        void appliesByRule() {
+            assertEquals(List.of(error("A", "R2"), error("B", "R2")),
+                    BatchPolicy.selectBatch(ERRORS, BatchGrouping.RULE, 0, 2, Set.of()));
+        }
+
+        @Test
+        @DisplayName("the passes are the more of what the files and the errors need, and two to spare")
+        void countsThePassesTheErrorsNeed() {
+            assertEquals(5, BatchPolicy.estimateMaxIterations(ERRORS, BatchGrouping.FILE, 5, 2));
+            assertEquals(3, BatchPolicy.estimateMaxIterations(ERRORS, BatchGrouping.FILE, 5, 0));
+            assertEquals(3, BatchPolicy.estimateMaxIterations(ERRORS, BatchGrouping.FILE, 0, 5));
+            assertEquals(5, BatchPolicy.estimateMaxIterations(ERRORS, BatchGrouping.RULE, 0, 5));
+        }
+
+        @Test
+        @DisplayName("a cap grows from the errors left, never past three times the first")
+        void growsTheCapFromTheErrorsLeft() {
+            assertEquals(9, BatchPolicy.extendedMaxIterations(5, 2, ERRORS, BatchGrouping.FILE, 0, 1, 5));
+            assertEquals(6, BatchPolicy.extendedMaxIterations(5, 2, ERRORS, BatchGrouping.FILE, 0, 1, 2));
+            assertEquals(5, BatchPolicy.extendedMaxIterations(5, 2, ERRORS, BatchGrouping.FILE, 0, 0, 5));
+        }
+    }
+
+    @Nested
     @DisplayName("naming a grouping")
     class Naming {
 

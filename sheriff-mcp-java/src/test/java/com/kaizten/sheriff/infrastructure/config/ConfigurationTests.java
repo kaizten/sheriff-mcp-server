@@ -68,6 +68,7 @@ class ConfigurationTests {
         assertEquals("claude_cli", configuration.backend());
         assertEquals(5, configuration.loopSettings().maxFilesPerBatch());
         assertEquals(BatchGrouping.FILE, configuration.loopSettings().grouping());
+        assertEquals(0, configuration.loopSettings().maxErrorsPerBatch());
         assertTrue(configuration.loopSettings().useGitSafety());
         assertNull(configuration.loopSettings().maxIterations());
     }
@@ -108,6 +109,7 @@ class ConfigurationTests {
                 "SHERIFF_MAX_ITERATIONS", "3",
                 "SHERIFF_MAX_FILES_PER_BATCH", "0",
                 "SHERIFF_BATCH_BY", "rule",
+                "SHERIFF_MAX_ERRORS_PER_BATCH", "20",
                 "SHERIFF_AGENT_GIT_SAFETY", "0",
                 "SHERIFF_TIMEOUT", "42",
                 "SHERIFF_MAX_RULES_IN_PROMPT", "10",
@@ -115,6 +117,7 @@ class ConfigurationTests {
         assertEquals(3, configuration.loopSettings().maxIterations());
         assertEquals(0, configuration.loopSettings().maxFilesPerBatch());
         assertEquals(BatchGrouping.RULE, configuration.loopSettings().grouping());
+        assertEquals(20, configuration.loopSettings().maxErrorsPerBatch());
         assertFalse(configuration.loopSettings().useGitSafety());
         assertEquals(42, configuration.sheriffTimeout().toSeconds());
         assertEquals(10, configuration.maxRulesInPrompt());
@@ -264,5 +267,31 @@ class ConfigurationTests {
         assertEquals(300, Configuration.defaultSheriffTimeout(true, Map.of()));
         assertEquals(300, Configuration.defaultSheriffTimeout(false, wsl), "Linux and macOS are never changed");
         assertEquals(300, Configuration.defaultSheriffTimeout(false, Map.of()));
+    }
+
+    @Test
+    @DisplayName("reports go under the state home only with SHERIFF_REPORT on, and only where the environment says")
+    void reportsGoUnderTheStateHome() {
+        assertEquals(Optional.empty(), with(Map.of("HOME", "/home/a")).reportsDirectory());
+        assertEquals(Optional.of(Path.of("/home/a/.local/state/sheriff-mcp/reports")),
+                with(Map.of("SHERIFF_REPORT", "1", "HOME", "/home/a")).reportsDirectory());
+        assertEquals(Optional.of(Path.of("/state/sheriff-mcp/reports")),
+                with(Map.of("SHERIFF_REPORT", "1", "HOME", "/home/a", "XDG_STATE_HOME", "/state")).reportsDirectory());
+        assertEquals(Optional.empty(), with(Map.of("SHERIFF_REPORT", "1")).reportsDirectory(), "no home, no reports");
+    }
+
+    @Test
+    @DisplayName("the model asked for is each backend's own setting, or a model flag on its command")
+    void theModelAskedForIsEachBackendsOwn() {
+        assertEquals("", with(Map.of()).requestedModel(), "Claude Code with its own default");
+        assertEquals("claude-sonnet-5-5", with(Map.of("ANTHROPIC_MODEL", "claude-sonnet-5-5")).requestedModel());
+        assertEquals("gpt-5.5", with(Map.of("AI_BACKEND", "codex_cli", "CODEX_COMMAND",
+                "codex exec --sandbox workspace-write -m gpt-5.5")).requestedModel());
+        assertEquals("", with(Map.of("AI_BACKEND", "codex_cli")).requestedModel());
+        assertEquals("claude-sonnet-5-5-high", with(Map.of("AI_BACKEND", "antigravity_cli", "ANTIGRAVITY_COMMAND",
+                "agy --mode accept-edits --model claude-sonnet-5-5-high")).requestedModel());
+        assertEquals(with(Map.of()).apiModel(), with(Map.of("AI_BACKEND", "anthropic_api")).requestedModel());
+        assertEquals("qwen2.5-coder", with(Map.of("AI_BACKEND", "local", "OPENAI_MODEL", "qwen2.5-coder"))
+                .requestedModel());
     }
 }
