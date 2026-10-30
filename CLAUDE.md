@@ -301,9 +301,11 @@ to be tried by hand.
     the first rule (28 planned, 2 fixed).
   Of the image's two jar fixers, `BracesForStatements` works (images of 28
   and 29 October: it braces a classic `for`), and `FolderNameUnderscore`
-  renames `my_pkg` to `my-pkg` and leaves `package com.my_pkg;` as it was
-  (`sha256:05a1f4a4`): no Java package can be named after that folder, and
-  the analysis after it finds nothing.
+  renames `my_pkg` to `mypkg` and its files' `package` line, but no other
+  file's `import` of it (image of 30 October 12:49, `sha256:46f6caf2`): the
+  build breaks, the report says `fixed` and the analysis after it finds
+  nothing. Only the project's tests catch it, which is why a repair is
+  verified by them.
 - **`fix -f` with no `--fixers` is not every fixer, nor only the state's.**
   Its default set leaves fixers out and runs some regardless of the state.
   With `--fixers A,B` it runs only those. So `sheriff_fix` with no arguments
