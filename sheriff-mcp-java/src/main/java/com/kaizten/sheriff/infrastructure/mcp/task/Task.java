@@ -23,8 +23,7 @@ import java.util.TreeMap;
  * @param created when it was accepted
  * @param finished when it finished, {@code null} until then
  */
-public record Task(
-        String id,
+public record Task(String id,
         String command,
         Map<String, String> provenance,
         TaskState state,

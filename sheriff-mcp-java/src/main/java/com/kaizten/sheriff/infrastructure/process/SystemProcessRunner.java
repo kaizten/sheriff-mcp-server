@@ -51,8 +51,8 @@ public final class SystemProcessRunner implements ProcessRunner {
      * @return what it produced, or why it never got there
      */
     @Override
-    public ProcessOutcome run(
-            List<String> command, Path workingDirectory, Map<String, String> environment, Duration timeout) {
+    public ProcessOutcome run(List<String> command,
+            Path workingDirectory, Map<String, String> environment, Duration timeout) {
         return run(command, workingDirectory, environment, timeout, NO_INPUT);
     }
 
@@ -71,8 +71,8 @@ public final class SystemProcessRunner implements ProcessRunner {
     @Override
     public ProcessOutcome run(List<String> command, Path workingDirectory, Map<String, String> environment,
             Duration timeout, String standardInput) {
-        ProcessBuilder builder = new ProcessBuilder(Platform.quotedForCommandLine(
-                Platform.resolved(Platform.dockerCommand(command)), Platform.windows()));
+        ProcessBuilder builder = new ProcessBuilder(Platform.quotedForCommandLine(Platform.resolved(Platform.dockerCommand(command)),
+                Platform.windows()));
         if (workingDirectory != null) {
             builder.directory(workingDirectory.toFile());
         }
@@ -104,8 +104,8 @@ public final class SystemProcessRunner implements ProcessRunner {
      * @throws IOException when the process cannot be started or read
      * @throws InterruptedException when the wait is interrupted
      */
-    private ProcessOutcome runAndCollect(
-            ProcessBuilder builder, Duration timeout, ExecutorService drains, String standardInput)
+    private ProcessOutcome runAndCollect(ProcessBuilder builder,
+            Duration timeout, ExecutorService drains, String standardInput)
             throws IOException, InterruptedException {
         Process process = builder.start();
         Future<String> standardOutput = drains.submit(() -> drain(process.getInputStream()));

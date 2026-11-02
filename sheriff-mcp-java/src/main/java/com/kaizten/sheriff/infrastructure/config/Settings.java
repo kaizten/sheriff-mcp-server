@@ -104,8 +104,8 @@ public final class Settings {
     private static final String BRANCHES_SETTING = "SHERIFF_BRANCHES";
     private static final String MUTANTS_SETTING = "SHERIFF_MUTATION";
     private static final String MUTATORS_SETTING = "SHERIFF_MUTATORS";
-    private static final Map<String, String> PROJECT_KEY_SETTINGS = Map.of(
-            CoverageThresholds.LINES_KEY, LINES_SETTING, CoverageThresholds.BRANCHES_KEY, BRANCHES_SETTING,
+    private static final Map<String, String> PROJECT_KEY_SETTINGS = Map.of(CoverageThresholds.LINES_KEY,
+            LINES_SETTING, CoverageThresholds.BRANCHES_KEY, BRANCHES_SETTING,
             CoverageThresholds.MUTANTS_KEY, MUTANTS_SETTING, CoverageThresholds.MUTATORS_KEY, MUTATORS_SETTING);
     private static final int MOST_EDITS = 3;
     private static final int NO_EDITS = 0;
@@ -241,8 +241,7 @@ public final class Settings {
         List<String> problems = new ArrayList<>();
         for (Setting setting : ALL) {
             if (isSet(environment, setting.name())) {
-                setting.problemWith(environment.get(setting.name()).strip()).ifPresent(problem -> problems.add(
-                        String.format(IN_ENVIRONMENT, problem)));
+                setting.problemWith(environment.get(setting.name()).strip()).ifPresent(problem -> problems.add(String.format(IN_ENVIRONMENT, problem)));
             }
         }
         problems.addAll(fileProblems(projectFile(project), true));

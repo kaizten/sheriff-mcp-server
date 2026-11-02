@@ -87,8 +87,8 @@ public final class CatalogProvisioning {
      * @return the test to put a catalog to
      */
     public static Predicate<Path> matching(ProcessRunner processes, String image) {
-        return catalog -> CatalogFreshness.check(
-                processes, catalog.toAbsolutePath().getParent(), catalog, image).isEmpty();
+        return catalog -> CatalogFreshness.check(processes,
+                catalog.toAbsolutePath().getParent(), catalog, image).isEmpty();
     }
 
     /**
@@ -114,8 +114,8 @@ public final class CatalogProvisioning {
      * @param extraction how to make one
      * @return the catalog to read
      */
-    public static Path choose(
-            Path configured, List<Path> candidates, Path cache, Predicate<Path> fresh, CatalogExtraction extraction) {
+    public static Path choose(Path configured,
+            List<Path> candidates, Path cache, Predicate<Path> fresh, CatalogExtraction extraction) {
         if (configured != null) {
             return configured;
         }

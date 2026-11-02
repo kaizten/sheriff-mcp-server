@@ -49,8 +49,8 @@ public final class Rules {
     private static final List<String> VUE_SUFFIXES = List.of(VUE_SUFFIX, TYPESCRIPT_SUFFIX, JAVASCRIPT_SUFFIX);
     private static final List<String> PERL_SUFFIXES = List.of(PERL_SCRIPT_SUFFIX, PERL_MODULE_SUFFIX);
     private static final List<String> PYTHON_SUFFIXES = List.of(PYTHON_SUFFIX);
-    private static final Map<String, List<String>> SOURCE_SUFFIXES = Map.of(
-            JAVA_LANGUAGE, JAVA_SUFFIXES,
+    private static final Map<String, List<String>> SOURCE_SUFFIXES = Map.of(JAVA_LANGUAGE,
+            JAVA_SUFFIXES,
             TYPESCRIPT_LANGUAGE, TYPESCRIPT_SUFFIXES,
             VUE_LANGUAGE, VUE_SUFFIXES,
             PERL_LANGUAGE, PERL_SUFFIXES,
@@ -94,8 +94,8 @@ public final class Rules {
     private static final String VUE_PROFILE = "VUEJS";
     private static final String PERL_PROFILE = "PERL_FORMAT";
     private static final String PYTHON_PROFILE = "PYTHON";
-    private static final Map<String, String> BASE_PROFILES = Map.of(
-            JAVA_LANGUAGE, JAVA_PROFILE,
+    private static final Map<String, String> BASE_PROFILES = Map.of(JAVA_LANGUAGE,
+            JAVA_PROFILE,
             TYPESCRIPT_LANGUAGE, TYPESCRIPT_PROFILE,
             VUE_LANGUAGE, VUE_PROFILE,
             PERL_LANGUAGE, PERL_PROFILE,
@@ -301,8 +301,8 @@ public final class Rules {
      * @param maxExamples how many to show, zero or less for all of them
      * @return that text, empty when no error in the pass has an example
      */
-    public static String acceptedCodeContext(
-            List<SheriffFinding> findings, List<SheriffRule> rules, int maxExamples) {
+    public static String acceptedCodeContext(List<SheriffFinding> findings,
+            List<SheriffRule> rules, int maxExamples) {
         if (findings.isEmpty() || rules.isEmpty()) {
             return NOTHING;
         }

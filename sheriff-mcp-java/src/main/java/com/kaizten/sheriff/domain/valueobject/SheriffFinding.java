@@ -20,8 +20,7 @@ import java.util.Map;
  * @param type {@code ERROR} or {@code WARNING}
  * @param raw every field of the original entry, including the ones above
  */
-public record SheriffFinding(
-        String file,
+public record SheriffFinding(String file,
         String description,
         String howToSolve,
         String referenceCode,

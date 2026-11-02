@@ -420,7 +420,9 @@ for line in sys.stdin:
 }
 for copy in one two; do
   component "$work/same/$copy/app"
-  printf 'package demo;\n\nimport java.util.List;\nimport java.util.ArrayList;\n\npublic class Basket {\n}\n' \
+  # Imports it uses: since the image of 2 November, a fixer removes unused ones
+  # rather than sort them.
+  printf 'package demo;\n\nimport java.util.List;\nimport java.util.ArrayList;\n\npublic class Basket {\n\n    private final List<String> items = new ArrayList<>();\n}\n' \
     > "$work/same/$copy/app/src/main/java/demo/Basket.java"
   printf '/**\n * Demo.\n */\npackage demo;\n' > "$work/same/$copy/app/src/main/java/demo/package-info.java"
   answer "$work/same/$copy/app" sheriff_test >"$work/16-test-$copy.out"

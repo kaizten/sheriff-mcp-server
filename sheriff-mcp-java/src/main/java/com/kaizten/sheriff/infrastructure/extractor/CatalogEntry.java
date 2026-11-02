@@ -78,8 +78,7 @@ public record CatalogEntry(SheriffRule rule, String referenceCode, String source
      * @return the rebuilt entry
      */
     private CatalogEntry with(String fixer, List<String> profiles, String example) {
-        return new CatalogEntry(
-                new SheriffRule(rule.code(), rule.description(), rule.howToSolve(), rule.language(),
+        return new CatalogEntry(new SheriffRule(rule.code(), rule.description(), rule.howToSolve(), rule.language(),
                         rule.category(), fixer, profiles, example),
                 referenceCode, source, owner);
     }

@@ -146,8 +146,7 @@ public final class SettingsPage implements AutoCloseable {
     private static final String TRANSLATIONS_FIELD = "translations";
     private static final String SPANISH = "es";
     private static final String SPANISH_RESOURCE = "/settings-page-es.tsv";
-    private static final List<SettingsTranslation> TRANSLATIONS = List.of(
-            SettingsTranslation.read(SPANISH, SPANISH_RESOURCE));
+    private static final List<SettingsTranslation> TRANSLATIONS = List.of(SettingsTranslation.read(SPANISH, SPANISH_RESOURCE));
     private static final String OPEN_COMMAND = "%s -jar %s --config-ui";
     private static final String JAVA = "java";
     private static final String JAR_SUFFIX = ".jar";

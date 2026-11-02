@@ -122,8 +122,8 @@ public final class ProvisionedCatalog implements RuleCatalog {
      * @param imageReady completes once the image has been pulled or found
      * @return the catalog, being provisioned
      */
-    public static ProvisionedCatalog forServer(
-            McpConfig config, ProcessRunner processes, CompletableFuture<Void> imageReady) {
+    public static ProvisionedCatalog forServer(McpConfig config,
+            ProcessRunner processes, CompletableFuture<Void> imageReady) {
         Path cache = config.cachedCatalog();
         String configured = config.configuredCatalog();
         Path byHand = configured.isEmpty() ? null : Path.of(configured);

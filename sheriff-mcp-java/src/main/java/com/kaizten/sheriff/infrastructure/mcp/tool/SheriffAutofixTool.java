@@ -88,8 +88,7 @@ final class SheriffAutofixTool {
      * @return that tool
      */
     Tool definition() {
-        Map<String, Object> schema = Schemas.objectSchema(List.of(
-                Map.entry(ToolContext.COMPONENT_ARGUMENT, Schemas.stringProperty(ToolContext.COMPONENT_HELP)),
+        Map<String, Object> schema = Schemas.objectSchema(List.of(Map.entry(ToolContext.COMPONENT_ARGUMENT, Schemas.stringProperty(ToolContext.COMPONENT_HELP)),
                 Map.entry(ToolContext.PROFILE_ARGUMENT, Schemas.stringProperty(ToolContext.PROFILE_HELP)),
                 Map.entry(MAX_ITERATIONS_ARGUMENT, Schemas.positiveIntegerProperty(MAX_ITERATIONS_HELP))));
         return new Tool(context.autofixTool(), DESCRIPTION, schema, ANNOTATIONS, this::handle);
@@ -197,8 +196,8 @@ final class SheriffAutofixTool {
                 ? ToolContext.EMPTY
                 : String.format(OF_CAP, summary.maxIterations());
         String repairNote = summary.repairPassUsed() ? REPAIR_USED : REPAIR_NOT_USED;
-        StringBuilder body = new StringBuilder(String.format(
-                SUMMARY, component, profile, backend, summary.ok() ? GOAL_REACHED : GOAL_NOT_REACHED,
+        StringBuilder body = new StringBuilder(String.format(SUMMARY,
+                component, profile, backend, summary.ok() ? GOAL_REACHED : GOAL_NOT_REACHED,
                 summary.stoppedReason().wireName(), summary.iterationsUsed(), capSuffix, repairNote));
         if (!summary.parkedFiles().isEmpty()) {
             body.append(String.format(PARKED_FILES_LINE, String.join(FILE_SEPARATOR, summary.parkedFiles())));

@@ -77,8 +77,7 @@ public final class MockSheriffAnalyzer implements CodeAnalyzer {
         for (int index = 0; index < lines.size(); index++) {
             if (lines.get(index).contains(marker)) {
                 int line = index + 1;
-                findings.add(new SheriffFinding(
-                        repositoryRoot.relativize(file).toString(),
+                findings.add(new SheriffFinding(repositoryRoot.relativize(file).toString(),
                         String.format(DESCRIPTION, line),
                         String.format(HOW_TO_SOLVE, marker, line),
                         REFERENCE_CODE,

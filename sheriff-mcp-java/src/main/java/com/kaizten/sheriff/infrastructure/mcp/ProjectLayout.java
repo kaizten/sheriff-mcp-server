@@ -61,8 +61,8 @@ public final class ProjectLayout {
     private static final List<String> VUE_FILES = List.of(VUE_EXTENSION);
     private static final List<String> PERL_FILES = List.of(PERL_SCRIPT_EXTENSION, PERL_MODULE_EXTENSION);
     private static final List<String> PYTHON_FILES = List.of(PYTHON_EXTENSION);
-    private static final List<String> ANY_SOURCE_FILES = List.of(
-            JAVA_EXTENSION, TYPESCRIPT_EXTENSION, TYPESCRIPT_JSX_EXTENSION, VUE_EXTENSION,
+    private static final List<String> ANY_SOURCE_FILES = List.of(JAVA_EXTENSION,
+            TYPESCRIPT_EXTENSION, TYPESCRIPT_JSX_EXTENSION, VUE_EXTENSION,
             PERL_SCRIPT_EXTENSION, PERL_MODULE_EXTENSION, PYTHON_EXTENSION);
     private static final String USER_HOME = "user.home";
     private static final String MAVEN_WRAPPER = "mvnw";
@@ -71,8 +71,8 @@ public final class ProjectLayout {
     private static final String GRADLE_BUILD = "build.gradle";
     private static final String GRADLE_KOTLIN_BUILD = "build.gradle.kts";
     private static final String NPM_MANIFEST = "package.json";
-    private static final List<String> BUILD_FILES = List.of(
-            MAVEN_BUILD, GRADLE_BUILD, GRADLE_KOTLIN_BUILD, NPM_MANIFEST, DeclaredProfile.FILE_NAME);
+    private static final List<String> BUILD_FILES = List.of(MAVEN_BUILD,
+            GRADLE_BUILD, GRADLE_KOTLIN_BUILD, NPM_MANIFEST, DeclaredProfile.FILE_NAME);
     private static final String SCRIPTS_FIELD = "scripts";
     private static final String TEST_SCRIPT = "test";
     private static final String NO_RUN = "";

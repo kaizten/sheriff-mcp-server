@@ -158,8 +158,7 @@ public final class AnthropicApiFixer implements CodeFixer {
      * @param repositoryRoot the repository the tools may work in
      * @param promptLog where to record what was asked
      */
-    public AnthropicApiFixer(
-            String apiKey,
+    public AnthropicApiFixer(String apiKey,
             String baseUrl,
             String model,
             long maxTokens,
@@ -183,8 +182,7 @@ public final class AnthropicApiFixer implements CodeFixer {
      * @param workspace the only folder the tools may read or write in
      * @param promptLog where to record what was asked
      */
-    public AnthropicApiFixer(
-            String apiKey,
+    public AnthropicApiFixer(String apiKey,
             String baseUrl,
             String model,
             long maxTokens,
@@ -300,8 +298,7 @@ public final class AnthropicApiFixer implements CodeFixer {
                 .build();
         HttpResponse<String> response = sendRetrying(client, request, endpoint);
         if (response.statusCode() >= FIRST_ERROR_STATUS) {
-            throw new IllegalStateException(
-                    String.format(BAD_STATUS, endpoint, response.statusCode(), trimmed(response.body())));
+            throw new IllegalStateException(String.format(BAD_STATUS, endpoint, response.statusCode(), trimmed(response.body())));
         }
         try {
             return json.readTree(response.body());
@@ -334,7 +331,7 @@ public final class AnthropicApiFixer implements CodeFixer {
      * @return the last response
      */
     private HttpResponse<String> sendRetrying(HttpClient client, HttpRequest request, String endpoint) {
-        for (int attempt = FIRST_TURN; ; attempt++) {
+        for (int attempt = FIRST_TURN;; attempt++) {
             boolean last = attempt >= RETRIES;
             Optional<HttpResponse<String>> response = sendOnce(client, request, endpoint, last);
             if (response.isPresent() && (last || !retried(response.get()))) {
@@ -355,8 +352,8 @@ public final class AnthropicApiFixer implements CodeFixer {
      * @return the response, or empty when the connection failed and another
      *     attempt follows
      */
-    private static Optional<HttpResponse<String>> sendOnce(
-            HttpClient client, HttpRequest request, String endpoint, boolean last) {
+    private static Optional<HttpResponse<String>> sendOnce(HttpClient client,
+            HttpRequest request, String endpoint, boolean last) {
         try {
             return Optional.of(client.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8)));
         } catch (IOException exception) {

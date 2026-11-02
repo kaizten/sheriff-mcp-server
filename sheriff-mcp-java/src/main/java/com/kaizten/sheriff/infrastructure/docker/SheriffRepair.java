@@ -247,8 +247,8 @@ public final class SheriffRepair {
      * @throws FixNotRun when the {@code fix} did not run
      */
     private List<String> runFix(List<String> extraArguments) {
-        List<String> arguments = new ArrayList<>(List.of(
-                FIX_COMMAND, APPLY_FLAG,
+        List<String> arguments = new ArrayList<>(List.of(FIX_COMMAND,
+                APPLY_FLAG,
                 TYPE_FLAG, DETERMINISTIC_TYPE,
                 URI_FLAG, URI_ARGUMENT,
                 COMPONENT_FLAG, component));

@@ -22,8 +22,7 @@ import java.util.List;
  *     left behind, {@code null} when they were not run; a run that stopped
  *     short still checks, so a branch that no longer compiles says so
  */
-public record RunSummary(
-        boolean ok,
+public record RunSummary(boolean ok,
         StopReason stoppedReason,
         int iterationsUsed,
         Integer maxIterations,
@@ -64,8 +63,7 @@ public record RunSummary(
      * @param parkedFiles files the loop stopped offering to the fixer
      * @param workingBranch the branch the run left the repository on
      */
-    public RunSummary(
-            boolean ok,
+    public RunSummary(boolean ok,
             StopReason stoppedReason,
             int iterationsUsed,
             Integer maxIterations,
@@ -85,8 +83,7 @@ public record RunSummary(
      * @param repairPassUsed whether the unrestricted repair pass was spent
      * @param parkedFiles files the loop stopped offering to the fixer
      */
-    public RunSummary(
-            boolean ok,
+    public RunSummary(boolean ok,
             StopReason stoppedReason,
             int iterationsUsed,
             Integer maxIterations,

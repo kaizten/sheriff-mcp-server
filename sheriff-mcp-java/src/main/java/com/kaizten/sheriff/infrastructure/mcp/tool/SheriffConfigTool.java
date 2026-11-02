@@ -89,8 +89,7 @@ final class SheriffConfigTool implements AutoCloseable {
      * @return that tool
      */
     Tool definition() {
-        Map<String, Object> schema = Schemas.objectSchema(List.of(
-                Map.entry(SETTING_ARGUMENT, Schemas.stringProperty(SETTING_HELP)),
+        Map<String, Object> schema = Schemas.objectSchema(List.of(Map.entry(SETTING_ARGUMENT, Schemas.stringProperty(SETTING_HELP)),
                 Map.entry(VALUE_ARGUMENT, Schemas.stringProperty(VALUE_HELP)),
                 Map.entry(PROJECT_ARGUMENT, Schemas.booleanProperty(PROJECT_HELP)),
                 Map.entry(PAGE_ARGUMENT, Schemas.booleanProperty(PAGE_HELP))));

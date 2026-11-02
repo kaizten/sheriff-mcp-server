@@ -117,8 +117,8 @@ final class DraftRule {
      * @return the finished rule
      */
     SheriffRule toRule() {
-        return new SheriffRule(
-                code, String.join(SPACE, description).strip(), howToSolve, language, category, fixer, profiles,
+        return new SheriffRule(code,
+                String.join(SPACE, description).strip(), howToSolve, language, category, fixer, profiles,
                 String.join(NEWLINE, example).stripTrailing());
     }
 }

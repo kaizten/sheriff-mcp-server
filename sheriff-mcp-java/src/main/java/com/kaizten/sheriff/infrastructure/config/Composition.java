@@ -235,8 +235,8 @@ public final class Composition {
      * @param verifications the test command for each component
      * @return that composition
      */
-    public static Composition real(
-            Configuration configuration, UnaryOperator<String> profiles, UnaryOperator<String> verifications) {
+    public static Composition real(Configuration configuration,
+            UnaryOperator<String> profiles, UnaryOperator<String> verifications) {
         return new Composition(configuration, new SystemProcessRunner(), profiles, verifications);
     }
 
@@ -271,13 +271,11 @@ public final class Composition {
      */
     public CodeAnalyzer analyzer() {
         if (configuration.mockMode()) {
-            return new MockSheriffAnalyzer(
-                    configuration.targetRepository(),
+            return new MockSheriffAnalyzer(configuration.targetRepository(),
                     configuration.targetRepository().resolve(configuration.component()),
                     configuration.mockMarker());
         }
-        return exporting(new SheriffDockerAnalyzer(
-                processes,
+        return exporting(new SheriffDockerAnalyzer(processes,
                 configuration.image(),
                 configuration.testType(),
                 configuration.component(),
@@ -323,8 +321,7 @@ public final class Composition {
         if (configuration.mockMode()) {
             return analyzer();
         }
-        SheriffDockerAnalyzer analyzer = exporting(new SheriffDockerAnalyzer(
-                processes,
+        SheriffDockerAnalyzer analyzer = exporting(new SheriffDockerAnalyzer(processes,
                 configuration.image(),
                 profileFor(component),
                 component,
@@ -348,8 +345,7 @@ public final class Composition {
                     configuration.verificationCommand(), configuration.claudeTimeout());
         }
         if (ANTHROPIC_API_BACKEND.equals(backend)) {
-            return new AnthropicApiFixer(
-                    configuration.apiKey(),
+            return new AnthropicApiFixer(configuration.apiKey(),
                     configuration.apiBaseUrl(),
                     configuration.apiModel(),
                     configuration.apiMaxTokens(),
@@ -372,8 +368,7 @@ public final class Composition {
         if (LOCAL_BACKEND.equals(backend)) {
             return openAiFixer(log, LOCAL_BASE_URL, LOCAL_MODEL, false);
         }
-        throw new IllegalArgumentException(
-                String.format(UNKNOWN_BACKEND, backend, String.join(BACKEND_SEPARATOR, BACKENDS)));
+        throw new IllegalArgumentException(String.format(UNKNOWN_BACKEND, backend, String.join(BACKEND_SEPARATOR, BACKENDS)));
     }
 
     /**
@@ -410,8 +405,7 @@ public final class Composition {
     private CodeFixer openAiFixer(PromptLog log, String defaultBaseUrl, String defaultModel, boolean keyRequired) {
         String baseUrl = configuration.openAiBaseUrl();
         String model = configuration.openAiModel();
-        return new OpenAiApiFixer(
-                configuration.openAiKey(),
+        return new OpenAiApiFixer(configuration.openAiKey(),
                 baseUrl.isEmpty() ? defaultBaseUrl : baseUrl,
                 model.isEmpty() ? defaultModel : model,
                 configuration.openAiMaxTokens(),
@@ -459,8 +453,7 @@ public final class Composition {
         if (configuration.prototype()) {
             return () -> VerificationResult.notRun(PROTOTYPE_TESTS);
         }
-        return new ShellTestRunner(
-                processes,
+        return new ShellTestRunner(processes,
                 configuration.verificationCommand(),
                 configuration.targetRepository(),
                 configuration.verificationTimeout());
@@ -517,8 +510,8 @@ public final class Composition {
     public Optional<String> provisionCatalog() {
         Optional<Path> cache = configuration.cachedCatalog();
         if (configuration.catalogConfigured() || configuration.mockMode() || cache.isEmpty()) {
-            return CatalogFreshness.check(
-                    processes, configuration.agentDirectory(), configuration.rulesCatalog(), configuration.image());
+            return CatalogFreshness.check(processes,
+                    configuration.agentDirectory(), configuration.rulesCatalog(), configuration.image());
         }
         provisionedCatalog = CatalogProvisioning.choose(null, List.of(configuration.rulesCatalog()), cache.get(),
                 CatalogProvisioning.matching(processes, configuration.image()),
@@ -536,8 +529,7 @@ public final class Composition {
      */
     public String rulesContext() {
         Integer cap = configuration.maxRulesInPrompt();
-        return Rules.sheriffRulesContext(
-                configuration.testType(),
+        return Rules.sheriffRulesContext(configuration.testType(),
                 ruleCatalog().allRules(),
                 cap == null ? Rules.DEFAULT_MAX_RULES_IN_PROMPT : cap);
     }
@@ -580,8 +572,8 @@ public final class Composition {
      * @return that pass
      */
     public DeterministicFixer deterministicFixer() {
-        SheriffDockerAnalyzer stateKeeping = exporting(new SheriffDockerAnalyzer(
-                processes, configuration.image(), configuration.testType(), configuration.component(),
+        SheriffDockerAnalyzer stateKeeping = exporting(new SheriffDockerAnalyzer(processes,
+                configuration.image(), configuration.testType(), configuration.component(),
                 configuration.targetRepository(), configuration.sheriffTimeout(), false));
         return new DeterministicFixer(processes, ruleCatalog(), stateKeeping, configuration.image(),
                 configuration.component(), configuration.targetRepository(), configuration.sheriffTimeout())
@@ -603,8 +595,8 @@ public final class Composition {
      * @return that hook
      */
     public SheriffStopHook stopHook() {
-        GitVersionControl git = new GitVersionControl(
-                processes, configuration.targetRepository(), configuration.projectDirectory(), NO_BRANCH_STAMP);
+        GitVersionControl git = new GitVersionControl(processes,
+                configuration.targetRepository(), configuration.projectDirectory(), NO_BRANCH_STAMP);
         Function<String, VerificationResult> tests = configuration.stopRunsTests()
                 ? component -> commandRunner(verifications.apply(component), configuration.targetRepository()).run()
                 : null;

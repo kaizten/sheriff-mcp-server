@@ -346,8 +346,7 @@ public final class OpenAiApiFixer implements CodeFixer {
      * @param repositoryRoot the repository the tools are scoped to
      * @param promptLog where to record what was asked
      */
-    public OpenAiApiFixer(
-            String apiKey,
+    public OpenAiApiFixer(String apiKey,
             String baseUrl,
             String model,
             long maxTokens,
@@ -373,8 +372,7 @@ public final class OpenAiApiFixer implements CodeFixer {
      * @param workspace the only folder the tools may read or write in
      * @param promptLog where to record what was asked
      */
-    public OpenAiApiFixer(
-            String apiKey,
+    public OpenAiApiFixer(String apiKey,
             String baseUrl,
             String model,
             long maxTokens,
@@ -470,8 +468,7 @@ public final class OpenAiApiFixer implements CodeFixer {
         HttpResponse<String> response = send(builder.build(), endpoint);
         if (response.statusCode() >= FIRST_ERROR_STATUS) {
             String hint = response.body().contains(CONTEXT_EXCEEDED) ? String.format(CONTEXT_HINT, model, model) : NO_HINT;
-            throw new IllegalStateException(
-                    String.format(BAD_STATUS, endpoint, response.statusCode(), trimmed(response.body())) + hint);
+            throw new IllegalStateException(String.format(BAD_STATUS, endpoint, response.statusCode(), trimmed(response.body())) + hint);
         }
         JsonNode choice = parse(response.body()).path(CHOICES).path(0);
         String finishReason = choice.path(FINISH_REASON).asText(MISSING_ARGUMENT);

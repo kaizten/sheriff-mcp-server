@@ -163,8 +163,7 @@ public final class AntigravityCliFixer implements CodeFixer {
      * @param timeout how long one invocation is given
      * @param home the home each pass runs with, and the commands it grants
      */
-    public AntigravityCliFixer(
-            ProcessRunner processes,
+    public AntigravityCliFixer(ProcessRunner processes,
             PromptLog promptLog,
             Path repositoryRoot,
             String component,
@@ -199,8 +198,8 @@ public final class AntigravityCliFixer implements CodeFixer {
         if (!outcome.ran()) {
             return FixResult.failed(outcome.failure());
         }
-        Path logged = promptLog.record(
-                request.label(), request.prompt(), outcome.standardOutput() + outcome.standardError());
+        Path logged = promptLog.record(request.label(),
+                request.prompt(), outcome.standardOutput() + outcome.standardError());
         if (logged != null) {
             System.out.printf(LOGGED_MESSAGE, logged);
         }

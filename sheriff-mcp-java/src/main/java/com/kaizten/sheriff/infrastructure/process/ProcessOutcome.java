@@ -16,8 +16,8 @@ package com.kaizten.sheriff.infrastructure.process;
  * @param standardError everything it wrote to stderr
  * @param failure why it never ran or was killed, empty when it ran
  */
-public record ProcessOutcome(
-        ProcessStatus status, int exitCode, String standardOutput, String standardError, String failure) {
+public record ProcessOutcome(ProcessStatus status,
+        int exitCode, String standardOutput, String standardError, String failure) {
 
     /**
      * Normalizes the nulls a caller or a stream reader can produce.

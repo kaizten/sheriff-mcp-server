@@ -76,8 +76,7 @@ public final class JsonRuleCatalog implements RuleCatalog {
         for (JsonNode profile : entry.path(PROFILES_FIELD)) {
             profiles.add(profile.asText());
         }
-        return new SheriffRule(
-                code,
+        return new SheriffRule(code,
                 entry.path(DESCRIPTION_FIELD).asText(),
                 entry.path(HOW_TO_SOLVE_FIELD).asText(),
                 entry.path(LANGUAGE_FIELD).asText(),

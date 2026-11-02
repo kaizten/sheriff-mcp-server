@@ -68,8 +68,7 @@ public final class DockerFixerScriptSource implements FixerScriptSource {
     @Override
     public String read(String scriptPath) {
         String path = FIXERS_ROOT + SEPARATOR + cleaned(scriptPath);
-        ProcessOutcome outcome = processes.run(
-                List.of(DOCKER, RUN, REMOVE, ENTRYPOINT, SHELL, image, COMMAND_FLAG, String.format(READ_COMMAND, path)),
+        ProcessOutcome outcome = processes.run(List.of(DOCKER, RUN, REMOVE, ENTRYPOINT, SHELL, image, COMMAND_FLAG, String.format(READ_COMMAND, path)),
                 null,
                 Map.of(),
                 timeout);

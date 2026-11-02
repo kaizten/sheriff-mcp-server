@@ -497,8 +497,10 @@ names Java requires; and, since the image of 29 October,
 `JavaVariableName` on a `static final` constant and `UnusedImport` on an
 import used as an annotation. On this repository's code, clean under the
 image of 28 October, those three were 13,981 of 14,879 errors under the new
-one, and every `UnusedImport` of the plugin. A line it cannot read keeps
-its finding.
+one, and every `UnusedImport` of the plugin. Since the image of 2 November,
+`JavaBracePlacement` on a switch expression's closing brace alone on its line
+but for its `;`, which the rule flagged on every one, assigned or returned
+(measured). A line it cannot read keeps its finding.
 
 ## The MCP's answers
 

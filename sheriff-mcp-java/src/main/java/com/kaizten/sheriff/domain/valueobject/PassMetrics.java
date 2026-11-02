@@ -24,8 +24,7 @@ import java.util.TreeMap;
  * @param usage what the pass cost, {@code null} when it used no model or its
  *     backend did not say
  */
-public record PassMetrics(
-        String label,
+public record PassMetrics(String label,
         String kind,
         Map<String, Integer> errorsBefore,
         Map<String, Integer> errorsAfter,

@@ -139,8 +139,7 @@ public final class FixLoop implements FixCodeUntilClean {
      * @param rules the catalog itself
      * @param settings the iteration cap, git safety and batch size
      */
-    public FixLoop(
-            CodeAnalyzer analyzer,
+    public FixLoop(CodeAnalyzer analyzer,
             CodeFixer fixer,
             VersionControl versionControl,
             TestRunner testRunner,
@@ -167,8 +166,7 @@ public final class FixLoop implements FixCodeUntilClean {
      *     injected rather than read from configuration
      * @param settings the iteration cap, git safety and batch size
      */
-    public FixLoop(
-            CodeAnalyzer analyzer,
+    public FixLoop(CodeAnalyzer analyzer,
             CodeFixer fixer,
             VersionControl versionControl,
             TestRunner testRunner,
@@ -193,8 +191,7 @@ public final class FixLoop implements FixCodeUntilClean {
      * @param metrics where each pass goes once the analysis after it has
      *     measured it
      */
-    public FixLoop(
-            CodeAnalyzer analyzer,
+    public FixLoop(CodeAnalyzer analyzer,
             CodeFixer fixer,
             VersionControl versionControl,
             TestRunner testRunner,
@@ -230,8 +227,7 @@ public final class FixLoop implements FixCodeUntilClean {
         if (settings.useGitSafety()) {
             String branch = versionControl.createWorkingBranch(BRANCH_PREFIX);
             state.workingBranch(branch);
-            System.out.printf(
-                    "Working on dedicated branch '%s' — every iteration with changes becomes its own commit.%n%n",
+            System.out.printf("Working on dedicated branch '%s' — every iteration with changes becomes its own commit.%n%n",
                     branch);
         }
         applyAutomaticRepair();
@@ -318,8 +314,7 @@ public final class FixLoop implements FixCodeUntilClean {
         if (state.maxIterations() == null) {
             state.maxIterations(BatchPolicy.estimateMaxIterations(result.errors(), settings.grouping(),
                     settings.maxFilesPerBatch(), settings.maxErrorsPerBatch()));
-            System.out.printf(
-                    "  sizing the iteration cap to %d automatically, based on how many files have errors%n",
+            System.out.printf("  sizing the iteration cap to %d automatically, based on how many files have errors%n",
                     state.maxIterations());
         }
         if (state.hasHistory() && total >= state.lastTotal()) {
@@ -334,8 +329,7 @@ public final class FixLoop implements FixCodeUntilClean {
         List<SheriffFinding> batch = BatchPolicy.selectBatch(result.errors(), settings.grouping(),
                 settings.maxFilesPerBatch(), settings.maxErrorsPerBatch(), state.parkedFiles());
         if (batch.isEmpty()) {
-            System.out.printf(
-                    "%nNothing left to try: every file that still has errors (%d of them) was already "
+            System.out.printf("%nNothing left to try: every file that still has errors (%d of them) was already "
                             + "attempted without improvement. Cutting for manual review.%n", total);
             return finish(state, false, StopReason.STALLED);
         }
@@ -361,8 +355,7 @@ public final class FixLoop implements FixCodeUntilClean {
         if (batch.size() < result.errors().size()) {
             reportBatching(state, result, batch, total, allowedFiles);
         }
-        FixRequest request = FixRequest.scoped(
-                String.format(PROMPT_TEMPLATE, rulesContext, batch.size(), describeAll(batch),
+        FixRequest request = FixRequest.scoped(String.format(PROMPT_TEMPLATE, rulesContext, batch.size(), describeAll(batch),
                         section(Rules.acceptedCodeContext(batch, rules))),
                 String.format(ITERATION_LABEL, state.iteration()),
                 allowedFiles);
@@ -387,8 +380,7 @@ public final class FixLoop implements FixCodeUntilClean {
                     .filter(file -> !allowedFiles.contains(renamedFrom.getOrDefault(file, file)))
                     .toList();
             if (!outOfScope.isEmpty()) {
-                System.out.printf(
-                        "%nThe fixer modified files outside what Sheriff had flagged: %s. "
+                System.out.printf("%nThe fixer modified files outside what Sheriff had flagged: %s. "
                                 + "Cutting without committing — review manually before continuing.%n", outOfScope);
                 return finish(state, false, StopReason.OUT_OF_SCOPE);
             }
@@ -416,8 +408,7 @@ public final class FixLoop implements FixCodeUntilClean {
             System.out.println("Tests pass too — goal achieved.");
             return finish(state, true, StopReason.SUCCESS);
         }
-        System.out.printf(
-                "%nSheriff is happy, but the project's own tests failed -- the fix broke something "
+        System.out.printf("%nSheriff is happy, but the project's own tests failed -- the fix broke something "
                         + "Sheriff can't see.%n%s%n", verification.output());
         state.markRepairPassUsed();
         if (attemptRepair(verification.output())) {
@@ -461,14 +452,12 @@ public final class FixLoop implements FixCodeUntilClean {
      */
     private RunSummary park(RunState state, int total) {
         if (state.lastBatchFiles().isEmpty()) {
-            System.out.printf(
-                    "%nNo progress: %d -> %d errors, and the last pass had no file of its own to park. "
+            System.out.printf("%nNo progress: %d -> %d errors, and the last pass had no file of its own to park. "
                             + "Cutting for manual review.%n", state.lastTotal(), total);
             return finish(state, false, StopReason.STALLED);
         }
         state.park(state.lastBatchFiles());
-        System.out.printf(
-                "  no progress (%d -> %d errors): parking %s and moving on to the other files%n",
+        System.out.printf("  no progress (%d -> %d errors): parking %s and moving on to the other files%n",
                 state.lastTotal(), total, String.join(COMMA, new TreeSet<>(state.lastBatchFiles())));
         return null;
     }
@@ -483,16 +472,15 @@ public final class FixLoop implements FixCodeUntilClean {
      * @param total how many errors there are in all
      * @param allowedFiles the files this pass may touch
      */
-    private void reportBatching(
-            RunState state, AnalysisResult result, List<SheriffFinding> batch, int total, Set<String> allowedFiles) {
+    private void reportBatching(RunState state,
+            AnalysisResult result, List<SheriffFinding> batch, int total, Set<String> allowedFiles) {
         long parkedErrors = result.errors().stream()
                 .filter(f -> state.isParked(BatchPolicy.parkingKey(f, settings.grouping()))).count();
         long queued = total - batch.size() - parkedErrors;
         String parkedNote = parkedErrors == NO_ERRORS ? EMPTY : String.format(", %d error(s) parked", parkedErrors);
         String rule = settings.grouping() == BatchGrouping.RULE ? String.format(RULE_NOTE, batch.get(0).referenceCode())
                 : EMPTY;
-        System.out.printf(
-                "  batching: fixing %s%d file(s) this pass, %d error(s) left for later%s%n",
+        System.out.printf("  batching: fixing %s%d file(s) this pass, %d error(s) left for later%s%n",
                 rule, allowedFiles.size(), queued, parkedNote);
     }
 
@@ -511,8 +499,8 @@ public final class FixLoop implements FixCodeUntilClean {
     private boolean attemptRepair(String verificationOutput) {
         System.out.println("  attempting one repair pass (unrestricted file scope, using the test failure)...");
         long started = System.nanoTime();
-        FixResult fixResult = fixer.fix(FixRequest.unrestricted(
-                String.format(REPAIR_PROMPT_TEMPLATE, verificationOutput), REPAIR_LABEL));
+        FixResult fixResult = fixer.fix(FixRequest.unrestricted(String.format(REPAIR_PROMPT_TEMPLATE, verificationOutput),
+                REPAIR_LABEL));
         meter.repairPassed(REPAIR_LABEL, since(started), fixResult.usage());
         if (!fixResult.ok()) {
             System.out.printf("  repair pass failed to run: %s%n", excerpt(fixResult.output()));

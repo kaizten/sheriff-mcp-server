@@ -520,8 +520,7 @@ public final class McpConfig {
      * @return those thresholds
      */
     public CoverageThresholds coverageThresholds(String component) {
-        return CoverageThresholds.declared(
-                threshold(component, LINES_SETTING, CoverageThresholds.LINES_PROPERTY, CoverageThresholds.LINES_KEY),
+        return CoverageThresholds.declared(threshold(component, LINES_SETTING, CoverageThresholds.LINES_PROPERTY, CoverageThresholds.LINES_KEY),
                 threshold(component, BRANCHES_SETTING, CoverageThresholds.BRANCHES_PROPERTY,
                         CoverageThresholds.BRANCHES_KEY),
                 threshold(component, MUTANTS_SETTING, CoverageThresholds.MUTANTS_PROPERTY,

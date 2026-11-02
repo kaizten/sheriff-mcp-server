@@ -144,8 +144,8 @@ public final class ProfileMapper {
      * @param graphDump the reference-graph dump
      * @return the mapping, profiles sorted
      */
-    public static Map<String, List<String>> profileRules(
-            List<CatalogEntry> entries, String factoryDump, String graphDump) {
+    public static Map<String, List<String>> profileRules(List<CatalogEntry> entries,
+            String factoryDump, String graphDump) {
         Map<String, Set<String>> graph = referenceGraph(graphDump);
         Map<String, List<String>> profiles = new TreeMap<>();
         for (Map.Entry<String, String> entry : profileCheckers(factoryDump).entrySet()) {

@@ -22,8 +22,7 @@ import java.util.Optional;
  * @param rounds how many rounds of fixers ran, each measured by the analysis
  *     after it
  */
-public record RepairOutcome(
-        AnalysisResult before,
+public record RepairOutcome(AnalysisResult before,
         AnalysisResult after,
         List<String> codes,
         List<String> fixerFailures,

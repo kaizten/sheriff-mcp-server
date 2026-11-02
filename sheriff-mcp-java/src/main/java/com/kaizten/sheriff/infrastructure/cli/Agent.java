@@ -769,8 +769,7 @@ public final class Agent {
         String files = valueAfter(arguments, MAX_FILES);
         String grouping = valueAfter(arguments, BATCH_BY);
         String errors = valueAfter(arguments, MAX_ERRORS);
-        return new LoopSettings(
-                iterations.isEmpty() ? configured.maxIterations() : flagNumber(MAX_ITERATIONS, iterations),
+        return new LoopSettings(iterations.isEmpty() ? configured.maxIterations() : flagNumber(MAX_ITERATIONS, iterations),
                 configured.useGitSafety() && !arguments.contains(NO_GIT_SAFETY),
                 files.isEmpty() ? configured.maxFilesPerBatch() : flagNumber(MAX_FILES, files),
                 grouping.isEmpty() ? configured.grouping() : BatchGrouping.named(grouping),

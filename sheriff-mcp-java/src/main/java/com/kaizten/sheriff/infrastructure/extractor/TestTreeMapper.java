@@ -134,8 +134,8 @@ public final class TestTreeMapper {
      * @param profileNames the valid {@code --test} values
      * @return the codes of each profile, sorted
      */
-    public static Map<String, List<String>> profileRules(
-            List<CatalogEntry> entries, String treeJson, List<String> profileNames) {
+    public static Map<String, List<String>> profileRules(List<CatalogEntry> entries,
+            String treeJson, List<String> profileNames) {
         Map<String, List<String>> byProfile = new TreeMap<>();
         for (Map.Entry<String, List<String>> profile : checksByProfile(treeJson, profileNames).entrySet()) {
             Set<String> codes = new LinkedHashSet<>();
@@ -166,8 +166,8 @@ public final class TestTreeMapper {
      * @return those checks, each prefixed by its profile, plus any profile
      *     that could not be placed at all
      */
-    public static List<String> unmatchedChecks(
-            List<CatalogEntry> entries, String treeJson, List<String> profileNames) {
+    public static List<String> unmatchedChecks(List<CatalogEntry> entries,
+            String treeJson, List<String> profileNames) {
         List<String> unmatched = new ArrayList<>(unplacedProfiles(treeJson, profileNames));
         for (Map.Entry<String, List<String>> profile : checksByProfile(treeJson, profileNames).entrySet()) {
             for (String check : profile.getValue()) {

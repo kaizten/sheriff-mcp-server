@@ -42,8 +42,7 @@ public final class DeterministicFixer implements AutomaticRepair {
      * @param repositoryRoot the repository to mount
      * @param timeout how long each invocation is given
      */
-    public DeterministicFixer(
-            ProcessRunner processes,
+    public DeterministicFixer(ProcessRunner processes,
             RuleCatalog catalog,
             SheriffDockerAnalyzer analyzer,
             String image,

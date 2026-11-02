@@ -122,8 +122,7 @@ public final class CatalogWriter {
      * @return the JSON document
      * @throws IOException when it cannot be serialized
      */
-    public String toJson(
-            List<CatalogEntry> entries,
+    public String toJson(List<CatalogEntry> entries,
             String image,
             String imageId,
             String profileSource,
@@ -152,8 +151,7 @@ public final class CatalogWriter {
      * @return the Markdown document
      */
     public String toMarkdown(List<CatalogEntry> entries, String image) {
-        List<String> lines = new ArrayList<>(List.of(
-                TITLE,
+        List<String> lines = new ArrayList<>(List.of(TITLE,
                 BLANK,
                 String.format(GENERATED_NOTE, image, ZonedDateTime.now(ZoneOffset.UTC).format(STAMP)),
                 BLANK,
@@ -209,8 +207,7 @@ public final class CatalogWriter {
      * @param unmatchedChecks checks Sheriff lists that no rule code matched
      * @throws IOException when a document cannot be written
      */
-    public void write(
-            List<CatalogEntry> entries,
+    public void write(List<CatalogEntry> entries,
             String image,
             String imageId,
             Path jsonPath,

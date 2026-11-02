@@ -409,8 +409,8 @@ public final class Platform {
      * @return the first file that exists, or empty
      */
     private static Optional<Path> find(String executable, Map<String, String> environment) {
-        String path = environment.getOrDefault(PATH_VARIABLE, environment.getOrDefault(
-                PATH_VARIABLE.toLowerCase(Locale.ROOT), NOTHING));
+        String path = environment.getOrDefault(PATH_VARIABLE, environment.getOrDefault(PATH_VARIABLE.toLowerCase(Locale.ROOT),
+                NOTHING));
         String extensions = environment.getOrDefault(PATH_EXTENSIONS_VARIABLE, DEFAULT_PATH_EXTENSIONS);
         for (String directory : path.split(WINDOWS_PATH_SEPARATOR)) {
             if (directory.isBlank()) {

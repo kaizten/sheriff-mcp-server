@@ -117,4 +117,34 @@ class KnownFalsePositivesTests {
         assertEquals(List.of(missing, noLine, pastTheEnd),
                 KnownFalsePositives.without(List.of(missing, noLine, pastTheEnd), mount));
     }
+
+    @Test
+    @DisplayName("a switch expression's closing brace alone on its line is placed, one with more on its line is not")
+    void dropsTheClosingBraceOfASwitchExpression() throws IOException {
+        Files.createDirectories(mount.resolve("app/src"));
+        Files.writeString(mount.resolve("app/src/Kind.java"), """
+                package demo;
+
+                class Kind {
+                    String name(int value) {
+                        return switch (value) {
+                            case 1 -> "one";
+                            default -> "other";
+                        };
+                    }
+
+                    String other(int value) {
+                        return switch (value) { default -> "other"; };
+                    }
+                }
+                """);
+        String format = "Closing brace for switch expression on line %d does not follow Java brace placement.";
+        SheriffFinding alone = finding("app/src/Kind.java", "JavaBracePlacement", String.format(format, 8));
+        SheriffFinding inline = finding("app/src/Kind.java", "JavaBracePlacement", String.format(format, 12));
+        SheriffFinding pastTheEnd = finding("app/src/Kind.java", "JavaBracePlacement", String.format(format, 400));
+        SheriffFinding unread = finding("app/src/Gone.java", "JavaBracePlacement", String.format(format, 8));
+        SheriffFinding other = finding("app/src/Kind.java", "JavaBracePlacement", "Opening brace on line 4.");
+        assertEquals(List.of(inline, pastTheEnd, unread, other),
+                KnownFalsePositives.without(List.of(alone, inline, pastTheEnd, unread, other), mount));
+    }
 }
