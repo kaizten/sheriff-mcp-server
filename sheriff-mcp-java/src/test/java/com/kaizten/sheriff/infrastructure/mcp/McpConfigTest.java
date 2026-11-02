@@ -234,6 +234,37 @@ final class McpConfigTest {
     }
 
     @Test
+    @DisplayName("only a component Sheriff was applied to is checked, under what it declares and every test its "
+            + "history records")
+    void onlyAComponentSheriffWasAppliedToIsChecked() throws IOException {
+        javaModule("back-end");
+        javaModule("declared");
+        javaModule("never");
+        Files.writeString(workspace.resolve("declared/pom.xml"),
+                "<project><properties><sheriff.profile>JAVA_DDD</sheriff.profile></properties></project>");
+        Files.writeString(workspace.resolve("sheriff_history.json"), "{\"file:/data\":["
+                + "{\"components\":[\"back-end\"],\"test\":\"JAVA\"},"
+                + "{\"components\":[\"back-end\"],\"test\":\"JAVA_HEXAGONAL\"},"
+                + "{\"components\":[\"declared\"],\"test\":\"JAVA_HEXAGONAL\"}]}");
+
+        McpConfig config = new McpConfig(Map.of(), workspace);
+
+        assertEquals(Optional.of("JAVA,JAVA_HEXAGONAL"), config.checkedProfile("back-end"));
+        assertEquals(Optional.of("JAVA,JAVA_DDD,JAVA_HEXAGONAL"), config.checkedProfile("declared"));
+        assertEquals(Optional.empty(), config.checkedProfile("never"));
+        assertEquals("JAVA", config.profileFor("never"), "asked for by hand, its sources choose");
+        assertEquals(Optional.of("JAVA"), new McpConfig(Map.of("SHERIFF_SCOPE", "all"), workspace)
+                .checkedProfile("never"));
+        Path front = Files.createDirectories(workspace.resolve("front/src"));
+        Files.writeString(front.resolve("app.ts"), "export const a = 1;");
+        Files.writeString(workspace.resolve("pom.xml"),
+                "<project><properties><sheriff.profile>JAVA_HEXAGONAL</sheriff.profile></properties></project>");
+        assertEquals(Optional.empty(), config.checkedProfile("front"), "a Java declaration is not a TypeScript one's");
+        Files.writeString(workspace.resolve("sheriff_history.json"), "not JSON");
+        assertEquals(Optional.empty(), config.checkedProfile("back-end"), "a history that cannot be read records none");
+    }
+
+    @Test
     @DisplayName("a directory that is not a Maven module inherits nothing from the pom.xml above it")
     void onlyMavenModulesInheritFromThePom() throws IOException {
         Path gradle = Files.createDirectories(workspace.resolve("service/src"));
@@ -346,5 +377,14 @@ final class McpConfigTest {
                 "SHERIFF_REPORT", "1", "XDG_STATE_HOME", state.toString()), workspace).reportsDirectory());
         assertEquals(Optional.empty(), new McpConfig(Map.of("XDG_STATE_HOME", state.toString()), workspace)
                 .reportsDirectory());
+    }
+
+    @Test
+    @DisplayName("with no component and nothing applied, the profile is JAVA whatever the sources")
+    void withNoComponentNothingAppliedIsJava() throws IOException {
+        Path front = Files.createDirectories(workspace.resolve("front/src"));
+        Files.writeString(front.resolve("app.ts"), "export const a = 1;");
+
+        assertEquals("JAVA", new McpConfig(Map.of(), workspace).profileFor(""));
     }
 }

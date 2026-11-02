@@ -19,6 +19,10 @@ work="$(mktemp -d)"
 failures=0
 trap 'if (( failures == 0 )); then rm -rf "$work"; fi' EXIT
 
+# The scenarios check what they check on any component, as if Sheriff had been
+# applied to it; scenario 24 checks that by default only such a one is.
+export SHERIFF_SCOPE=all
+
 pass() { printf '  \033[32mPASS\033[0m %s\n' "$1"; }
 fail() { printf '  \033[31mFAIL\033[0m %s\n' "$1"; failures=$((failures + 1)); }
 check() { if eval "$2"; then pass "$1"; else fail "$1"; fi; }
@@ -610,6 +614,35 @@ check "it names the client, and the call with the errors Sheriff found" \
 assert r[\"client\"][\"name\"]==\"e2e-client\" and r[\"calls\"][0][\"tool\"]==\"sheriff_test\" and c[\"after\"][\"total\"]>0" "$session_report"'
 check "and the comparison reads it" \
   'java -jar "$mcp_jar" --agent --compare-reports "$work/session-state/sheriff-mcp/reports" | grep -q "| e2e-client 9.9 | session |"'
+
+echo "24. Only a component Sheriff was applied to is checked, under every test its history records"
+applied="$work/applied"
+component "$applied/back-end"
+component "$applied/never"
+repository "$applied"
+for profile in JAVA JAVA_HEXAGONAL; do
+  docker run --rm --user "$(id -u):$(id -g)" --mount "type=bind,source=$applied,target=/data" --workdir / \
+    "$image" test -u file:/data -c back-end -t "$profile" >/dev/null 2>&1
+done
+check "running Sheriff by hand leaves its history in the repository" '[[ -f "$applied/sheriff_history.json" ]]'
+printf '%s\n' \
+  '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' \
+  '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"sheriff_test","arguments":{"component":"back-end"}}}' \
+  '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"sheriff_test","arguments":{"component":"never"}}}' \
+  | (cd "$applied" && env -u SHERIFF_SCOPE SHERIFF_REPO="$applied" XDG_STATE_HOME="$work/state24" \
+      java -jar "$mcp_jar" >"$work/24.out" 2>/dev/null)
+check "the component the history names is checked under both of its tests" \
+  'grep -q "back-end has [0-9]* error(s) under JAVA,JAVA_HEXAGONAL" "$work/24.out"'
+check "the one it does not name is not checked" \
+  'grep -q "never is not checked: Sheriff has never been applied to it" "$work/24.out"'
+for module in back-end never; do
+  printf '{"tool_name":"Write","tool_input":{"file_path":"%s"}}' "$applied/$module/src/main/java/demo/Added.java" \
+    | env -u SHERIFF_SCOPE CLAUDE_PROJECT_DIR="$applied" XDG_CACHE_HOME="$lone/cache" \
+      java -jar "$mcp_jar" --hook-gate >/dev/null 2>&1
+  printf -v "gate_${module//-/_}" '%d' $?
+done
+check "the gate holds a new file back in the component with errors" '(( gate_back_end == 2 ))'
+check "and lets it through in the one Sheriff was never applied to, errors and all" '(( gate_never == 0 ))'
 
 echo
 if (( failures > 0 )); then

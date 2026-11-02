@@ -112,7 +112,8 @@ What the project is written in and built with decides only two things:
 
 | The project | What happens |
 |---|---|
-| Java, TypeScript, Vue, Perl or Python | Analyzed, with the profile the project declares or, if none, the one its sources call for |
+| Java, TypeScript, Vue, Perl or Python | Analyzed once Sheriff has been applied to it, under every test Sheriff's history records on it and the profile the project declares |
+| Never run through Sheriff, nothing declared | Not checked: `sheriff_test` says so and the hooks let edits through, unless `SHERIFF_SCOPE=all` |
 | Any other language (Go, C#...) | Nothing to analyze, and the tools say so rather than report a pass |
 | Built with Maven, Gradle or an npm `test` script | Its tests run after repairs, and in the fix loop |
 | No build tool | Analyzed all the same; the tools say no tests were run, never that they passed |
@@ -761,7 +762,8 @@ which no tool reports.
 | `SHERIFF_REPO` | from the working directory | Directory mounted at `/data` (MCP server) |
 | `TARGET_REPO` | from the working directory | The same, for the agent's CLI: the directory that holds the module |
 | `SHERIFF_COMPONENT` | the project, or its only component (the agent's CLI with `TARGET_REPO` set: `sheriff-mcp-java`) | Component when a call names none |
-| `SHERIFF_PROFILE` / `SHERIFF_TEST_TYPE` | declared, else from the sources / `JAVA` | Rule profile (server / agent), overriding the project's declaration for the components written in its language |
+| `SHERIFF_PROFILE` / `SHERIFF_TEST_TYPE` | declared and in Sheriff's history, else from the sources / `JAVA` | Rule profile (server / agent), overriding the project's declaration for the components written in its language |
+| `SHERIFF_SCOPE` | `applied` | Which components the tools and the hooks check. `applied`: only those Sheriff has been applied to, which its history (`sheriff_history.json` at the repository's root, written by every run of Sheriff on it) names or the project declares a profile for, each under all of those profiles. `all`: every component, under the profile its sources call for when it has no other. `--check`, the Maven plugin and the repair loop check what they are given either way |
 | `SHERIFF_PULL` | `always` | `always` pulls a newer image when the server, `--check`, the agent or a Maven goal starts: newer means the digest Docker Hub publishes for the tag differs from the one the image here was pulled by, as Sheriff is only published as `latest`, with no versions. `check` only reports it, once per session; `never` does not even ask Docker Hub |
 | `SHERIFF_UPDATES` | `notify` | What happens when a newer version of these tools is published, looked for at most once a day when the server starts, through the public `releases/latest` address (no API, no token). `notify`: the first answer of a session says so, with the install line, or `git pull && scripts/install.sh` in a clone. `auto`: the server downloads the new jar, checks it against its release's checksum and puts it in place of the installed one, for the sessions that start after (a jar in a build's `target/` is only told about). `never`: it does not look. Your file only |
 | `SHERIFF_TIMEOUT` | `300` (`900` through WSL's Docker) | Seconds per run; the container is removed after. Through WSL (`SHERIFF_DOCKER=wsl`) the default is 900, and Codex is given 1800 s a call instead of 600: a `sheriff_fix` of PetClinic took 511 s there |

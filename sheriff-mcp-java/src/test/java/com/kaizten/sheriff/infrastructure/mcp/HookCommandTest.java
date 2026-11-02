@@ -6,8 +6,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
+import java.util.function.UnaryOperator;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -53,9 +55,9 @@ final class HookCommandTest {
             + "inside a module")
     void theHooksReadTheToolsSettings() throws Exception {
         McpConfig config = new McpConfig(Map.of(), project);
-        java.nio.file.Files.writeString(config.settingsProject().resolve(".sheriff.properties"),
+        Files.writeString(config.settingsProject().resolve(".sheriff.properties"),
                 "SHERIFF_PROTOTYPE=1\n");
-        Path inside = java.nio.file.Files.createDirectories(project.resolve("src/main"));
+        Path inside = Files.createDirectories(project.resolve("src/main"));
 
         McpConfig hooks = new McpConfig(Map.of(), project);
         Map<String, String> environment = HookCommand.agentEnvironment(hooks, inside);
@@ -64,5 +66,20 @@ final class HookCommandTest {
         assertEquals(hooks.repository().toString(), environment.get("TARGET_REPO"));
         assertEquals("kaizten/sheriff:latest", environment.get("SHERIFF_IMAGE"));
         assertTrue(new com.kaizten.sheriff.infrastructure.config.Configuration(environment, project).prototype());
+    }
+
+    @Test
+    @DisplayName("the hooks guard a component under the profile the tools check it under, and no other")
+    void theHooksGuardWhatTheToolsCheck() throws Exception {
+        Files.createDirectories(project.resolve("app/src"));
+        Files.createDirectories(project.resolve("other/src"));
+        Files.writeString(project.resolve("sheriff_history.json"),
+                "{\"file:/data\":[{\"components\":[\"app\"],\"test\":\"JAVA_HEXAGONAL\"}]}");
+
+        UnaryOperator<String> profiles = HookCommand.guardedProfiles(
+                new McpConfig(Map.of("SHERIFF_REPO", project.toString()), project));
+
+        assertEquals("JAVA,JAVA_HEXAGONAL", profiles.apply("app"));
+        assertEquals("", profiles.apply("other"));
     }
 }

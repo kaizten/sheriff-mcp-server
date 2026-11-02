@@ -6,6 +6,7 @@ import com.kaizten.sheriff.infrastructure.mcp.task.Task;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * {@code sheriff_test}: runs Sheriff on a component and reports every error,
@@ -58,6 +59,10 @@ final class SheriffTestTool {
      */
     private String handle(Map<String, Object> arguments) {
         String component = context.componentArgument(arguments);
+        Optional<String> notChecked = context.notChecked(arguments, component);
+        if (notChecked.isPresent()) {
+            return notChecked.get();
+        }
         String profile = context.profileArgument(arguments, component);
         Map<String, String> resolved = new LinkedHashMap<>();
         resolved.put(ToolContext.COMPONENT_ARGUMENT, component);

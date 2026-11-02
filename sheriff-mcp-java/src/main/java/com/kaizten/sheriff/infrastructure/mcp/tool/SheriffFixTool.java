@@ -15,6 +15,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
@@ -119,6 +120,10 @@ final class SheriffFixTool {
      */
     private String handle(Map<String, Object> arguments) {
         String component = context.componentArgument(arguments);
+        Optional<String> notChecked = context.notChecked(arguments, component);
+        if (notChecked.isPresent()) {
+            return notChecked.get();
+        }
         String profile = context.profileArgument(arguments, component);
         String referenceCode = ToolContext.textArgument(arguments, ToolContext.REFERENCE_CODE_ARGUMENT);
         boolean verify = YES.equalsIgnoreCase(ToolContext.textArgument(arguments, VERIFY_ARGUMENT));
