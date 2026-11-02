@@ -1251,12 +1251,30 @@ model you pay for.
 \setting{OPENAI_MAX_TOOL_ITERATIONS}{\code{20}}{times, 1 or more}{How many times
   one pass may read or write a file before it is cut.}
 
-\subsubsection*{Environment variables only} Three things go in no file:
+\subsubsection*{Environment variables only} Four things go in no file:
 \code{SHERIFF_DOCKER}, which on Windows uses WSL's Docker (\code{--docker-wsl}
 sets it); \code{VERIFICATION_TEST_CMD}, the test command, when the one worked
-out from your build tool is not the right one; and the APIs' keys,
+out from your build tool is not the right one; the APIs' keys,
 \code{ANTHROPIC_API_KEY} and \code{OPENAI_API_KEY}, which are never written
-into a file.
+into a file; and \code{GITHUB_TOKEN}.
+
+\textbf{With a GitHub token, Sheriff checks more.} Without one it does not
+check a \code{pom.xml}'s dependencies on GitHub Packages, where Kaizten's are.
+Export it where you start the assistant, and every analysis passes it to
+Sheriff, never on a command line:
+
+\begin{command}{bash}
+export GITHUB_TOKEN=$(gh auth token)
+claude
+\end{command}
+
+In Codex it works too, as the installer has Codex pass it to the server; its
+hooks analyze without it. A value that is not a GitHub token (one starting
+\code{ghp_}, \code{github_pat_}, \code{gho_}, \code{ghu_}, \code{ghs_} or
+\code{ghr_}) is not passed, because Sheriff then refuses to analyze anything.
+A token GitHub refuses shows as an error,
+\code{Cannot complete Maven dependency/version checks}: replace it with one
+that can read your organization's packages.
 
 % ---------------------------------------------------------------------------
 \section{Codex}

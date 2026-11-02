@@ -78,6 +78,7 @@
                     -->
                     <systemPropertyVariables>
                         <sheriff.state.home>${project.build.directory}/sheriff-state</sheriff.state.home>
+                        <sheriff.github.token>none</sheriff.github.token>
                     </systemPropertyVariables>
                 </configuration>
             </plugin>

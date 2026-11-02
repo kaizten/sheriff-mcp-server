@@ -176,6 +176,16 @@ final class CodexInstallerTest {
     }
 
     @Test
+    @DisplayName("Codex passes a server none of the user's variables but those it names, so GITHUB_TOKEN is named")
+    void forwardsTheGitHubToken() throws Exception {
+        assertEquals(0, installer(false).install());
+
+        String config = read("config.toml");
+        assertTrue(config.contains("env_vars = [\"GITHUB_TOKEN\"]"), config);
+        assertTrue(config.indexOf("env_vars") < config.indexOf("[mcp_servers.sheriff.tools"), "in the server's table");
+    }
+
+    @Test
     @DisplayName("an entry codex mcp add wrote is replaced, with its subtables, and the rest is kept")
     void replacesAnEarlierEntryAndKeepsTheRest() throws Exception {
         Files.createDirectories(codexHome());
