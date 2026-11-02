@@ -1649,24 +1649,34 @@ replaced}, y en esa sesión las herramientas de Sheriff fallan hasta que la
 reinicies. Repítela también si actualizas o cambias de Java: los asistentes lo
 llaman por su ruta completa, y la del Java anterior puede desaparecer.
 
-En los comandos de desinstalación, si \code{java} no está en el \code{PATH},
-pon en su lugar la ruta que el instalador mostró en su primera línea
-(\code{Using Java ... at ...}).
-
-\textbf{Para desinstalar}, en este orden, porque los primeros pasos usan el
-jar. En Linux y macOS:
+\textbf{Para desinstalar} en Linux y macOS, una línea, la contraria de la de
+instalación:
 
 \begin{command}{bash}
-java -jar ~/.local/share/sheriff-agent/sheriff-mcp.jar --uninstall-hooks --user
-# Si usas Codex
-java -jar ~/.local/share/sheriff-agent/sheriff-mcp.jar --uninstall-codex
-# Si usas Antigravity
-java -jar ~/.local/share/sheriff-agent/sheriff-mcp.jar --uninstall-antigravity
-claude mcp remove --scope user sheriff
-rm -rf ~/.local/share/sheriff-agent ~/.cache/sheriff-mcp ~/.local/state/sheriff-mcp
-# Opcional: libera los 4 GB de la imagen
-docker rmi kaizten/sheriff:latest
+curl -fsSL https://github.com/kaizten/sheriff-mcp-server/releases/latest/download/uninstall.sh | bash
 \end{command}
+
+Saca Sheriff de todos los asistentes (el servidor MCP, los hooks, las
+herramientas permitidas sin preguntar y el orden de trabajo de Codex) y después
+borra el jar, su caché, sus registros de tareas y las carpetas temporales de
+los hooks. Cada fichero de un asistente queda como estaba antes de instalar:
+idéntico byte a byte si no cambió nada más en él desde entonces, y borrado si
+lo creó la instalación; si cambiaste otra cosa en él mientras tanto, solo se
+quitan las líneas de Sheriff. Termina diciendo de qué asistentes lo ha sacado:
+
+\begin{answer}[Salida del desinstalador]
+Sheriff is no longer set up for Claude Code, Codex and Antigravity. Restart open sessions to drop it.
+Your settings file, if you have one, is kept: --purge removes it.
+\end{answer}
+
+Las opciones van tras \code{bash -s --}: \code{--disable} solo lo saca de los
+asistentes y lo deja instalado (la línea de instalación lo vuelve a
+configurar), \code{--purge} borra también tu fichero de ajustes,
+\code{--remove-image} también la imagen de Sheriff (4 GB), y
+\code{--no-claude}, \code{--no-codex} y \code{--no-antigravity} dejan en paz
+ese asistente. Los hooks instalados en un solo proyecto
+(sección~\ref{sec:hooks}) son de ese proyecto: en él,
+\code{java -jar <jar> --uninstall-hooks}.
 
 En Windows, en PowerShell:
 

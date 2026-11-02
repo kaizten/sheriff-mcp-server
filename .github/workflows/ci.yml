@@ -121,6 +121,18 @@ jobs:
           grep -q "claude mcp add --scope user sheriff -- /" "$calls" || grep -q "claude mcp add --scope user sheriff -- [A-Z]:/" "$calls"
           grep -q "The MCP server starts: OK" "$all"
           if grep -q '"command" : "java ' "$HOME/.claude/settings.json"; then echo "the hooks run java from the PATH"; exit 1; fi
+          # And back: the uninstaller leaves every assistant's file as it was
+          # before the install, which on this runner is not there at all, and
+          # removes what the install put in place.
+          PATH="$tools:$PATH" /bin/bash scripts/uninstall.sh > "$all" 2>&1 || { cat "$all"; exit 1; }
+          cat "$all"
+          grep -q "Sheriff is no longer set up for Claude Code, Codex and Antigravity." "$all"
+          grep -q "claude mcp remove --scope user sheriff" "$calls"
+          for left in .claude/settings.json .codex/config.toml .codex/hooks.json .codex/AGENTS.md \
+              .gemini/config/mcp_config.json .gemini/antigravity-cli/settings.json; do
+            if [[ -e "$HOME/$left" ]]; then echo "the uninstall left $left"; cat "$HOME/$left"; exit 1; fi
+          done
+          test ! -e "$SHERIFF_HOME"
           # The Windows steps below start from a machine with no assistant.
           rm -rf "$HOME/.claude" "$HOME/.codex" "$HOME/.gemini"
       # The same in Windows PowerShell, run through cmd so that the

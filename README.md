@@ -102,6 +102,28 @@ java -jar ~/.local/share/sheriff-agent/sheriff-mcp.jar --install-hooks --user
 
 For Codex, which needs one review of its own, see [Codex](#codex).
 
+### Uninstall
+
+The install line's counterpart takes Sheriff out of every assistant (the MCP
+server, the hooks, the tools allowed without asking, Codex's order of work)
+and removes the jar, its cache, its task records and the hooks' temporary
+folders:
+
+```bash
+curl -fsSL https://github.com/kaizten/sheriff-mcp-server/releases/latest/download/uninstall.sh | bash
+scripts/uninstall.sh --disable    # from a clone: only out of the assistants, still installed
+```
+
+Each assistant's file is left as it was before the install: the first install
+keeps every file it changes, as it was, in `originals/` beside the jar, and
+the uninstall writes it back byte for byte when nothing else in it changed
+since, removes it when the install created it, and otherwise takes out only
+Sheriff's lines. `--purge` also removes your settings file, `--remove-image`
+Sheriff's image, and `--no-claude`, `--no-codex` and `--no-antigravity` leave
+that assistant alone. Hooks installed into one project (`--install-hooks`
+without `--user`) are that project's: `--uninstall-hooks` in it. On Windows
+there is no `uninstall.ps1` yet: the playbook gives the steps.
+
 ## Adding it to a project, step by step
 
 Nothing is copied into the project you want to check: the tools come from the

@@ -1628,26 +1628,37 @@ replaced}, and in that session Sheriff's tools fail until you restart it. Run it
 again too when you update or change Java: the assistants call it by its full
 path, and the old Java's may disappear.
 
-In the uninstall commands, if \code{java} is not on the \code{PATH}, put in its
-place the path the installer showed on its first line
-(\code{Using Java ... at ...}).
-
-\textbf{To uninstall}, in this order, as the first steps use the jar. On
-Linux and macOS:
+\textbf{To uninstall} on Linux and macOS, one line, the install line's
+counterpart:
 
 \begin{command}{bash}
-java -jar ~/.local/share/sheriff-agent/sheriff-mcp.jar --uninstall-hooks --user
-# If you use Codex
-java -jar ~/.local/share/sheriff-agent/sheriff-mcp.jar --uninstall-codex
-# If you use Antigravity
-java -jar ~/.local/share/sheriff-agent/sheriff-mcp.jar --uninstall-antigravity
-claude mcp remove --scope user sheriff
-rm -rf ~/.local/share/sheriff-agent ~/.cache/sheriff-mcp ~/.local/state/sheriff-mcp
-# Optional: frees the image's 4 GB
-docker rmi kaizten/sheriff:latest
+curl -fsSL https://github.com/kaizten/sheriff-mcp-server/releases/latest/download/uninstall.sh | bash
 \end{command}
 
-On Windows, in PowerShell:
+It takes Sheriff out of every assistant (the MCP server, the hooks, the tools
+allowed without asking and Codex's order of work) and then removes the jar,
+its cache, its task records and the hooks' temporary folders. Each assistant's
+file is left as it was before the install: byte for byte when nothing else in
+it changed since, and removed when the install created it; if you changed
+something else in it meanwhile, only Sheriff's lines go. It ends saying which
+assistants it took Sheriff out of:
+
+\begin{answer}[Uninstaller output]
+Sheriff is no longer set up for Claude Code, Codex and Antigravity. Restart open sessions to drop it.
+Your settings file, if you have one, is kept: --purge removes it.
+\end{answer}
+
+Options go after \code{bash -s --}:
+\code{--disable} only takes it out of the assistants and keeps it installed
+(the install line sets it up again), \code{--purge} also removes your settings
+file, \code{--remove-image} also Sheriff's image (4 GB), and
+\code{--no-claude}, \code{--no-codex} and \code{--no-antigravity} leave that
+assistant alone. Hooks installed into a single project (section~\ref{sec:hooks})
+are that project's: in it, \code{java -jar <jar> --uninstall-hooks}.
+
+On Windows, in PowerShell, by hand, in this order, as the first steps use the
+jar (if \code{java} is not on the \code{PATH}, put in its place the path the
+installer showed on its first line, \code{Using Java ... at ...}):
 
 \begin{command}[basicstyle=\ttfamily\footnotesize]{PowerShell}
 $jar = "$HOME\.local\share\sheriff-agent\sheriff-mcp.jar"

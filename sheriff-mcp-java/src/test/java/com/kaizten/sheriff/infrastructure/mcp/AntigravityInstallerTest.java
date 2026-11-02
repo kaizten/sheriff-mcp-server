@@ -180,9 +180,11 @@ final class AntigravityInstallerTest {
     void uninstallDropsWhatItLeavesEmpty() throws Exception {
         installer().install();
 
+        assertTrue(Files.exists(jar().resolveSibling("originals")), "the install noted the files were not there");
         installer().uninstall();
 
-        assertTrue(JSON.readTree(settings().toFile()).path("permissions").isMissingNode());
+        assertFalse(Files.exists(settings()), "the install created it, so it goes");
+        assertFalse(Files.exists(servers()));
     }
 
     @Test

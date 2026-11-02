@@ -252,7 +252,7 @@ public final class CodexInstaller {
             }
             kept.addAll(serverEntry().lines().toList());
         }
-        write(config, kept);
+        write(config, kept, add);
     }
 
     /**
@@ -362,11 +362,7 @@ public final class CodexInstaller {
             kept.addAll(instructions.strip().lines().toList());
             kept.add(END_MARKER);
         }
-        if (kept.isEmpty()) {
-            Files.deleteIfExists(agents);
-            return;
-        }
-        write(agents, kept);
+        write(agents, kept, add);
     }
 
     /**
@@ -409,12 +405,23 @@ public final class CodexInstaller {
      * Writes a file whole, where a link points and with the permissions it
      * had, as {@link ConfigFile} does for every installer.
      *
+     * <p>A file left with nothing in it is removed, as this installer
+     * created it, and one whose rest did not change is written back as it
+     * was before the install ({@link ConfigFile#uninstalling}).
+     *
      * @param file the file
      * @param lines its new content
+     * @param add whether Sheriff's lines were put in, or taken out
      * @throws IOException when it cannot be written
      */
-    private static void write(Path file, List<String> lines) throws IOException {
-        ConfigFile.replace(file, String.join(System.lineSeparator(), lines) + System.lineSeparator());
+    private void write(Path file, List<String> lines, boolean add) throws IOException {
+        String content = String.join(System.lineSeparator(), lines) + System.lineSeparator();
+        Path originals = ConfigFile.originalsBeside(jar);
+        if (add) {
+            ConfigFile.installing(file, content, originals);
+        } else {
+            ConfigFile.uninstalling(file, content, originals);
+        }
     }
 
     /**
