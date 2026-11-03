@@ -96,6 +96,10 @@ class SheriffDockerAnalyzerTests {
                 0, "Usage: Sheriff [options] [command]", "ERROR. Test 'JAVAX' not valid\nUsage: Sheriff"))).analyze();
         assertTrue(result.error());
         assertEquals("ERROR. Test 'JAVAX' not valid", result.message());
+        AnalysisResult silent = analyzer(FakeProcessRunner.always(ProcessOutcome.completed(
+                0, "Usage: Sheriff [options] [command]", ""))).analyze();
+        assertTrue(silent.error());
+        assertTrue(silent.message().startsWith("Sheriff rejected the arguments for component"), silent.message());
     }
 
     @Test

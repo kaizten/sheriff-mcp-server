@@ -142,9 +142,10 @@ class KnownFalsePositivesTests {
         SheriffFinding alone = finding("app/src/Kind.java", "JavaBracePlacement", String.format(format, 8));
         SheriffFinding inline = finding("app/src/Kind.java", "JavaBracePlacement", String.format(format, 12));
         SheriffFinding pastTheEnd = finding("app/src/Kind.java", "JavaBracePlacement", String.format(format, 400));
+        SheriffFinding lineZero = finding("app/src/Kind.java", "JavaBracePlacement", String.format(format, 0));
         SheriffFinding unread = finding("app/src/Gone.java", "JavaBracePlacement", String.format(format, 8));
         SheriffFinding other = finding("app/src/Kind.java", "JavaBracePlacement", "Opening brace on line 4.");
-        assertEquals(List.of(inline, pastTheEnd, unread, other),
-                KnownFalsePositives.without(List.of(alone, inline, pastTheEnd, unread, other), mount));
+        assertEquals(List.of(inline, pastTheEnd, lineZero, unread, other),
+                KnownFalsePositives.without(List.of(alone, inline, pastTheEnd, lineZero, unread, other), mount));
     }
 }
