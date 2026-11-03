@@ -481,12 +481,15 @@ public final class SheriffDockerAnalyzer implements CodeAnalyzer {
      * <p>The record is the container's, root's on Linux, in a folder of the
      * user's, so it is replaced rather than written over. Best effort: one
      * that cannot be replaced stays as it was, and the fixers see every
-     * finding.
+     * finding. The known false positives are taken out with them, as the
+     * analysis drops them but {@code fix} reads the record, and a fixer
+     * given one changes code that was right.
      *
      * @param withheld the findings to take out
      * @return how many were taken out
      */
     public int withholdFromState(Predicate<SheriffFinding> withheld) {
+        Predicate<SheriffFinding> out = withheld.or(KnownFalsePositives.in(repositoryRoot));
         Optional<JsonNode> root = stateFile(ERRORS_STATE_FILE);
         if (root.isEmpty()) {
             return NONE_WITHHELD;
@@ -497,7 +500,7 @@ public final class SheriffDockerAnalyzer implements CodeAnalyzer {
             JsonNode entries = contexts.next().path(component).path(testType);
             if (entries instanceof ArrayNode array) {
                 for (int index = array.size() + LAST_TO_FIRST; index >= FIRST_INDEX; index--) {
-                    if (withheld.test(toFinding(array.get(index)))) {
+                    if (out.test(toFinding(array.get(index)))) {
                         array.remove(index);
                         removed++;
                     }

@@ -514,7 +514,14 @@ image of 28 October, those three were 13,981 of 14,879 errors under the new
 one, and every `UnusedImport` of the plugin. Since the image of 2 November,
 `JavaBracePlacement` on a switch expression's closing brace alone on its line
 but for its `;`, which the rule flagged on every one, assigned or returned
-(measured). A line it cannot read keeps its finding.
+(measured). A line it cannot read keeps its finding. Its findings are also
+taken out of the record `fix` reads (`SheriffRepair`, through
+`withholdFromState`), as a fixer given one changes code that was right: with
+the image of 3 November (`sha256:2f07cfc6`) `FourSpaceIndentation`'s fixer
+takes the space before every comment's `*` away. That spares a file whose only
+findings of the rule were those, but one with a tab too it rewrites whole,
+comments included (230 of 280 lines on PetClinic, measured), which only
+Sheriff can fix.
 
 ## The MCP's answers
 

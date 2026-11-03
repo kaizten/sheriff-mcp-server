@@ -6,12 +6,12 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -96,14 +96,24 @@ public final class KnownFalsePositives {
      * @return the same, without the known false positives
      */
     public static List<SheriffFinding> without(List<SheriffFinding> findings, Path mount) {
+        return findings.stream().filter(in(mount).negate()).toList();
+    }
+
+    /**
+     * Which findings Sheriff is known to get wrong, so that no fixer is given
+     * one either. Since the image of 3 November ({@code sha256:2f07cfc6})
+     * {@code FourSpaceIndentation}'s fixer takes the space before a comment's
+     * {@code *} away: given none of those lines, it leaves a file whose
+     * findings were only those alone, but one with a tab too it still
+     * rewrites whole, comments included (230 of PetClinic's 280 lines,
+     * measured). That part is Sheriff's to fix.
+     *
+     * @param mount the directory the findings' paths are relative to
+     * @return the test, which reads each source once
+     */
+    public static Predicate<SheriffFinding> in(Path mount) {
         Map<String, Optional<List<String>>> sources = new HashMap<>();
-        List<SheriffFinding> kept = new ArrayList<>();
-        for (SheriffFinding finding : findings) {
-            if (!falsePositive(finding, mount, sources)) {
-                kept.add(finding);
-            }
-        }
-        return kept;
+        return finding -> falsePositive(finding, mount, sources);
     }
 
     /**
