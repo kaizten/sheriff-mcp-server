@@ -644,6 +644,23 @@ done
 check "the gate holds a new file back in the component with errors" '(( gate_back_end == 2 ))'
 check "and lets it through in the one Sheriff was never applied to, errors and all" '(( gate_never == 0 ))'
 
+echo "25. GITHUB_TOKEN reaches Sheriff in a file of arguments, and one Sheriff would refuse is left out"
+tokened="$work/tokened"
+component "$tokened/app"
+cp "$repo/sheriff-maven-plugin/pom.xml" "$tokened/app/pom.xml"
+for token in none ghp_notARealTokenAtAll0000000000000000 not-a-token; do
+  (cd "$tokened" && env -u SHERIFF_SCOPE GITHUB_TOKEN="$token" SHERIFF_REPO="$tokened" \
+    java -jar "$mcp_jar" --check --component app --profile JAVA >"$work/25-$token.out" 2>&1)
+done
+# A token that is not real is refused by GitHub, which only a run given one meets.
+check "a token in GitHub's form reaches Sheriff's dependency checks" \
+  'grep -q "Cannot complete Maven dependency" "$work/25-ghp_notARealTokenAtAll0000000000000000.out"'
+check "with none they run without it" '! grep -q "Cannot complete Maven dependency" "$work/25-none.out"'
+check "and one of another form is not passed, so Sheriff still runs" \
+  'grep -q "error(s) under JAVA" "$work/25-not-a-token.out" && ! grep -q "Cannot complete" "$work/25-not-a-token.out"'
+check "it leaves no file of arguments behind" \
+  '[[ -z "$(find "${XDG_CACHE_HOME:-$HOME/.cache}/sheriff-mcp/state" -name sheriff-arguments 2>/dev/null)" ]]'
+
 echo
 if (( failures > 0 )); then
   echo "$failures check(s) failed. The repositories and outputs are kept in $work."

@@ -319,6 +319,20 @@ to be tried by hand.
   run its AI fixer too with credentials within reach, and a `fix` that
   answers with the banner did not run. With `sha256:05a1f4a4` a `fix` with
   no `--type` does the same, as `all` needs `--ai-provider`.
+- **`test` and `fix` take a GitHub token only as `--github-token`**, not
+  from the environment, and without one skip the checks of a `pom.xml`'s
+  dependencies on GitHub Packages; one not of GitHub's form
+  (`GitHubToken`'s pattern) makes them print the usage banner and exit 0,
+  running nothing (image of 2 November, `sha256:1522c9a2`). So
+  `SheriffContainer` passes `GITHUB_TOKEN`, when it has that form, in
+  `@/data/sheriff-arguments`, a file of arguments Sheriff reads as its own
+  (JCommander's `@`), owner-only in the state folder and deleted after the
+  run: on the command line every user of the machine would see it. A fake
+  token in the right form makes `JavaPomValidation` "Cannot complete Maven
+  dependency/version checks", which is how `scripts/e2e.sh` scenario 25 tells
+  it arrived. The tests set `sheriff.github.token` to `none`, which wins over
+  the variable. Codex forwards it to the server through `env_vars` in its
+  entry (`CodexInstaller`, measured on 0.164); its hooks do not get it.
 - **The TypeScript profile traces every checker on stdout**, one
   `COMMAND: node ...` line each, before any findings; the analyzer drops
   them, or a clean TypeScript run reads as "not JSON".

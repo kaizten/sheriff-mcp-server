@@ -112,6 +112,7 @@
                     -->
                     <systemPropertyVariables>
                         <sheriff.state.home>${project.build.directory}/sheriff-state</sheriff.state.home>
+                        <sheriff.github.token>none</sheriff.github.token>
                         <sheriff.temp.home>${project.build.directory}/sheriff-temp</sheriff.temp.home>
                     </systemPropertyVariables>
                 </configuration>

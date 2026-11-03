@@ -1299,12 +1299,30 @@ modelo pagas.
 \setting{OPENAI_MAX_TOOL_ITERATIONS}{\code{20}}{veces, 1 o más}{Cuántas veces
   puede leer o escribir un fichero una pasada antes de cortarla.}
 
-\subsubsection*{Solo con variables de entorno} Tres cosas no van en ningún
+\subsubsection*{Solo con variables de entorno} Cuatro cosas no van en ningún
 fichero: \code{SHERIFF_DOCKER}, que en Windows usa el Docker de WSL (lo pone
 \code{--docker-wsl}); \code{VERIFICATION_TEST_CMD}, el comando de tests si el
-que se deduce de tu herramienta de build no es el correcto, y las claves de las
+que se deduce de tu herramienta de build no es el correcto; las claves de las
 API, \code{ANTHROPIC_API_KEY} y \code{OPENAI_API_KEY}, que nunca se escriben en
-un fichero.
+un fichero, y \code{GITHUB_TOKEN}.
+
+\textbf{Con un token de GitHub, Sheriff comprueba más.} Sin él no comprueba las
+dependencias de un \code{pom.xml} en GitHub Packages, donde están las de
+Kaizten. Expórtalo donde arrancas el asistente y cada análisis se lo pasa a
+Sheriff, nunca en una línea de comandos:
+
+\begin{command}{bash}
+export GITHUB_TOKEN=$(gh auth token)
+claude
+\end{command}
+
+En Codex también funciona, porque el instalador hace que Codex se lo pase al
+servidor; sus hooks analizan sin él. Un valor que no es un token de GitHub (uno
+que empieza por \code{ghp_}, \code{github_pat_}, \code{gho_}, \code{ghu_},
+\code{ghs_} o \code{ghr_}) no se pasa, porque entonces Sheriff no analiza
+nada. Un token que GitHub rechaza aparece como un error,
+\code{Cannot complete Maven dependency/version checks}: cámbialo por uno que
+pueda leer los paquetes de tu organización.
 
 % ---------------------------------------------------------------------------
 \section{Codex}

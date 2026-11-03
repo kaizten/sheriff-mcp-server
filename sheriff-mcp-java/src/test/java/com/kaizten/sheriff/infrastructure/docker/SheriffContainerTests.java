@@ -7,12 +7,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.kaizten.sheriff.infrastructure.process.FakeProcessRunner;
 import com.kaizten.sheriff.infrastructure.process.ProcessOutcome;
+import com.kaizten.sheriff.infrastructure.process.ProcessRunner;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
@@ -203,5 +206,58 @@ class SheriffContainerTests {
         FakeProcessRunner runner = FakeProcessRunner.always(ProcessOutcome.completed(0, "", ""));
         container(runner).run(List.of("test"));
         assertEquals(1, runner.commands().size());
+    }
+
+    @Test
+    @DisabledOnOs(value = OS.WINDOWS, disabledReason = "Windows has no POSIX permissions")
+    @DisplayName("the token reaches test and fix in a file only its owner reads, never on the command line")
+    void theTokenGoesInAFileOfArguments(@TempDir Path repository) throws IOException {
+        Files.createDirectories(repository.resolve("app"));
+        String token = "ghp_secretValue0000";
+        List<List<String>> commands = new ArrayList<>();
+        List<String> seen = new ArrayList<>();
+        ProcessRunner reading = (command, directory, environment, timeout) -> {
+            commands.add(command);
+            Path file = directory.resolve("sheriff-arguments");
+            try {
+                seen.add(Files.readString(file) + PosixFilePermissions.toString(Files.getPosixFilePermissions(file)));
+            } catch (IOException exception) {
+                seen.add("none");
+            }
+            return ProcessOutcome.completed(0, "", "");
+        };
+        SheriffContainer container = new SheriffContainer(reading, "kaizten/sheriff:latest", repository,
+                Duration.ofSeconds(5), () -> "sheriff-agent-test", () -> Optional.of(token));
+
+        container.run(List.of("test", "--test", "JAVA", "--component", "app"));
+        container.run(List.of("fix", "--component", "app"));
+        container.run(List.of("tree", "--component", "app"));
+        container.run(List.of("test", "--test", "JAVA"));
+
+        assertEquals(List.of("--github-token\n" + token + "\nrw-------", "--github-token\n" + token + "\nrw-------",
+                "none", "none"), seen);
+        assertEquals(List.of("test", "@/data/sheriff-arguments", "--test"), commands.get(0).subList(
+                commands.get(0).indexOf("test"), commands.get(0).indexOf("test") + 3));
+        assertTrue(commands.get(1).contains("@/data/sheriff-arguments"));
+        assertFalse(commands.get(2).contains("@/data/sheriff-arguments"), "tree takes no token");
+        assertFalse(commands.get(3).contains("@/data/sheriff-arguments"), "a run on no component has no folder");
+        assertTrue(commands.stream().flatMap(List::stream).noneMatch(argument -> argument.contains(token)));
+        assertFalse(Files.exists(container.stateFolder("app").resolve("sheriff-arguments")), "deleted after the run");
+    }
+
+    @Test
+    @DisplayName("with no token nothing is added, and a file that cannot be written fails the run, saying why")
+    void withNoTokenNothingIsAdded(@TempDir Path repository) throws IOException {
+        Files.createDirectories(repository.resolve("app"));
+        FakeProcessRunner runner = FakeProcessRunner.always(ProcessOutcome.completed(0, "", ""));
+        new SheriffContainer(runner, "kaizten/sheriff:latest", repository, Duration.ofSeconds(5),
+                () -> "sheriff-agent-test", Optional::empty).run(List.of("test", "--component", "app"));
+        assertFalse(runner.command().contains("@/data/sheriff-arguments"));
+
+        SheriffContainer blocked = new SheriffContainer(runner, "kaizten/sheriff:latest", repository,
+                Duration.ofSeconds(5), () -> "sheriff-agent-test", () -> Optional.of("ghp_x"));
+        Files.createDirectories(blocked.stateFolder("app").resolve("sheriff-arguments").resolve("in-the-way"));
+        ProcessOutcome outcome = blocked.run(List.of("test", "--component", "app"));
+        assertTrue(outcome.failure().contains("Could not write Sheriff's arguments"), outcome.failure());
     }
 }

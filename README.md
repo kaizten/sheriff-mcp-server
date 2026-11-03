@@ -446,6 +446,12 @@ work: on PetClinic (`codex-cli` 0.160, 9 October), asked for one method, it
 twice called the work done with 133 and 120 errors left, and only the Stop
 hook sent it on to 0. The installer's output says so.
 
+Codex hands a server only the variables its entry names, so the installer
+writes `env_vars = ["GITHUB_TOKEN"]` into it: the token reaches Sheriff's
+dependency checks in Codex as in Claude Code (measured on `codex-cli` 0.164,
+where a variable not named there did not arrive). Codex's hooks get no such
+line, so they analyze without it.
+
 ```bash
 scripts/install.sh               # Claude Code and Codex
 scripts/install.sh --no-codex    # Claude Code only
@@ -796,6 +802,7 @@ which no tool reports.
 | `ANTHROPIC_MODEL`, `ANTHROPIC_BASE_URL`, `ANTHROPIC_MAX_TOKENS`, `ANTHROPIC_MAX_TOOL_ITERATIONS` | `claude-opus-5-5`, Anthropic's API, `16000`, `20` | `anthropic_api`'s model, endpoint, tokens per answer and file reads or writes per pass. Your file only, as a cloned project must not choose where code is sent |
 | `OPENAI_MODEL`, `OPENAI_BASE_URL`, `OPENAI_MAX_TOKENS`, `OPENAI_MAX_TOOL_ITERATIONS` | `gpt-4o-mini` / `qwen2.5-coder`, OpenAI's API / Ollama's `http://localhost:11434/v1`, `8000`, `20` | The same for `openai_api` / `local`. Your file only |
 | `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` | unset | The APIs' keys: environment variables only, never written into a file |
+| `GITHUB_TOKEN` | unset | A GitHub token for Sheriff's checks of a `pom.xml`'s dependencies on GitHub Packages, which without one are not made. A variable only: every Sheriff run (tools, hooks, `--check`, the loop, the Maven plugin) hands it to `test` and `fix` in a file of arguments readable by you alone, never on a command line, and deletes the file after. A value without the form of a GitHub token (`ghp_`, `github_pat_`, `gho_`, `ghu_`, `ghs_`, `ghr_`) is not passed, as Sheriff then refuses to run at all. The installer has Codex forward it to the server (`env_vars`); Codex's hooks do not get it |
 
 | `AI_BACKEND` | Needs |
 |---|---|

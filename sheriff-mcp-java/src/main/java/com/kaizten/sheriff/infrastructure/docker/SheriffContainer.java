@@ -4,6 +4,7 @@ import com.kaizten.sheriff.infrastructure.process.ProcessOutcome;
 import com.kaizten.sheriff.infrastructure.process.ProcessRunner;
 import com.kaizten.sheriff.infrastructure.process.ProcessStatus;
 import com.kaizten.sheriff.infrastructure.process.TemporaryFolders;
+import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -19,6 +20,7 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
@@ -58,6 +60,14 @@ import java.util.stream.Stream;
  * is under {@code /}. The image of 29 October ({@code sha256:e03d9daf})
  * declares {@code /data}, and there every TypeScript analysis reported 0
  * errors and exited 0, with Node's "Cannot find module" only on stdout.
+ *
+ * <p>A {@link GitHubToken} reaches {@code test} and {@code fix} in a file of
+ * arguments, {@code @/data/sheriff-arguments}, which Sheriff reads as if they
+ * were on its command line (measured: an option only in the file is the one
+ * it names when it refuses it). Never on the command line itself, where every
+ * user of the machine sees it in the process list: the file is in the
+ * component's state folder, readable by its owner alone, and deleted after
+ * the run.
  */
 public final class SheriffContainer {
 
@@ -106,11 +116,25 @@ public final class SheriffContainer {
     private static final String NO_STATE_FOLDER = "Could not create Sheriff's state folder %s: %s";
     private static final String STATE_NAME_REGEX = "[0-9a-f]{16}";
     private static final Pattern STATE_NAME = Pattern.compile(STATE_NAME_REGEX);
+    private static final String NO_ARGUMENTS_FILE = "Could not write Sheriff's arguments in %s: %s";
+    private static final String ARGUMENTS_FILE = "sheriff-arguments";
+    private static final String ARGUMENTS_IN_CONTAINER = "@" + CONTAINER_MOUNT + SLASH + ARGUMENTS_FILE;
+    private static final String TOKEN_FLAG = "--github-token";
+    private static final String TEST_COMMAND = "test";
+    private static final String FIX_COMMAND = "fix";
+    private static final Set<String> TOKEN_COMMANDS = Set.of(TEST_COMMAND, FIX_COMMAND);
+    private static final String LINE_END = "\n";
+    private static final int SUBCOMMAND = 0;
+    private static final boolean ALLOWED = true;
+    private static final boolean NOT_ALLOWED = false;
+    private static final boolean OWNER_ALONE = true;
+    private static final boolean EVERY_USER = false;
     private final ProcessRunner processes;
     private final String image;
     private final Path repositoryRoot;
     private final Duration timeout;
     private final Supplier<String> names;
+    private final Supplier<Optional<String>> tokens;
 
     /**
      * Wires runs of one image against one repository.
@@ -136,11 +160,28 @@ public final class SheriffContainer {
      */
     SheriffContainer(ProcessRunner processes,
             String image, Path repositoryRoot, Duration timeout, Supplier<String> names) {
+        this(processes, image, repositoryRoot, timeout, names, GitHubToken::fromProcess);
+    }
+
+    /**
+     * Wires runs with a chosen way of naming containers and a chosen token,
+     * so a test can assert what a run is given.
+     *
+     * @param processes how to run Docker
+     * @param image the Sheriff image to run
+     * @param repositoryRoot the directory to mount at {@code /data}
+     * @param timeout how long one run is given
+     * @param names where each run's container name comes from
+     * @param tokens where the GitHub token comes from, empty for none
+     */
+    SheriffContainer(ProcessRunner processes, String image, Path repositoryRoot, Duration timeout,
+            Supplier<String> names, Supplier<Optional<String>> tokens) {
         this.processes = processes;
         this.image = image;
         this.repositoryRoot = repositoryRoot;
         this.timeout = timeout;
         this.names = names;
+        this.tokens = tokens;
     }
 
     /**
@@ -275,12 +316,66 @@ public final class SheriffContainer {
         } catch (IOException exception) {
             return ProcessOutcome.unavailable(String.format(NO_STATE_FOLDER, directory, exception.getMessage()));
         }
-        String name = names.get();
-        ProcessOutcome outcome = processes.run(command(name, arguments), directory, Map.of(), timeout);
-        if (outcome.status() == ProcessStatus.TIMED_OUT) {
-            processes.run(List.of(DOCKER, REMOVE_CONTAINER, FORCE, name), repositoryRoot, Map.of(), REMOVAL_TIMEOUT);
+        Path argumentsFile = directory.resolve(ARGUMENTS_FILE);
+        try {
+            List<String> given = withToken(arguments, state.isPresent(), argumentsFile);
+            String name = names.get();
+            ProcessOutcome outcome = processes.run(command(name, given), directory, Map.of(), timeout);
+            if (outcome.status() == ProcessStatus.TIMED_OUT) {
+                processes.run(List.of(DOCKER, REMOVE_CONTAINER, FORCE, name), repositoryRoot, Map.of(),
+                        REMOVAL_TIMEOUT);
+            }
+            return outcome;
+        } catch (IOException exception) {
+            return ProcessOutcome.unavailable(String.format(NO_ARGUMENTS_FILE, directory, exception.getMessage()));
+        } finally {
+            deleteQuietly(argumentsFile);
         }
-        return outcome;
+    }
+
+    /**
+     * The arguments with the GitHub token's file among them, for a
+     * {@code test} or {@code fix} on a component when there is a token, with
+     * the file written: Sheriff's other commands take no token, and a run on
+     * no component has no state folder of its own to hold it. The file is
+     * made its owner's alone before the token goes into it, through
+     * {@link File}, which needs no POSIX file system.
+     *
+     * @param arguments what to pass to Sheriff
+     * @param ownFolder whether the run has a state folder of its own
+     * @param file where the file goes, in that folder
+     * @return the arguments to run with
+     * @throws IOException when the file cannot be written
+     */
+    private List<String> withToken(List<String> arguments, boolean ownFolder, Path file) throws IOException {
+        Optional<String> token = tokens.get();
+        if (!ownFolder || token.isEmpty() || !TOKEN_COMMANDS.contains(arguments.get(SUBCOMMAND))) {
+            return arguments;
+        }
+        Files.deleteIfExists(file);
+        Files.createFile(file);
+        File created = file.toFile();
+        created.setReadable(NOT_ALLOWED, EVERY_USER);
+        created.setWritable(NOT_ALLOWED, EVERY_USER);
+        created.setReadable(ALLOWED, OWNER_ALONE);
+        created.setWritable(ALLOWED, OWNER_ALONE);
+        Files.writeString(file, TOKEN_FLAG + LINE_END + token.get() + LINE_END, StandardCharsets.UTF_8);
+        List<String> given = new ArrayList<>(arguments);
+        given.add(SUBCOMMAND + NEXT, ARGUMENTS_IN_CONTAINER);
+        return given;
+    }
+
+    /**
+     * Deletes a file, if it is there, ignoring a failure.
+     *
+     * @param file the file
+     */
+    private static void deleteQuietly(Path file) {
+        try {
+            Files.deleteIfExists(file);
+        } catch (IOException exception) {
+            return;
+        }
     }
 
     /**

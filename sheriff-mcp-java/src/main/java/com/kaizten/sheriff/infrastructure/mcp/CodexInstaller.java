@@ -50,6 +50,7 @@ public final class CodexInstaller {
             command = "%s"
             args = ["-jar", "%s"]
             tool_timeout_sec = %d
+            env_vars = ["GITHUB_TOKEN"]
             %s
             [mcp_servers.%s.tools.sheriff_fix]
             approval_mode = "approve"
