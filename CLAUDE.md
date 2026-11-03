@@ -782,12 +782,14 @@ the image as profiles. When writing code here:
   `maven-plugin-api` "outdated", whose version is the Maven the plugin requires, as
   maven-plugin-plugin writes it into the descriptor (3.10.0 refused Maven
   3.9). Its outdated-dependency rule asks the network, so a new release
-  anywhere can turn a module red with no change here. The rule has no fixer
-  since the image of 26 October, so `sheriff_fix` leaves the plugin's
-  `pom.xml` alone (measured). An image whose fixer list (`fix -l`) gives
-  `JavaPomOutdatedDependency` one again would write `maven.version` 3.10.0:
-  that would be the one change of `sheriff_fix`'s to undo here, or the
-  plugin refuses Maven 3.9.
+  anywhere can turn a module red with no change here. The image of 3
+  November (`sha256:2f07cfc6`) lists a fixer for it in `fix -l`, and four
+  more for `pom.xml` layout, but its `fix` applies none of them to a
+  `pom.xml` ("available fixers=0"), so `sheriff_fix` leaves the plugin's
+  `pom.xml` alone (measured). An image whose `fix` does apply it would write
+  `maven.version` 3.10.0, the property both dependencies read: that would be
+  the one change of `sheriff_fix`'s to undo here, or the plugin refuses
+  Maven 3.9.
 - **JavaDoc is at least three lines** (`/**`, text, `*/`, each on its own
   line) on every method, constructor and field, with `@param` and `@return`.
   No hardcoded strings or numbers in a call, braces on every branch, imports
