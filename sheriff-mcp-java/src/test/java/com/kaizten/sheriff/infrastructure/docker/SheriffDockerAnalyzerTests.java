@@ -295,6 +295,28 @@ class SheriffDockerAnalyzerTests {
     }
 
     @Test
+    @DisplayName("a known false positive leaves the record fix reads too, so no fixer changes the comment")
+    void knownFalsePositivesLeaveTheRecord() throws IOException {
+        Path state = state();
+        Path source = repository.resolve("app/src/main/java/A.java");
+        Files.createDirectories(source.getParent());
+        Files.writeString(source, "/*\n * Licence.\n */\nclass A {\n\tint a;\n}\n");
+        Files.writeString(state.resolve("sheriff_errors.json"), "{\"file:/data\": {\"app\": {\"JAVA\": ["
+                + "{\"file\": \"/data/app/src/main/java/A.java\", \"description\": \"Wrong indentation at line 2\","
+                + " \"referenceCode\": \"FourSpaceIndentation\"},"
+                + "{\"file\": \"/data/app/src/main/java/A.java\", \"description\": \"Tab at line 5\","
+                + " \"referenceCode\": \"FourSpaceIndentation\"}]}}}");
+
+        int withheld = analyzer(FakeProcessRunner.always(ProcessOutcome.completed(0, "", "")))
+                .withholdFromState(finding -> false);
+
+        assertEquals(1, withheld, "the comment's line, not the tab");
+        String record = Files.readString(state.resolve("sheriff_errors.json"));
+        assertFalse(record.contains("line 2"), record);
+        assertTrue(record.contains("line 5"), record);
+    }
+
+    @Test
     @DisplayName("withholding nothing leaves Sheriff's record as it wrote it, not rewritten")
     void withholdingNothingRewritesNothing() throws IOException {
         Path state = state();
