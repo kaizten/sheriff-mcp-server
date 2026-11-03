@@ -164,6 +164,19 @@ class HookTests {
         }
 
         @Test
+        @DisplayName("a component given no profile, as one Sheriff was never applied to, is not guarded")
+        void aComponentWithNoProfileIsNotGuarded() {
+            Configuration configuration = new Configuration(Map.of("TARGET_REPO", repository.toString()), agent);
+            Composition applied = new Composition(configuration,
+                    FakeProcessRunner.always(ProcessOutcome.completed(0, "", "")),
+                    component -> "app".equals(component) ? "JAVA" : "");
+            ComponentGate gate = applied.componentGate();
+
+            assertEquals("app", gate.componentFor(repository.resolve("app/src/A.java").toString()));
+            assertEquals("", gate.componentFor(repository.resolve("other/src/B.java").toString()));
+        }
+
+        @Test
         @DisplayName("a file is named as Sheriff names it, relative to the mount with '/', to compare with its findings")
         void namesAFileTheWaySheriffDoes() {
             assertEquals("app/src/A.java", gate().sheriffName(repository.resolve("app/src/A.java").toString()));

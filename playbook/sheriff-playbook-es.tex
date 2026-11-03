@@ -830,8 +830,35 @@ java -jar ~/.local/share/sheriff-agent/sheriff-mcp.jar --install-hooks
 \section{Configurar tu proyecto}
 \label{sec:configurar}
 
-No hace falta configurar nada. Esta sección es para cuando quieras algo distinto
+En un proyecto en el que ya se ha ejecutado Sheriff no hace falta configurar
+nada. Esta sección es para cuando quieras algo distinto
 de lo que las herramientas deducen solas.
+
+\subsection{Qué componentes se revisan}\label{sec:alcance}
+
+Las herramientas y los hooks solo revisan un componente al que ya se ha
+aplicado Sheriff: uno que nombra el historial de Sheriff, o uno para el que el
+proyecto declara un perfil (sección~\ref{sec:perfil}). Sheriff escribe su
+historial, \path{sheriff_history.json}, en la raíz del repositorio cada vez que
+se ejecuta sobre él; las herramientas nunca lo escriben. Un componente se
+revisa con todos los tests que el historial registra sobre él y con el perfil
+que declara: uno que Sheriff analizó con \code{JAVA} y con
+\code{JAVA_HEXAGONAL} se revisa con los dos.
+
+Sobre cualquier otro componente, \code{sheriff_test} responde que Sheriff nunca
+se le ha aplicado, el asistente hace lo que le pediste sin Sheriff y los hooks
+dejan pasar sus ediciones. Para que se revise, ejecuta Sheriff sobre él una vez
+desde la raíz del repositorio, con cada perfil que deba cumplir:
+
+\begin{command}{bash}
+docker run --rm -v "$PWD:/data" --workdir / kaizten/sheriff:latest \
+  test -u file:/data -c back-end -t JAVA
+\end{command}
+
+o declara su perfil. Para revisar todos los componentes, como hacían las
+versiones anteriores, pon \code{SHERIFF_SCOPE} a \code{all}
+(sección~\ref{sec:ajustes}). \code{--check}, el plugin de Maven y el bucle de
+reparación revisan el componente que se les indica en cualquier caso.
 
 \subsection{Qué se analiza}
 
@@ -854,8 +881,9 @@ dice que no se ha ejecutado ningún test.
 
 \subsection{Declarar la arquitectura}\label{sec:perfil}
 
-Sin declarar nada, un proyecto Java se comprueba con \code{JAVA}: estilo y
-documentación. Si sigue una arquitectura hexagonal o DDD, declárala una vez y
+Sin declarar nada, un proyecto Java se comprueba con \code{JAVA}, o con los
+tests que registra el historial de Sheriff (sección~\ref{sec:alcance}): estilo
+y documentación. Si sigue una arquitectura hexagonal o DDD, declárala una vez y
 todas las herramientas (servidor, hooks, \code{--check} y plugin de Maven) la
 tendrán en cuenta. En el \code{pom.xml}, que los módulos heredan:
 
@@ -1054,8 +1082,9 @@ ajuste.
 
 \subsubsection*{El análisis} Con qué reglas y cuánto tiempo.
 
-\setting{SHERIFF_PROFILE}{vacío: el que declara el proyecto o, si no declara
-  ninguno, el que piden sus fuentes}{un perfil de Sheriff: \code{JAVA},
+\setting{SHERIFF_PROFILE}{vacío: el que declara el proyecto y los que
+  registra el historial de Sheriff o, si no hay ninguno, el que piden sus
+  fuentes}{un perfil de Sheriff: \code{JAVA},
   \code{JAVA_HEXAGONAL}, \code{JAVA_DDD}, \code{TYPESCRIPT},
   \code{TYPESCRIPT_HEXAGONAL}, \code{VUEJS}}{El perfil de reglas con el que se
   analiza, por encima de lo que declare el proyecto, en los componentes de su
@@ -1063,6 +1092,13 @@ ajuste.
   declarar el perfil en el proyecto (sección~\ref{sec:perfil}), que lo leen
   igual todas las herramientas. Un perfil de arquitectura se analiza siempre
   junto al base de su lenguaje, nunca en su lugar.}
+
+\setting{SHERIFF_SCOPE}{\code{applied}}{\code{applied} o \code{all}}{Qué
+  componentes revisan las herramientas y los hooks. \code{applied}: solo
+  aquellos a los que ya se ha aplicado Sheriff, los que nombra su historial o
+  para los que el proyecto declara un perfil (sección~\ref{sec:alcance}).
+  \code{all}: todos los componentes, con el perfil que piden sus fuentes cuando
+  no tienen otro.}
 
 \setting{SHERIFF_TIMEOUT}{\code{300} (\code{900} con el Docker de WSL)}{segundos,
   1 o más}{Lo que puede tardar un análisis de Sheriff antes de pararlo. Súbelo
@@ -1509,6 +1545,10 @@ vuelve a pedir la revisión.}
 componente que analiza, y en Windows con el Docker de WSL un proyecto en
 \code{C:} tarda mucho más que uno en el disco propio de WSL. Sube
 \code{SHERIFF_TIMEOUT}.}
+\problem{\code{is not checked: Sheriff has never been applied to it}}{No
+hay ningún test de Sheriff registrado sobre el componente y el proyecto no le
+declara perfil, así que las herramientas no lo tocan. Ejecuta Sheriff sobre él
+una vez, o declara su perfil (sección~\ref{sec:alcance}).}
 \problem{\code{Nothing was analyzed}}{El componente no tiene fuentes del
 lenguaje del perfil. Nombra el componente (\ask{revisa el módulo api}) o revisa
 el perfil que declara el proyecto.}

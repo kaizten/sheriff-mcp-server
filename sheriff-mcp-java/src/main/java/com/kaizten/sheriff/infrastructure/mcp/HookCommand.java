@@ -8,6 +8,7 @@ import com.kaizten.sheriff.infrastructure.mcp.tool.Tools;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.function.UnaryOperator;
 
 /**
  * The same jar as the two Claude Code hooks, {@code --hook-gate} and
@@ -27,6 +28,7 @@ public final class HookCommand {
 
     private static final String PROJECT_VARIABLE = "CLAUDE_PROJECT_DIR";
     private static final String NO_COMPONENT = "";
+    private static final String NOT_CHECKED = "";
     private static final String COULD_NOT_START =
             "The code standards hook could not start (%s) -- letting the work through unchecked.%n";
     private static final String ERROR_UTILITY_CLASS = "This is a utility class and cannot be instantiated.";
@@ -58,7 +60,7 @@ public final class HookCommand {
             }
             Map<String, String> agentEnvironment = agentEnvironment(config, project);
             Configuration configuration = new Configuration(agentEnvironment, config.cachedCatalog().getParent());
-            Composition composition = Composition.real(configuration, config::profileFor,
+            Composition composition = Composition.real(configuration, guardedProfiles(config),
                     config.layout()::verificationCommand, config.layout()::testCommandForModel)
                     .withChangeCoverage(Tools.changeCoverage(config)::measure);
             return new Agent(configuration, composition).run(List.of(hook));
@@ -66,6 +68,18 @@ public final class HookCommand {
             System.err.printf(COULD_NOT_START, exception.getMessage());
             return HookExit.ALLOW;
         }
+    }
+
+    /**
+     * The profile the hooks guard each component under: the one the tools
+     * check it under, or none for a component they do not check, which the
+     * hooks then let through.
+     *
+     * @param config the server's configuration
+     * @return that profile for each component, empty when it is not checked
+     */
+    static UnaryOperator<String> guardedProfiles(McpConfig config) {
+        return component -> config.checkedProfile(component).orElse(NOT_CHECKED);
     }
 
     /**

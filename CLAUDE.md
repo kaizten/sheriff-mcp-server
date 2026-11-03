@@ -452,6 +452,20 @@ reads `.ts`/`.js`, so those cannot; `.py` calls for `PYTHON`), and the test
 command from the build tool. `scripts/e2e.sh` scenarios 8, 9, 14 and 18
 exercise it.
 
+**The tools and the hooks check only a component Sheriff has been applied
+to** (`McpConfig.checkedProfile`): one `sheriff_history.json` at the root of
+the mount names (`SheriffHistory`; Sheriff appends every `test` run on the
+repository to it, and these tools never write there, as their runs mount a
+state folder), or one the project declares a profile for. It is checked under
+the declared profile and every test the history records on it, each with its
+base profile. Any other gets an answer that ends with `Next step: none`, and
+the hooks a profile of `""`, which `ComponentGate.componentFor` does not
+guard: a Codex session on a repository nobody had run Sheriff on repaired the
+whole of it under `JAVA` before writing what it was asked for. A call that
+names a profile, `--check`, the Maven plugin and the loop check what they are
+given. `SHERIFF_SCOPE=all` checks every component, as before; `scripts/e2e.sh`
+sets it for every scenario but 24, which checks the default.
+
 **Every setting has a default and a name, and is changed in a file**
 (`Settings`, its catalog in `src/main/resources/settings.tsv`, a line per
 setting): an environment variable, then the project's `.sheriff.properties`,
