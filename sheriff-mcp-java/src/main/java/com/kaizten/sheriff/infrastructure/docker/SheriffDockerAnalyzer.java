@@ -143,8 +143,7 @@ public final class SheriffDockerAnalyzer implements CodeAnalyzer {
      * @param repositoryRoot the repository to mount
      * @param timeout how long Sheriff is given before being killed
      */
-    public SheriffDockerAnalyzer(
-            ProcessRunner processes,
+    public SheriffDockerAnalyzer(ProcessRunner processes,
             String image,
             String testType,
             String component,
@@ -171,8 +170,7 @@ public final class SheriffDockerAnalyzer implements CodeAnalyzer {
      * @param timeout how long Sheriff is given
      * @param cleanUpState whether to delete Sheriff's state after the run
      */
-    public SheriffDockerAnalyzer(
-            ProcessRunner processes,
+    public SheriffDockerAnalyzer(ProcessRunner processes,
             String image,
             String testType,
             String component,
@@ -195,8 +193,7 @@ public final class SheriffDockerAnalyzer implements CodeAnalyzer {
      *     anywhere
      * @param failFast whether Sheriff stops at the first error it finds
      */
-    private SheriffDockerAnalyzer(
-            SheriffContainer container,
+    private SheriffDockerAnalyzer(SheriffContainer container,
             String testType,
             String component,
             Path repositoryRoot,
@@ -225,8 +222,8 @@ public final class SheriffDockerAnalyzer implements CodeAnalyzer {
      * @return that analyzer
      */
     public SheriffDockerAnalyzer exportingTo(Path directory) {
-        return new SheriffDockerAnalyzer(
-                container, testType, component, repositoryRoot, cleanUpState, Optional.of(directory), failFast);
+        return new SheriffDockerAnalyzer(container,
+                testType, component, repositoryRoot, cleanUpState, Optional.of(directory), failFast);
     }
 
     /**
@@ -239,8 +236,8 @@ public final class SheriffDockerAnalyzer implements CodeAnalyzer {
      * @return that analyzer
      */
     public SheriffDockerAnalyzer failingFast() {
-        return new SheriffDockerAnalyzer(
-                container, testType, component, repositoryRoot, cleanUpState, exportDirectory, true);
+        return new SheriffDockerAnalyzer(container,
+                testType, component, repositoryRoot, cleanUpState, exportDirectory, true);
     }
 
     /**
@@ -363,8 +360,7 @@ public final class SheriffDockerAnalyzer implements CodeAnalyzer {
         String output = withoutTraces(outcome.standardOutput());
         if (output.stripLeading().startsWith(USAGE_BANNER)) {
             String reason = reasonOf(outcome.standardError());
-            return AnalysisResult.failure(
-                    reason.isEmpty() ? String.format(REJECTED_ARGUMENTS, component, testType) : reason);
+            return AnalysisResult.failure(reason.isEmpty() ? String.format(REJECTED_ARGUMENTS, component, testType) : reason);
         }
         List<TrackedFile> tracked = trackedFiles();
         Optional<JsonNode> recorded = recordedEntries();
@@ -404,8 +400,7 @@ public final class SheriffDockerAnalyzer implements CodeAnalyzer {
      * @return the {@code test} subcommand and its flags
      */
     List<String> arguments() {
-        List<String> arguments = new ArrayList<>(List.of(
-                TEST_SUBCOMMAND,
+        List<String> arguments = new ArrayList<>(List.of(TEST_SUBCOMMAND,
                 TEST_FLAG, testType,
                 URI_FLAG, URI_ARGUMENT,
                 COMPONENT_FLAG, component));
@@ -486,12 +481,15 @@ public final class SheriffDockerAnalyzer implements CodeAnalyzer {
      * <p>The record is the container's, root's on Linux, in a folder of the
      * user's, so it is replaced rather than written over. Best effort: one
      * that cannot be replaced stays as it was, and the fixers see every
-     * finding.
+     * finding. The known false positives are taken out with them, as the
+     * analysis drops them but {@code fix} reads the record, and a fixer
+     * given one changes code that was right.
      *
      * @param withheld the findings to take out
      * @return how many were taken out
      */
     public int withholdFromState(Predicate<SheriffFinding> withheld) {
+        Predicate<SheriffFinding> out = withheld.or(KnownFalsePositives.in(repositoryRoot));
         Optional<JsonNode> root = stateFile(ERRORS_STATE_FILE);
         if (root.isEmpty()) {
             return NONE_WITHHELD;
@@ -502,7 +500,7 @@ public final class SheriffDockerAnalyzer implements CodeAnalyzer {
             JsonNode entries = contexts.next().path(component).path(testType);
             if (entries instanceof ArrayNode array) {
                 for (int index = array.size() + LAST_TO_FIRST; index >= FIRST_INDEX; index--) {
-                    if (withheld.test(toFinding(array.get(index)))) {
+                    if (out.test(toFinding(array.get(index)))) {
                         array.remove(index);
                         removed++;
                     }
@@ -617,8 +615,7 @@ public final class SheriffDockerAnalyzer implements CodeAnalyzer {
             Map.Entry<String, JsonNode> field = fields.next();
             raw.put(field.getKey(), plain(field.getValue(), field.getKey()));
         }
-        return new SheriffFinding(
-                normalize(entry.path(FILE_FIELD).asText()),
+        return new SheriffFinding(normalize(entry.path(FILE_FIELD).asText()),
                 entry.path(DESCRIPTION_FIELD).asText(),
                 entry.path(HOW_TO_SOLVE_FIELD).asText(),
                 entry.path(REFERENCE_CODE_FIELD).asText(),

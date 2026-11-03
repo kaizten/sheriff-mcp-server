@@ -20,8 +20,7 @@ import java.util.List;
  * @param costUsd what it cost in dollars at list price, {@code null} when
  *     the backend does not say
  */
-public record TokenUsage(
-        List<String> models,
+public record TokenUsage(List<String> models,
         long inputTokens,
         long outputTokens,
         long cacheReadTokens,

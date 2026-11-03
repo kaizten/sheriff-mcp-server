@@ -66,8 +66,8 @@ public final class CatalogFreshness {
      * @return a warning to print, empty when they match or when either side
      *     could not be determined
      */
-    public static Optional<String> check(
-            ProcessRunner processes, Path workingDirectory, Path catalogPath, String image) {
+    public static Optional<String> check(ProcessRunner processes,
+            Path workingDirectory, Path catalogPath, String image) {
         String recordedId = field(catalogPath, IMAGE_ID_FIELD);
         if (recordedId.isEmpty()) {
             return Optional.empty();
@@ -77,8 +77,8 @@ public final class CatalogFreshness {
             return Optional.empty();
         }
         String recordedAt = field(catalogPath, GENERATED_AT_FIELD);
-        return Optional.of(String.format(
-                WARNING, catalogPath, recordedAt, image, shortened(recordedId), shortened(liveId)));
+        return Optional.of(String.format(WARNING,
+                catalogPath, recordedAt, image, shortened(recordedId), shortened(liveId)));
     }
 
     /**
@@ -117,8 +117,7 @@ public final class CatalogFreshness {
      * @return that identifier, empty when Docker could not answer
      */
     private static String liveImageId(ProcessRunner processes, Path workingDirectory, String image) {
-        ProcessOutcome outcome = processes.run(
-                List.of(DOCKER, IMAGE, INSPECT, FORMAT_FLAG, IMAGE_ID_FORMAT, image),
+        ProcessOutcome outcome = processes.run(List.of(DOCKER, IMAGE, INSPECT, FORMAT_FLAG, IMAGE_ID_FORMAT, image),
                 workingDirectory, Map.of(), INSPECT_TIMEOUT);
         return outcome.succeeded() ? outcome.standardOutput().strip() : EMPTY;
     }

@@ -138,8 +138,8 @@ public final class MessageLinkParser {
      * @param checker the class that raises the message
      * @param code the reference code the message class names
      */
-    private static void record(
-            Map<String, CatalogEntry> links, List<String> recent, String checker, String code) {
+    private static void record(Map<String,
+            CatalogEntry> links, List<String> recent, String checker, String code) {
         if (links.containsKey(code) || recent.isEmpty()) {
             return;
         }
@@ -149,8 +149,7 @@ public final class MessageLinkParser {
         String description = recent.size() < STRINGS_PER_MESSAGE
                 ? howToSolve
                 : recent.get(recent.size() - DESCRIPTION_OFFSET);
-        links.put(code, new CatalogEntry(
-                new SheriffRule(code, description, howToSolve, classified[0], classified[1], EMPTY_TEXT, List.of()),
+        links.put(code, new CatalogEntry(new SheriffRule(code, description, howToSolve, classified[0], classified[1], EMPTY_TEXT, List.of()),
                 code, CatalogEntry.MESSAGE_CLASS_SOURCE, slashed(checker)));
     }
 

@@ -47,8 +47,7 @@ public final class CatalogBuilder {
      *     whose message classes carry their own text
      * @return every rule, sorted by language and code, with profiles attached
      */
-    public static List<CatalogEntry> build(
-            String constantsDump,
+    public static List<CatalogEntry> build(String constantsDump,
             String fixerOutput,
             String factoryDump,
             String graphDump,
@@ -61,8 +60,7 @@ public final class CatalogBuilder {
         Map<String, String> fixers = FixerListParser.parse(fixerOutput);
         Map<String, String> examples = FixerExampleParser.parse(fixerScripts);
         for (Map.Entry<String, String> fixer : fixers.entrySet()) {
-            byCode.computeIfAbsent(fixer.getKey(), code -> new CatalogEntry(
-                    new SheriffRule(code, "", "", GENERAL, "", "", List.of()),
+            byCode.computeIfAbsent(fixer.getKey(), code -> new CatalogEntry(new SheriffRule(code, "", "", GENERAL, "", "", List.of()),
                     code, CatalogEntry.MESSAGE_CLASS_SOURCE, ""));
         }
         List<CatalogEntry> entries = new ArrayList<>();
@@ -120,9 +118,7 @@ public final class CatalogBuilder {
     private static CatalogEntry merged(CatalogEntry existing, CatalogEntry link) {
         SheriffRule known = existing.rule();
         SheriffRule found = link.rule();
-        return new CatalogEntry(
-                new SheriffRule(
-                        known.code(),
+        return new CatalogEntry(new SheriffRule(known.code(),
                         known.description().isEmpty() ? found.description() : known.description(),
                         known.howToSolve().isEmpty() ? found.howToSolve() : known.howToSolve(),
                         known.language().isEmpty() || GENERAL.equals(known.language())
@@ -150,8 +146,7 @@ public final class CatalogBuilder {
      * @param profileNames the valid test names
      * @return the same rules, each carrying its profiles
      */
-    static List<CatalogEntry> attachProfiles(
-            List<CatalogEntry> entries,
+    static List<CatalogEntry> attachProfiles(List<CatalogEntry> entries,
             String factoryDump,
             String graphDump,
             String treeJson,
@@ -161,8 +156,8 @@ public final class CatalogBuilder {
                 : ProfileMapper.profileRules(entries, factoryDump, graphDump);
         Map<String, List<String>> byProfile;
         if (!treeJson.isEmpty() && !profileNames.isEmpty()) {
-            byProfile = mergeProfileMaps(
-                    TestTreeMapper.profileRules(entries, treeJson, profileNames), derived);
+            byProfile = mergeProfileMaps(TestTreeMapper.profileRules(entries, treeJson, profileNames),
+                    derived);
         } else if (!derived.isEmpty()) {
             byProfile = derived;
         } else {
@@ -199,8 +194,8 @@ public final class CatalogBuilder {
      * @param fromBytecode what the reference graph could reach
      * @return the tree's answer, extended for the codes it never names
      */
-    static Map<String, List<String>> mergeProfileMaps(
-            Map<String, List<String>> fromTree, Map<String, List<String>> fromBytecode) {
+    static Map<String, List<String>> mergeProfileMaps(Map<String,
+            List<String>> fromTree, Map<String, List<String>> fromBytecode) {
         Set<String> placed = new LinkedHashSet<>();
         fromTree.values().forEach(placed::addAll);
         Map<String, List<String>> merged = new java.util.TreeMap<>(fromTree);

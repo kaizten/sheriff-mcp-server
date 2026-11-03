@@ -171,8 +171,8 @@ public final class ClaudeCliFixer implements CodeFixer {
      *     that directory; empty to accept edits anywhere under it
      * @param timeout how long one invocation is given
      */
-    public ClaudeCliFixer(
-            ProcessRunner processes, PromptLog promptLog, Path repositoryRoot, String component, Duration timeout) {
+    public ClaudeCliFixer(ProcessRunner processes,
+            PromptLog promptLog, Path repositoryRoot, String component, Duration timeout) {
         this(processes, promptLog, repositoryRoot, component, EMPTY, timeout);
     }
 
@@ -225,8 +225,8 @@ public final class ClaudeCliFixer implements CodeFixer {
     public FixResult fix(FixRequest request) {
         String prompt = request.prompt() + GIT_MV_HINT
                 + (testRule(testCommand).isEmpty() ? EMPTY : String.format(TESTS_HINT, testCommand));
-        ProcessOutcome outcome = processes.run(
-                command(), repositoryRoot, Map.of(AGENT_MARKER, AGENT_MARKER_VALUE), timeout, prompt);
+        ProcessOutcome outcome = processes.run(command(),
+                repositoryRoot, Map.of(AGENT_MARKER, AGENT_MARKER_VALUE), timeout, prompt);
         if (!outcome.ran()) {
             return FixResult.failed(outcome.failure());
         }

@@ -23,8 +23,7 @@ import java.util.Locale;
  * @param profiles the {@code --test} profiles that run this rule; empty means
  *     the catalog does not know, never "no profile runs it"
  */
-public record SheriffRule(
-        String code,
+public record SheriffRule(String code,
         String description,
         String howToSolve,
         String language,
@@ -82,8 +81,7 @@ public record SheriffRule(
      * @param fixer the script that repairs it, empty when there is none
      * @param profiles the test profiles that run it
      */
-    public SheriffRule(
-            String code,
+    public SheriffRule(String code,
             String description,
             String howToSolve,
             String language,

@@ -56,8 +56,7 @@ final class SheriffTaskTool {
      * @return that tool
      */
     Tool definition() {
-        Map<String, Object> schema = Schemas.objectSchema(List.of(
-                Map.entry(ID_ARGUMENT, Schemas.stringProperty(ID_HELP))));
+        Map<String, Object> schema = Schemas.objectSchema(List.of(Map.entry(ID_ARGUMENT, Schemas.stringProperty(ID_HELP))));
         return new Tool(context.taskTool(), DESCRIPTION, schema, ANNOTATIONS, this::handle);
     }
 

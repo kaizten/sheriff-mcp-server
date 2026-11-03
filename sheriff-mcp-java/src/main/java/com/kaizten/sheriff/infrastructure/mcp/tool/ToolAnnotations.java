@@ -22,8 +22,8 @@ import java.util.Map;
  *     nothing more
  * @param openWorld whether it reaches beyond this machine, such as a model
  */
-public record ToolAnnotations(
-        String title, boolean readOnly, boolean destructive, boolean idempotent, boolean openWorld) {
+public record ToolAnnotations(String title,
+        boolean readOnly, boolean destructive, boolean idempotent, boolean openWorld) {
 
     private static final String TITLE_FIELD = "title";
     private static final String READ_ONLY_FIELD = "readOnlyHint";

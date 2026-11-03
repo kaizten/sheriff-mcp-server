@@ -104,8 +104,7 @@ final class SheriffFixTool {
      * @return that tool
      */
     Tool definition() {
-        Map<String, Object> schema = Schemas.objectSchema(List.of(
-                Map.entry(ToolContext.COMPONENT_ARGUMENT, Schemas.stringProperty(ToolContext.COMPONENT_HELP)),
+        Map<String, Object> schema = Schemas.objectSchema(List.of(Map.entry(ToolContext.COMPONENT_ARGUMENT, Schemas.stringProperty(ToolContext.COMPONENT_HELP)),
                 Map.entry(ToolContext.PROFILE_ARGUMENT, Schemas.stringProperty(ToolContext.PROFILE_HELP)),
                 Map.entry(ToolContext.REFERENCE_CODE_ARGUMENT, Schemas.stringProperty(REFERENCE_CODE_HELP)),
                 Map.entry(VERIFY_ARGUMENT, Schemas.booleanProperty(VERIFY_HELP))));
@@ -158,8 +157,8 @@ final class SheriffFixTool {
         String scope = referenceCode.isEmpty()
                 ? DEFAULT_FIXER_SCOPE
                 : String.format(SPECIFIC_FIXER_SCOPE, referenceCode);
-        StringBuilder body = new StringBuilder(String.format(
-                FIX_SUMMARY, scope, component, run.before().total(), run.after().total(), repaired));
+        StringBuilder body = new StringBuilder(String.format(FIX_SUMMARY,
+                scope, component, run.before().total(), run.after().total(), repaired));
         if (run.rounds() > ONE_ROUND) {
             body.append(String.format(ROUNDS, run.rounds()));
         }

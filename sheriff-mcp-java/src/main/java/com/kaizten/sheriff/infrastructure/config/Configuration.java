@@ -453,8 +453,7 @@ public final class Configuration {
      * @return those settings
      */
     public LoopSettings loopSettings() {
-        return new LoopSettings(
-                optionalPositive(MAX_ITERATIONS),
+        return new LoopSettings(optionalPositive(MAX_ITERATIONS),
                 !environment.getOrDefault(GIT_SAFETY, ENABLED).equals(DISABLED),
                 number(MAX_FILES_PER_BATCH, DEFAULT_BATCH),
                 BatchGrouping.named(value(BATCH_BY, BatchGrouping.FILE.setting())),

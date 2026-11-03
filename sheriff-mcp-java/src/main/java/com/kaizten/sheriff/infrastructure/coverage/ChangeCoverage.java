@@ -5,6 +5,7 @@ import com.kaizten.sheriff.infrastructure.process.BuildOutput;
 import com.kaizten.sheriff.infrastructure.process.Platform;
 import com.kaizten.sheriff.infrastructure.process.ProcessOutcome;
 import com.kaizten.sheriff.infrastructure.process.ProcessRunner;
+import com.kaizten.sheriff.infrastructure.process.ProcessStatus;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
@@ -99,6 +100,8 @@ public final class ChangeCoverage {
     private static final String NO_JUNIT5_PLUGIN = "PIT's JUnit 5 plugin (%s) could not be downloaded. Maven "
             + "said:%n%s";
     private static final String UNREADABLE = "a report could not be read: %s";
+    private static final String MUTATION_UNFINISHED = "PIT did not finish within its %d minute(s): a change "
+            + "this big needs more, which SHERIFF_MUTATION_TIMEOUT gives it, in seconds.";
     private static final String NOT_MAVEN = "the component does not build with Maven";
     private final ProcessRunner processes;
     private final Path mount;
@@ -216,6 +219,11 @@ public final class ChangeCoverage {
     /**
      * Runs PIT on the classes of the changed files and reads its report.
      *
+     * <p>Not when PIT ran out of time: it writes its report as it goes, and
+     * one cut off at the limit was read as a report that could not be read,
+     * which says nothing of the limit (measured on this repository's change
+     * of 2 November, 70 files, cut at 30 minutes).
+     *
      * @param component the component
      * @param root its folder
      * @param files the changed files, under {@code src/main/java}
@@ -238,6 +246,9 @@ public final class ChangeCoverage {
         Path report = root.resolve(MUTATION_REPORT);
         Files.deleteIfExists(report);
         ProcessOutcome outcome = run(component, arguments, mutationTimeout);
+        if (outcome.status() == ProcessStatus.TIMED_OUT) {
+            throw new IllegalStateException(String.format(MUTATION_UNFINISHED, mutationTimeout.toMinutes()));
+        }
         if (Files.isRegularFile(report)) {
             return CoverageReports.mutants(report);
         }

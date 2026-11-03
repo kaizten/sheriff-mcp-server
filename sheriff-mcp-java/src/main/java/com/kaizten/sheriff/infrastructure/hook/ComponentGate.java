@@ -71,8 +71,7 @@ public final class ComponentGate {
      *
      * <p>Editing a README is not this gate's business.
      */
-    static final Set<String> GUARDED_SUFFIXES = Set.of(
-            JAVA_SUFFIX,
+    static final Set<String> GUARDED_SUFFIXES = Set.of(JAVA_SUFFIX,
             TYPESCRIPT_SUFFIX,
             TYPESCRIPT_JSX_SUFFIX,
             VUE_SUFFIX,

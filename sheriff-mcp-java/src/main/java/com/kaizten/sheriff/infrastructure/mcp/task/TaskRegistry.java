@@ -227,8 +227,8 @@ public final class TaskRegistry implements AutoCloseable {
             if (!rethrow) {
                 awaitAStopInProgress();
             }
-            Task failed = record(running.finishedAs(TaskState.FAILED, String.format(
-                    FAILURE, exception.getClass().getSimpleName(), exception.getMessage())));
+            Task failed = record(running.finishedAs(TaskState.FAILED, String.format(FAILURE,
+                    exception.getClass().getSimpleName(), exception.getMessage())));
             if (rethrow) {
                 throw new TaskFailure(failed, exception);
             }

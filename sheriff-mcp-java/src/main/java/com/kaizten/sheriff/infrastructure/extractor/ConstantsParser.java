@@ -73,8 +73,8 @@ public final class ConstantsParser {
     private static final String VUEJS_LANGUAGE = "vuejs";
     private static final String PERL_LANGUAGE = "perl";
     private static final String REPOSITORY_LANGUAGE = "repository";
-    private static final Set<String> KNOWN_LANGUAGES = Set.of(
-            JAVA_LANGUAGE, TYPESCRIPT_LANGUAGE, VUEJS_LANGUAGE, PERL_LANGUAGE, REPOSITORY_LANGUAGE);
+    private static final Set<String> KNOWN_LANGUAGES = Set.of(JAVA_LANGUAGE,
+            TYPESCRIPT_LANGUAGE, VUEJS_LANGUAGE, PERL_LANGUAGE, REPOSITORY_LANGUAGE);
     private static final String NOT_INSTANTIABLE = "This is a utility class and cannot be instantiated.";
 
     /**
@@ -104,8 +104,7 @@ public final class ConstantsParser {
             }
             String code = simple.substring(0, simple.length() - MESSAGE_SUFFIX.length());
             String[] classified = classify(packageOf(parsed.name()), TYPES_MARKER);
-            rules.put(code, new CatalogEntry(
-                    new SheriffRule(code, join(parsed.descriptions()), join(parsed.howToSolve()),
+            rules.put(code, new CatalogEntry(new SheriffRule(code, join(parsed.descriptions()), join(parsed.howToSolve()),
                             classified[0], classified[1], EMPTY_TEXT, List.of()),
                     code, CatalogEntry.MESSAGE_CLASS_SOURCE, slashed(parsed.name())));
         }
@@ -185,8 +184,7 @@ public final class ConstantsParser {
             String suffix = entry[0].contains(NAME_SEPARATOR)
                     ? entry[0].substring(entry[0].indexOf(NAME_SEPARATOR) + 1)
                     : entry[0];
-            rules.add(new CatalogEntry(
-                    new SheriffRule(base + PACKAGE_SEPARATOR + suffix, entry[1], entry[2],
+            rules.add(new CatalogEntry(new SheriffRule(base + PACKAGE_SEPARATOR + suffix, entry[1], entry[2],
                             classified[0], classified[1], EMPTY_TEXT, List.of()),
                     EMPTY_TEXT, CatalogEntry.CHECKER_SOURCE, slashed(parsed.name())));
         }

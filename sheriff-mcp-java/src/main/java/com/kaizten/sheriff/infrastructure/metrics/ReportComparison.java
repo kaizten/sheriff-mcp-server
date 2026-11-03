@@ -181,8 +181,8 @@ public final class ReportComparison {
     private static final List<String> SESSION_COLUMNS = Stream.concat(SESSION_KEY.stream(), Stream.of(REPORT_COLUMN,
             CALLS_FIELD, TESTS_COLUMN, FIXES_COLUMN, FAILED_CALLS_FIELD, FIRST_COLUMN, LEFT_COLUMN,
             CALLS_S_COLUMN)).toList();
-    private static final List<String> CLIENT_COLUMNS = Stream.concat(SESSION_KEY.stream(), Stream.of(
-            SESSIONS_COLUMN, CALLS_FIELD, FIXES_COLUMN, FIRST_COLUMN, LEFT_COLUMN, CALLS_S_COLUMN)).toList();
+    private static final List<String> CLIENT_COLUMNS = Stream.concat(SESSION_KEY.stream(), Stream.of(SESSIONS_COLUMN,
+            CALLS_FIELD, FIXES_COLUMN, FIRST_COLUMN, LEFT_COLUMN, CALLS_S_COLUMN)).toList();
     private final ObjectMapper json = new ObjectMapper();
     private final List<JsonNode> reports = new ArrayList<>();
     private final List<String> names = new ArrayList<>();
@@ -340,8 +340,8 @@ public final class ReportComparison {
      * @return the rows, in key order
      */
     private List<List<String>> clients() {
-        Map<List<String>, List<JsonNode>> groups = new TreeMap<>(Comparator.comparing(key -> String.join(
-                CSV_SEPARATOR, key)));
+        Map<List<String>, List<JsonNode>> groups = new TreeMap<>(Comparator.comparing(key -> String.join(CSV_SEPARATOR,
+                key)));
         for (JsonNode session : sessions) {
             groups.computeIfAbsent(sessionKey(session), key -> new ArrayList<>()).add(session);
         }
@@ -521,8 +521,7 @@ public final class ReportComparison {
                 }
             }
             byRule.entrySet().stream()
-                    .sorted(Comparator.comparingDouble(
-                            (Map.Entry<String, double[]> rule) -> -rule.getValue()[RuleColumn.DETECTED.ordinal()]))
+                    .sorted(Comparator.comparingDouble((Map.Entry<String, double[]> rule) -> -rule.getValue()[RuleColumn.DETECTED.ordinal()]))
                     .forEach(rule -> {
                         List<String> row = new ArrayList<>(key);
                         row.add(rule.getKey());
@@ -568,8 +567,8 @@ public final class ReportComparison {
      * @return each configuration's key with its runs, in key order
      */
     private Map<List<String>, List<JsonNode>> grouped() {
-        Map<List<String>, List<JsonNode>> groups = new TreeMap<>(Comparator.comparing(key -> String.join(
-                CSV_SEPARATOR, key)));
+        Map<List<String>, List<JsonNode>> groups = new TreeMap<>(Comparator.comparing(key -> String.join(CSV_SEPARATOR,
+                key)));
         for (JsonNode report : reports) {
             groups.computeIfAbsent(key(report), key -> new ArrayList<>()).add(report);
         }

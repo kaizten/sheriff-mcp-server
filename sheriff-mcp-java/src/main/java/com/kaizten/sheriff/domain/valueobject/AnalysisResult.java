@@ -27,8 +27,8 @@ import java.util.Set;
  * @param message why it failed, when it did
  * @param trackedFiles every file Sheriff analyzed, with its hash
  */
-public record AnalysisResult(
-        List<SheriffFinding> findings, boolean error, String message, List<TrackedFile> trackedFiles) {
+public record AnalysisResult(List<SheriffFinding> findings,
+        boolean error, String message, List<TrackedFile> trackedFiles) {
 
     /**
      * Checks the values it is given instead of quietly correcting them.
@@ -107,8 +107,7 @@ public record AnalysisResult(
                 return result;
             }
             for (SheriffFinding finding : result.findings()) {
-                findings.putIfAbsent(
-                        List.of(finding.file(), finding.description(), finding.referenceCode(), finding.type()),
+                findings.putIfAbsent(List.of(finding.file(), finding.description(), finding.referenceCode(), finding.type()),
                         finding);
             }
             for (TrackedFile file : result.trackedFiles()) {

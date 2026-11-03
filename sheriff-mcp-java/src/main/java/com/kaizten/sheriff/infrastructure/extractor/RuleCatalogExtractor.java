@@ -83,8 +83,8 @@ public final class RuleCatalogExtractor {
             System.out.print(NO_FIXER_SCRIPTS);
             fixerScripts = "";
         }
-        List<CatalogEntry> entries = CatalogBuilder.build(
-                reader.constants(), reader.fixerList(), reader.factory(), reader.referenceGraph(),
+        List<CatalogEntry> entries = CatalogBuilder.build(reader.constants(),
+                reader.fixerList(), reader.factory(), reader.referenceGraph(),
                 treeJson, profileNames, fixerScripts, reader.messageLinks());
         long withExamples = entries.stream().filter(entry -> entry.rule().hasExample()).count();
         System.out.printf(WITH_EXAMPLES, withExamples);
@@ -121,8 +121,7 @@ public final class RuleCatalogExtractor {
      * @return its identifier, or the empty string
      */
     private String imageId(String image) {
-        ProcessOutcome outcome = processes.run(
-                List.of(DOCKER_EXECUTABLE, IMAGE_COMMAND, INSPECT_COMMAND, FORMAT_FLAG, IMAGE_ID_FORMAT, image),
+        ProcessOutcome outcome = processes.run(List.of(DOCKER_EXECUTABLE, IMAGE_COMMAND, INSPECT_COMMAND, FORMAT_FLAG, IMAGE_ID_FORMAT, image),
                 workingDirectory, Map.of(), INSPECT_TIMEOUT);
         return outcome.succeeded() ? outcome.standardOutput().strip() : "";
     }

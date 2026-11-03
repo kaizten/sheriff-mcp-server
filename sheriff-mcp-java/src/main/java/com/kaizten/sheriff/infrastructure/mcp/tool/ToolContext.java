@@ -284,8 +284,8 @@ record ToolContext(McpConfig config, SheriffRunner runner, RuleCatalog catalog, 
         if (components.isEmpty()) {
             throw new IllegalArgumentException(String.format(NO_COMPONENTS, config.repository()));
         }
-        throw new IllegalArgumentException(String.format(
-                NO_COMPONENT, config.repository(), String.join(COMPONENT_SEPARATOR, components)));
+        throw new IllegalArgumentException(String.format(NO_COMPONENT,
+                config.repository(), String.join(COMPONENT_SEPARATOR, components)));
     }
 
     /**

@@ -125,8 +125,7 @@ public final class CodexCliFixer implements CodeFixer {
      * @param baseCommand the command that invokes Codex, prompt excluded
      * @param timeout how long one invocation is given
      */
-    public CodexCliFixer(
-            ProcessRunner processes,
+    public CodexCliFixer(ProcessRunner processes,
             PromptLog promptLog,
             Path repositoryRoot,
             List<String> baseCommand,
@@ -153,8 +152,7 @@ public final class CodexCliFixer implements CodeFixer {
      * @param baseCommand the command that invokes Codex, prompt excluded
      * @param timeout how long one invocation is given
      */
-    public CodexCliFixer(
-            ProcessRunner processes,
+    public CodexCliFixer(ProcessRunner processes,
             PromptLog promptLog,
             Path repositoryRoot,
             String component,
@@ -176,13 +174,13 @@ public final class CodexCliFixer implements CodeFixer {
      */
     @Override
     public FixResult fix(FixRequest request) {
-        ProcessOutcome outcome = processes.run(
-                command(), repositoryRoot, Map.of(AGENT_MARKER, AGENT_MARKER_VALUE), timeout, prompt(request));
+        ProcessOutcome outcome = processes.run(command(),
+                repositoryRoot, Map.of(AGENT_MARKER, AGENT_MARKER_VALUE), timeout, prompt(request));
         if (!outcome.ran()) {
             return FixResult.failed(outcome.failure());
         }
-        Path logged = promptLog.record(
-                request.label(), request.prompt(), outcome.standardOutput() + outcome.standardError());
+        Path logged = promptLog.record(request.label(),
+                request.prompt(), outcome.standardOutput() + outcome.standardError());
         if (logged != null) {
             System.out.printf(LOGGED_MESSAGE, logged);
         }

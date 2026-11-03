@@ -70,6 +70,7 @@ class ChangeCoverageTests {
         private String effectivePom = EFFECTIVE_POM;
         private boolean copiesPlugin = true;
         private ProcessOutcome outcome = ProcessOutcome.completed(0, "[ERROR] the build said why", "");
+        private ProcessOutcome mutationOutcome;
 
         StandInMaven(Path root, boolean writesCoverage, boolean writesMutants) {
             this.root = root;
@@ -102,7 +103,7 @@ class ChangeCoverageTests {
             } catch (IOException exception) {
                 throw new IllegalStateException(exception);
             }
-            return outcome;
+            return line.contains("mutationCoverage") && mutationOutcome != null ? mutationOutcome : outcome;
         }
 
         private static void write(Path file, String content) throws IOException {
@@ -252,6 +253,21 @@ class ChangeCoverageTests {
 
         assertTrue(verdict.problem().startsWith("a report could not be read: "), verdict.problem());
         assertFalse(verdict.problem().contains("%s"), verdict.problem());
+    }
+
+    @Test
+    @DisplayName("PIT cut off at its time limit is no measure, and says so, whatever it had written")
+    void aMutationRunOutOfTimeSaysSo() throws IOException, InterruptedException {
+        Path app = changedProject("class CalcTest {}\n");
+        StandInMaven maven = new StandInMaven(app, true, true);
+        maven.pit = "<mutations><mutation detected='true'";
+        maven.mutationOutcome = ProcessOutcome.timedOut("did not respond within 60s.");
+
+        CoverageVerdict verdict = coverage(mount, maven).measure("app");
+
+        assertFalse(verdict.measured());
+        assertEquals("PIT did not finish within its 1 minute(s): a change this big needs more, which "
+                + "SHERIFF_MUTATION_TIMEOUT gives it, in seconds.", verdict.problem());
     }
 
     @Test

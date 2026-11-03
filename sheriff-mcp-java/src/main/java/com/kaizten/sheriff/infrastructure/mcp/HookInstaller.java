@@ -467,8 +467,8 @@ public final class HookInstaller {
      * @param output where to report
      * @return the installer
      */
-    public static HookInstaller forProject(
-            Map<String, String> environment, Path workingDirectory, Path jar, Path home, PrintStream output) {
+    public static HookInstaller forProject(Map<String,
+            String> environment, Path workingDirectory, Path jar, Path home, PrintStream output) {
         String open = environment.get(PROJECT_VARIABLE);
         Path project = open == null || open.isBlank() ? workingDirectory : Path.of(open);
         return new HookInstaller(project, jar, home, output);

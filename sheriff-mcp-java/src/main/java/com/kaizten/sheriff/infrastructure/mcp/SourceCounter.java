@@ -40,8 +40,8 @@ final class SourceCounter extends SimpleFileVisitor<Path> {
     private static final String IDE_OUTPUT = "out";
     private static final String VENDORED = "vendor";
     private static final String COVERAGE_REPORTS = "coverage";
-    private static final Set<String> SKIPPED_DIRECTORIES = Set.of(
-            NODE_MODULES, MAVEN_OUTPUT, GRADLE_OUTPUT, BUNDLE_OUTPUT, IDE_OUTPUT, VENDORED, COVERAGE_REPORTS);
+    private static final Set<String> SKIPPED_DIRECTORIES = Set.of(NODE_MODULES,
+            MAVEN_OUTPUT, GRADLE_OUTPUT, BUNDLE_OUTPUT, IDE_OUTPUT, VENDORED, COVERAGE_REPORTS);
     private final Path root;
     private final Map<String, List<String>> groups;
     private final boolean stopAtFirst;

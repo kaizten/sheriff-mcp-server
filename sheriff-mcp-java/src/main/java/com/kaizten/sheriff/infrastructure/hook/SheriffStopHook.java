@@ -185,8 +185,7 @@ public final class SheriffStopHook {
      * @param turns what each component looked like when the turn began
      * @param maxBlocks how many blocks in a row before it lets the turn end
      */
-    public SheriffStopHook(
-            ComponentGate gate,
+    public SheriffStopHook(ComponentGate gate,
             GitVersionControl git,
             Function<String, VerificationResult> tests,
             StopBlocks blocks,

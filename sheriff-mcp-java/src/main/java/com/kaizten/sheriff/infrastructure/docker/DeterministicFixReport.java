@@ -21,8 +21,7 @@ import java.util.List;
  *     {@code CODE: reason}; a rule handed to a fixer that cannot run is not a
  *     rule anything is repairing
  */
-public record DeterministicFixReport(
-        boolean ran,
+public record DeterministicFixReport(boolean ran,
         int errorsBefore,
         List<String> codes,
         String failure,
@@ -62,8 +61,8 @@ public record DeterministicFixReport(
      * @param failure why it could not run, empty when it did
      * @param withoutCatalog whether it ran with no rule catalog
      */
-    public DeterministicFixReport(
-            boolean ran, int errorsBefore, List<String> codes, String failure, boolean withoutCatalog) {
+    public DeterministicFixReport(boolean ran,
+            int errorsBefore, List<String> codes, String failure, boolean withoutCatalog) {
         this(ran, errorsBefore, codes, failure, withoutCatalog, List.of());
     }
 

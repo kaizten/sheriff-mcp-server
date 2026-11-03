@@ -47,8 +47,7 @@ final class ConfigFile {
     private static final String POSIX_VIEW = "posix";
     private static final String ERROR_UTILITY_CLASS = "This is a utility class and cannot be instantiated.";
     private static final String NOTHING_INSIDE = "";
-    private static final DefaultPrettyPrinter AS_CLAUDE_CODE_WRITES_IT = new DefaultPrettyPrinter(
-            Separators.createDefaultInstance()
+    private static final DefaultPrettyPrinter AS_CLAUDE_CODE_WRITES_IT = new DefaultPrettyPrinter(Separators.createDefaultInstance()
                     .withObjectFieldValueSpacing(Separators.Spacing.AFTER)
                     .withObjectEmptySeparator(NOTHING_INSIDE)
                     .withArrayEmptySeparator(NOTHING_INSIDE))

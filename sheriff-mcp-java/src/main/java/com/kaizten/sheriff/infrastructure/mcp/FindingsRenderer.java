@@ -315,8 +315,8 @@ public final class FindingsRenderer {
      * @param heldBack the files left over
      * @param prefix the folder every file shares, left out of each name
      */
-    private static void appendHeldBack(
-            List<String> lines, List<Map.Entry<String, List<SheriffFinding>>> heldBack, String prefix) {
+    private static void appendHeldBack(List<String> lines,
+            List<Map.Entry<String, List<SheriffFinding>>> heldBack, String prefix) {
         int remaining = heldBack.stream().mapToInt(entry -> entry.getValue().size()).sum();
         lines.add(String.format(HELD_BACK_HEADING, remaining, heldBack.size()));
         for (Map.Entry<String, List<SheriffFinding>> entry : heldBack) {

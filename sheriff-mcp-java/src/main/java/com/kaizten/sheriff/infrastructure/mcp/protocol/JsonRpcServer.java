@@ -115,8 +115,8 @@ public final class JsonRpcServer {
      * @param callTool runs one tool and reports whether it failed
      * @param serverName this server's identity in the handshake
      */
-    public JsonRpcServer(
-            Supplier<List<Map<String, Object>>> listTools,
+    public JsonRpcServer(Supplier<List<Map<String,
+            Object>>> listTools,
             BiFunction<String, Map<String, Object>, ToolOutcome> callTool,
             String serverName) {
         this(listTools, callTool, serverName, NO_INSTRUCTIONS);
@@ -131,8 +131,8 @@ public final class JsonRpcServer {
      * @param serverName this server's identity in the handshake
      * @param instructions how to use the tools together, or empty for none
      */
-    public JsonRpcServer(
-            Supplier<List<Map<String, Object>>> listTools,
+    public JsonRpcServer(Supplier<List<Map<String,
+            Object>>> listTools,
             BiFunction<String, Map<String, Object>, ToolOutcome> callTool,
             String serverName,
             String instructions) {
@@ -150,8 +150,8 @@ public final class JsonRpcServer {
      * @param serverName this server's identity in the handshake
      * @param instructions how to use the tools together, or empty for none
      */
-    public JsonRpcServer(
-            Supplier<List<Map<String, Object>>> listTools,
+    public JsonRpcServer(Supplier<List<Map<String,
+            Object>>> listTools,
             BiFunction<String, Map<String, Object>, ToolOutcome> callTool,
             Predicate<String> answersAtOnce,
             String serverName,
@@ -250,8 +250,7 @@ public final class JsonRpcServer {
      */
     private ObjectNode callResult(JsonNode params) {
         String name = params.path(NAME_ARGUMENT_FIELD).asText(EMPTY_METHOD);
-        Map<String, Object> arguments = json.convertValue(
-                params.path(ARGUMENTS_FIELD).isObject() ? params.path(ARGUMENTS_FIELD) : json.createObjectNode(),
+        Map<String, Object> arguments = json.convertValue(params.path(ARGUMENTS_FIELD).isObject() ? params.path(ARGUMENTS_FIELD) : json.createObjectNode(),
                 Map.class);
         ToolOutcome outcome = callTool.apply(name, arguments);
         ObjectNode block = json.createObjectNode();

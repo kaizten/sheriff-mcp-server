@@ -134,8 +134,8 @@ public final class SheriffContainer {
      * @param timeout how long one run is given
      * @param names where each run's container name comes from
      */
-    SheriffContainer(
-            ProcessRunner processes, String image, Path repositoryRoot, Duration timeout, Supplier<String> names) {
+    SheriffContainer(ProcessRunner processes,
+            String image, Path repositoryRoot, Duration timeout, Supplier<String> names) {
         this.processes = processes;
         this.image = image;
         this.repositoryRoot = repositoryRoot;

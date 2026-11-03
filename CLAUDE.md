@@ -301,9 +301,11 @@ to be tried by hand.
     the first rule (28 planned, 2 fixed).
   Of the image's two jar fixers, `BracesForStatements` works (images of 28
   and 29 October: it braces a classic `for`), and `FolderNameUnderscore`
-  renames `my_pkg` to `my-pkg` and leaves `package com.my_pkg;` as it was
-  (`sha256:05a1f4a4`): no Java package can be named after that folder, and
-  the analysis after it finds nothing.
+  renames `my_pkg` to `mypkg` and its files' `package` line, but no other
+  file's `import` of it (image of 30 October 12:49, `sha256:46f6caf2`): the
+  build breaks, the report says `fixed` and the analysis after it finds
+  nothing. Only the project's tests catch it, which is why a repair is
+  verified by them.
 - **`fix -f` with no `--fixers` is not every fixer, nor only the state's.**
   Its default set leaves fixers out and runs some regardless of the state.
   With `--fixers A,B` it runs only those. So `sheriff_fix` with no arguments
@@ -495,8 +497,17 @@ names Java requires; and, since the image of 29 October,
 `JavaVariableName` on a `static final` constant and `UnusedImport` on an
 import used as an annotation. On this repository's code, clean under the
 image of 28 October, those three were 13,981 of 14,879 errors under the new
-one, and every `UnusedImport` of the plugin. A line it cannot read keeps
-its finding.
+one, and every `UnusedImport` of the plugin. Since the image of 2 November,
+`JavaBracePlacement` on a switch expression's closing brace alone on its line
+but for its `;`, which the rule flagged on every one, assigned or returned
+(measured). A line it cannot read keeps its finding. Its findings are also
+taken out of the record `fix` reads (`SheriffRepair`, through
+`withholdFromState`), as a fixer given one changes code that was right: with
+the image of 3 November (`sha256:2f07cfc6`) `FourSpaceIndentation`'s fixer
+takes the space before every comment's `*` away. That spares a file whose only
+findings of the rule were those, but one with a tab too it rewrites whole,
+comments included (230 of 280 lines on PetClinic, measured), which only
+Sheriff can fix.
 
 ## The MCP's answers
 
@@ -778,12 +789,14 @@ the image as profiles. When writing code here:
   `maven-plugin-api` "outdated", whose version is the Maven the plugin requires, as
   maven-plugin-plugin writes it into the descriptor (3.10.0 refused Maven
   3.9). Its outdated-dependency rule asks the network, so a new release
-  anywhere can turn a module red with no change here. The rule has no fixer
-  since the image of 26 October, so `sheriff_fix` leaves the plugin's
-  `pom.xml` alone (measured). An image whose fixer list (`fix -l`) gives
-  `JavaPomOutdatedDependency` one again would write `maven.version` 3.10.0:
-  that would be the one change of `sheriff_fix`'s to undo here, or the
-  plugin refuses Maven 3.9.
+  anywhere can turn a module red with no change here. The image of 3
+  November (`sha256:2f07cfc6`) lists a fixer for it in `fix -l`, and four
+  more for `pom.xml` layout, but its `fix` applies none of them to a
+  `pom.xml` ("available fixers=0"), so `sheriff_fix` leaves the plugin's
+  `pom.xml` alone (measured). An image whose `fix` does apply it would write
+  `maven.version` 3.10.0, the property both dependencies read: that would be
+  the one change of `sheriff_fix`'s to undo here, or the plugin refuses
+  Maven 3.9.
 - **JavaDoc is at least three lines** (`/**`, text, `*/`, each on its own
   line) on every method, constructor and field, with `@param` and `@return`.
   No hardcoded strings or numbers in a call, braces on every branch, imports

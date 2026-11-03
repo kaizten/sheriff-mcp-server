@@ -312,8 +312,8 @@ public final class McpServer {
         String folder = project.getFileName() == null ? project.toString() : project.getFileName().toString();
         String name = String.format(SESSION_REPORT_NAME, LocalDateTime.now().format(SESSION_STAMP), folder)
                 .replaceAll(NAME_UNSAFE, NAME_SAFE);
-        return config.reportsDirectory().map(reports -> new SessionReport(reports.resolve(name), Map.of(
-                TOOLS_SECTION, Map.of(VERSION_FIELD, ServerVersion.current()),
+        return config.reportsDirectory().map(reports -> new SessionReport(reports.resolve(name), Map.of(TOOLS_SECTION,
+                Map.of(VERSION_FIELD, ServerVersion.current()),
                 SHERIFF_SECTION, image.identity(),
                 PROJECT_SECTION, Map.of(REPOSITORY_FIELD, project.toString()))));
     }
@@ -350,8 +350,8 @@ public final class McpServer {
         ImageProvisioning image = imageFor(config, processes);
         image.now();
         ProvisionedCatalog catalog = ProvisionedCatalog.forServer(config, processes, image.ready());
-        ToolCall commands = ToolCall.throughCommandLine(
-                Path.of(System.getProperty(USER_DIRECTORY)).toAbsolutePath().normalize(), ownJar());
+        ToolCall commands = ToolCall.throughCommandLine(Path.of(System.getProperty(USER_DIRECTORY)).toAbsolutePath().normalize(),
+                ownJar());
         try (Tools tools = new Tools(config, runner, catalog, () -> pathOr(catalog, config),
                 Tools.projectTests(config), image, commands)) {
             ToolOutcome outcome = tools.call(options.get(at + AFTER_FIRST_OPTION), arguments);

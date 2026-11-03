@@ -88,8 +88,8 @@ public final class BatchPolicy {
      * @param firstEstimate the cap the first analysis gave
      * @return the cap to use from now on
      */
-    public static int extendedMaxIterations(
-            int cap, int passesRun, int filesWithErrors, int maxFilesPerBatch, int firstEstimate) {
+    public static int extendedMaxIterations(int cap,
+            int passesRun, int filesWithErrors, int maxFilesPerBatch, int firstEstimate) {
         if (maxFilesPerBatch <= NONE || filesWithErrors <= NONE) {
             return cap;
         }
@@ -219,8 +219,8 @@ public final class BatchPolicy {
      *     {@link #parkingKey(SheriffFinding, BatchGrouping)} names it
      * @return the errors that make up this pass
      */
-    public static List<SheriffFinding> selectBatch(
-            List<SheriffFinding> errors, BatchGrouping grouping, int maxFiles, Set<String> parked) {
+    public static List<SheriffFinding> selectBatch(List<SheriffFinding> errors,
+            BatchGrouping grouping, int maxFiles, Set<String> parked) {
         if (grouping == BatchGrouping.FILE) {
             return selectBatch(errors, maxFiles, parked);
         }

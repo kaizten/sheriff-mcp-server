@@ -6,12 +6,12 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -36,6 +36,13 @@ import java.util.regex.Pattern;
  * those: a tab, a misplaced statement, a variable or an import nothing uses
  * still counts, and a source that cannot be read keeps its finding.
  *
+ * <p>And, since the image of 2 November ({@code sha256:1522c9a2}),
+ * {@code JavaBracePlacement} on the closing brace of a switch expression when
+ * that brace is on a line of its own, as the rule asks: the {@code ;} Java
+ * requires after a switch expression is all that follows it, and the rule
+ * flagged every one, assigned or returned (measured on both), while the same
+ * switch as a statement passed.
+ *
  * <p>Applied once, in {@link SheriffDockerAnalyzer}, which every caller goes
  * through, so the MCP's tools, the hooks, the loop and the Maven plugin agree
  * on the count. No rule can be switched off by a project: an earlier version
@@ -50,6 +57,10 @@ public final class KnownFalsePositives {
     private static final String INDENTATION_RULE = "FourSpaceIndentation";
     private static final String VARIABLE_NAME_RULE = "JavaVariableName";
     private static final String UNUSED_IMPORT_RULE = "UnusedImport";
+    private static final String BRACE_RULE = "JavaBracePlacement";
+    private static final String SWITCH_CLOSING_PATTERN = "Closing brace for switch expression on line (\\d+)";
+    private static final Pattern SWITCH_CLOSING = Pattern.compile(SWITCH_CLOSING_PATTERN);
+    private static final String SWITCH_EXPRESSION_END = "};";
     private static final String PACKAGE_INFO = "package-info.java";
     private static final String MODULE_INFO = "module-info.java";
     private static final Set<String> NAMES_JAVA_REQUIRES = Set.of(PACKAGE_INFO, MODULE_INFO);
@@ -85,14 +96,24 @@ public final class KnownFalsePositives {
      * @return the same, without the known false positives
      */
     public static List<SheriffFinding> without(List<SheriffFinding> findings, Path mount) {
+        return findings.stream().filter(in(mount).negate()).toList();
+    }
+
+    /**
+     * Which findings Sheriff is known to get wrong, so that no fixer is given
+     * one either. Since the image of 3 November ({@code sha256:2f07cfc6})
+     * {@code FourSpaceIndentation}'s fixer takes the space before a comment's
+     * {@code *} away: given none of those lines, it leaves a file whose
+     * findings were only those alone, but one with a tab too it still
+     * rewrites whole, comments included (230 of PetClinic's 280 lines,
+     * measured). That part is Sheriff's to fix.
+     *
+     * @param mount the directory the findings' paths are relative to
+     * @return the test, which reads each source once
+     */
+    public static Predicate<SheriffFinding> in(Path mount) {
         Map<String, Optional<List<String>>> sources = new HashMap<>();
-        List<SheriffFinding> kept = new ArrayList<>();
-        for (SheriffFinding finding : findings) {
-            if (!falsePositive(finding, mount, sources)) {
-                kept.add(finding);
-            }
-        }
-        return kept;
+        return finding -> falsePositive(finding, mount, sources);
     }
 
     /**
@@ -112,6 +133,10 @@ public final class KnownFalsePositives {
         if (FILE_NAME_RULE.equals(rule)) {
             return NAMES_JAVA_REQUIRES.contains(name);
         }
+        if (BRACE_RULE.equals(rule)) {
+            return closesSwitchExpression(finding.description(),
+                    sources.computeIfAbsent(file, path -> read(mount, path)));
+        }
         if (!INDENTATION_RULE.equals(rule) && !VARIABLE_NAME_RULE.equals(rule)
                 && !UNUSED_IMPORT_RULE.equals(rule)) {
             return false;
@@ -129,6 +154,24 @@ public final class KnownFalsePositives {
             return CONSTANT.matcher(line).find();
         }
         return line.strip().startsWith(COMMENT_CONTINUATION) || insideTextBlock(lines.get(), number);
+    }
+
+    /**
+     * Whether a brace placement finding is about a switch expression whose
+     * closing brace is alone on its line, but for the semicolon after it.
+     *
+     * @param description the finding's description
+     * @param lines the source's lines, if it could be read
+     * @return {@code true} when it is
+     */
+    private static boolean closesSwitchExpression(String description, Optional<List<String>> lines) {
+        Matcher matcher = SWITCH_CLOSING.matcher(description);
+        if (!matcher.find() || lines.isEmpty()) {
+            return false;
+        }
+        int number = Integer.parseInt(matcher.group(1));
+        return number >= FIRST_LINE && number <= lines.get().size()
+                && SWITCH_EXPRESSION_END.equals(lines.get().get(number - 1).strip());
     }
 
     /**
