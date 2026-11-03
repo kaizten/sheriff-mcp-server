@@ -311,6 +311,13 @@ to be tried by hand.
   With `--fixers A,B` it runs only those. So `sheriff_fix` with no arguments
   runs the default set and then `--fixers` with every rule found, in rounds
   while the count drops: one call, the same end state every time.
+- **`fix` is recursive unless told not to**: after its fixers it analyzes
+  again and repairs what it finds, so a finding taken out of the record it
+  reads comes back and is repaired anyway (image of 3 November, 18:51,
+  `sha256:72dafc66`: given only a tab's finding, it repaired the comment's
+  lines taken out too; with `--disable-recursive`, only the tab). So
+  `SheriffRepair` passes `--disable-recursive` to every `fix`: its own
+  rounds repair again, each measured by an analysis.
 - **A bad `--test` profile exits 0 too**, printing a usage banner to stdout
   and the reason to stderr. Locating the findings array by the first `[`
   parses the banner instead. So does a `fix` argument it refuses, among
@@ -528,14 +535,16 @@ image of 28 October, those three were 13,981 of 14,879 errors under the new
 one, and every `UnusedImport` of the plugin. Since the image of 2 November,
 `JavaBracePlacement` on a switch expression's closing brace alone on its line
 but for its `;`, which the rule flagged on every one, assigned or returned
-(measured). A line it cannot read keeps its finding. Its findings are also
+(measured). And `JavaPomOutdatedDependency` on a dependency of
+`org.apache.maven` in a `pom.xml` packaged as `maven-plugin`, the Maven the
+plugin requires (see below). A line it cannot read keeps its finding. Its findings are also
 taken out of the record `fix` reads (`SheriffRepair`, through
-`withholdFromState`), as a fixer given one changes code that was right: with
-the image of 3 November (`sha256:2f07cfc6`) `FourSpaceIndentation`'s fixer
-takes the space before every comment's `*` away. That spares a file whose only
-findings of the rule were those, but one with a tab too it rewrites whole,
-comments included (230 of 280 lines on PetClinic, measured), which only
-Sheriff can fix.
+`withholdFromState`), as a fixer given one changes code that was right:
+`FourSpaceIndentation`'s fixer takes the space before the `*` of a `/* */`
+comment away. Since the image of 3 November, 18:51 (`sha256:72dafc66`), it
+repairs only the line it is given, so with `fix` not recursive no comment is
+touched (PetClinic: 0 of the 280 lines, 1,154 of 1,368 errors repaired in
+4:41; recursive, 200 lines, and cut at 50 minutes; measured).
 
 ## The MCP's answers
 
@@ -812,19 +821,15 @@ the image as profiles. When writing code here:
 
 - **Both modules must stay green under `JAVA`.** Check before finishing, and
   prefer the plugin's own goal for the plugin. Since the image of 19
-  October, `JAVA` checks `pom.xml` too, and two findings stay on the
-  plugin, each a false positive of the checker: `maven-core` and
-  `maven-plugin-api` "outdated", whose version is the Maven the plugin requires, as
+  October, `JAVA` checks `pom.xml` too, and its outdated-dependency rule
+  asks the network, so a new release anywhere can turn a module red with no
+  change here. On the plugin it flags `maven-core` and `maven-plugin-api`,
+  whose version is the oldest Maven the plugin runs on, as
   maven-plugin-plugin writes it into the descriptor (3.10.0 refused Maven
-  3.9). Its outdated-dependency rule asks the network, so a new release
-  anywhere can turn a module red with no change here. The image of 3
-  November (`sha256:2f07cfc6`) lists a fixer for it in `fix -l`, and four
-  more for `pom.xml` layout, but its `fix` applies none of them to a
-  `pom.xml` ("available fixers=0"), so `sheriff_fix` leaves the plugin's
-  `pom.xml` alone (measured). An image whose `fix` does apply it would write
-  `maven.version` 3.10.0, the property both dependencies read: that would be
-  the one change of `sheriff_fix`'s to undo here, or the plugin refuses
-  Maven 3.9.
+  3.9). Since the image of 3 November, 18:51 (`sha256:72dafc66`), its fixer
+  applies and would write `maven.version` 3.10.0 (measured), so
+  `KnownFalsePositives` drops that rule on a dependency of `org.apache.maven`
+  in a `pom.xml` packaged as `maven-plugin`, and both modules report 0.
 - **JavaDoc is at least three lines** (`/**`, text, `*/`, each on its own
   line) on every method, constructor and field, with `@param` and `@return`.
   No hardcoded strings or numbers in a call, braces on every branch, imports

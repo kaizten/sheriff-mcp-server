@@ -148,4 +148,25 @@ class KnownFalsePositivesTests {
         assertEquals(List.of(inline, pastTheEnd, lineZero, unread, other),
                 KnownFalsePositives.without(List.of(alone, inline, pastTheEnd, lineZero, unread, other), mount));
     }
+
+    @Test
+    @DisplayName("the Maven a plugin requires is not outdated, any other dependency, or any other pom's, is")
+    void dropsTheMavenAPluginRequires() throws IOException {
+        Files.createDirectories(mount.resolve("plugin"));
+        Files.createDirectories(mount.resolve("app"));
+        Files.writeString(mount.resolve("plugin/pom.xml"), "<project>\n    <packaging>maven-plugin</packaging>\n</project>\n");
+        Files.writeString(mount.resolve("app/pom.xml"), "<project>\n    <packaging>jar</packaging>\n</project>\n");
+        SheriffFinding core = finding("plugin/pom.xml", "JavaPomOutdatedDependency",
+                "Maven dependency 'org.apache.maven:maven-core' is outdated: 3.9.6 -> 3.10.0.");
+        SheriffFinding junit = finding("plugin/pom.xml", "JavaPomOutdatedDependency",
+                "Maven dependency 'junit:junit' is outdated: 4.12 -> 4.13.2.");
+        SheriffFinding application = finding("app/pom.xml", "JavaPomOutdatedDependency",
+                "Maven dependency 'org.apache.maven:maven-core' is outdated: 3.9.6 -> 3.10.0.");
+        SheriffFinding unread = finding("gone/pom.xml", "JavaPomOutdatedDependency",
+                "Maven dependency 'org.apache.maven:maven-core' is outdated: 3.9.6 -> 3.10.0.");
+        SheriffFinding layout = finding("plugin/pom.xml", "JavaPomIndentation",
+                "Maven dependency 'org.apache.maven:maven-core' is outdated: 3.9.6 -> 3.10.0.");
+        assertEquals(List.of(junit, application, unread, layout),
+                KnownFalsePositives.without(List.of(core, junit, application, unread, layout), mount));
+    }
 }

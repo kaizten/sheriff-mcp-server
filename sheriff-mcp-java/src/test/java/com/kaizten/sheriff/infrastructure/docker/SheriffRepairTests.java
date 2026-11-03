@@ -173,6 +173,21 @@ class SheriffRepairTests {
     }
 
     @Test
+    @DisplayName("no fix is recursive, so a finding taken out of its record is not found and repaired again")
+    void noFixIsRecursive() {
+        FakeProcessRunner runner = new FakeProcessRunner(List.of(ProcessOutcome.completed(0, TWO, ""), FIXED, FIXED,
+                ProcessOutcome.completed(0, TWO, "")));
+
+        repair(runner).everyFixer(List.of());
+
+        List<List<String>> fixes = runner.commands().stream().filter(command -> command.contains("fix")).toList();
+        assertEquals(2, fixes.size());
+        for (List<String> fix : fixes) {
+            assertTrue(fix.contains("--disable-recursive"), fix.toString());
+        }
+    }
+
+    @Test
     @DisplayName("a fix that answered with its usage banner refused its arguments: a failure, with Sheriff's reason")
     void aFixThatPrintedItsUsageIsAFailure() {
         FakeProcessRunner runner = new FakeProcessRunner(List.of(ProcessOutcome.completed(0, TWO, ""),

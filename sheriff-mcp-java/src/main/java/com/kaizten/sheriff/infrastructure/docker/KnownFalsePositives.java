@@ -43,6 +43,15 @@ import java.util.regex.Pattern;
  * flagged every one, assigned or returned (measured on both), while the same
  * switch as a statement passed.
  *
+ * <p>And {@code JavaPomOutdatedDependency} on a dependency of
+ * {@code org.apache.maven} in the {@code pom.xml} of a module packaged as
+ * {@code maven-plugin}: there the version of {@code maven-core} or
+ * {@code maven-plugin-api} is the oldest Maven the plugin runs on, as
+ * maven-plugin-plugin writes it into the descriptor (3.10.0 refused Maven
+ * 3.9). Since the image of 3 November ({@code sha256:72dafc66}) its fixer
+ * applies, and would write {@code maven.version} 3.10.0 into this
+ * repository's plugin (measured).
+ *
  * <p>Applied once, in {@link SheriffDockerAnalyzer}, which every caller goes
  * through, so the MCP's tools, the hooks, the loop and the Maven plugin agree
  * on the count. No rule can be switched off by a project: an earlier version
@@ -58,6 +67,11 @@ public final class KnownFalsePositives {
     private static final String VARIABLE_NAME_RULE = "JavaVariableName";
     private static final String UNUSED_IMPORT_RULE = "UnusedImport";
     private static final String BRACE_RULE = "JavaBracePlacement";
+    private static final String OUTDATED_RULE = "JavaPomOutdatedDependency";
+    private static final String MAVEN_API_PATTERN = "Maven dependency 'org\\.apache\\.maven:[^']+' is outdated";
+    private static final Pattern MAVEN_API = Pattern.compile(MAVEN_API_PATTERN);
+    private static final String PLUGIN_PACKAGING = "<packaging>maven-plugin</packaging>";
+    private static final String POM = "pom.xml";
     private static final String SWITCH_CLOSING_PATTERN = "Closing brace for switch expression on line (\\d+)";
     private static final Pattern SWITCH_CLOSING = Pattern.compile(SWITCH_CLOSING_PATTERN);
     private static final String SWITCH_EXPRESSION_END = "};";
@@ -101,12 +115,11 @@ public final class KnownFalsePositives {
 
     /**
      * Which findings Sheriff is known to get wrong, so that no fixer is given
-     * one either. Since the image of 3 November ({@code sha256:2f07cfc6})
-     * {@code FourSpaceIndentation}'s fixer takes the space before a comment's
-     * {@code *} away: given none of those lines, it leaves a file whose
-     * findings were only those alone, but one with a tab too it still
-     * rewrites whole, comments included (230 of PetClinic's 280 lines,
-     * measured). That part is Sheriff's to fix.
+     * one either: {@code FourSpaceIndentation}'s fixer takes the space before
+     * the {@code *} of a block comment that is not JavaDoc. Since the image of
+     * 3 November, 18:51 ({@code sha256:72dafc66}), it repairs only the line it
+     * is given, so with {@code fix} not recursive none of PetClinic's 280
+     * such lines is touched (measured).
      *
      * @param mount the directory the findings' paths are relative to
      * @return the test, which reads each source once
@@ -122,8 +135,9 @@ public final class KnownFalsePositives {
      * @param finding the finding
      * @param mount the directory its path is relative to
      * @param sources the files already read, by path
-     * @return {@code true} for a file name the language requires, or a line
-     *         or an import one of the three rules is wrong about
+     * @return {@code true} for a file name the language requires, a line
+     *         or an import one of the three rules is wrong about, or the
+     *         Maven a plugin requires
      */
     private static boolean falsePositive(SheriffFinding finding, Path mount,
             Map<String, Optional<List<String>>> sources) {
@@ -132,6 +146,10 @@ public final class KnownFalsePositives {
         String rule = finding.referenceCode();
         if (FILE_NAME_RULE.equals(rule)) {
             return NAMES_JAVA_REQUIRES.contains(name);
+        }
+        if (OUTDATED_RULE.equals(rule)) {
+            return POM.equals(name) && MAVEN_API.matcher(finding.description()).find()
+                    && pluginPom(sources.computeIfAbsent(file, path -> read(mount, path)));
         }
         if (BRACE_RULE.equals(rule)) {
             return closesSwitchExpression(finding.description(),
@@ -154,6 +172,16 @@ public final class KnownFalsePositives {
             return CONSTANT.matcher(line).find();
         }
         return line.strip().startsWith(COMMENT_CONTINUATION) || insideTextBlock(lines.get(), number);
+    }
+
+    /**
+     * Whether a {@code pom.xml} builds a Maven plugin.
+     *
+     * @param lines the file's lines, if it could be read
+     * @return {@code true} when its packaging is {@code maven-plugin}
+     */
+    private static boolean pluginPom(Optional<List<String>> lines) {
+        return lines.isPresent() && lines.get().stream().anyMatch(line -> PLUGIN_PACKAGING.equals(line.strip()));
     }
 
     /**
