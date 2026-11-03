@@ -6,12 +6,14 @@ import com.kaizten.sheriff.infrastructure.config.Configuration;
 import com.kaizten.sheriff.infrastructure.config.Settings;
 import com.kaizten.sheriff.infrastructure.coverage.CoverageThresholds;
 import com.kaizten.sheriff.infrastructure.docker.ImageProvisioning;
+import com.kaizten.sheriff.infrastructure.docker.SheriffHistory;
 import com.kaizten.sheriff.infrastructure.docker.SheriffRepair;
 import com.kaizten.sheriff.infrastructure.process.Platform;
 import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -73,6 +75,10 @@ public final class McpConfig {
     private static final String MUTATORS_SETTING = "SHERIFF_MUTATORS";
     private static final String NO_VALUE = "";
     private static final String PROTOTYPE = "SHERIFF_PROTOTYPE";
+    private static final String SCOPE = "SHERIFF_SCOPE";
+    private static final String EVERY_COMPONENT = "all";
+    private static final String APPLIED_ONLY = "applied";
+    private static final String PROFILE_SEPARATOR = ",";
     private static final String ENABLED = "1";
     private static final String NOT_POSITIVE = "%s must be at least 1 second, but it is '%s'.";
     private final Map<String, String> environment;
@@ -201,7 +207,8 @@ public final class McpConfig {
      * own file sets it for every project they open.
      *
      * @return {@code SHERIFF_PROFILE} when set; otherwise the one the
-     *     project declares for it; otherwise the base profile of the
+     *     project declares for it and those Sheriff's history records on
+     *     it; otherwise the base profile of the
      *     language the component's sources are in; {@code JAVA} when there
      *     is nothing to tell by
      */
@@ -222,12 +229,51 @@ public final class McpConfig {
         if (!configured.isEmpty() && (component.isEmpty() || layout.holdsSourcesFor(component, configured))) {
             return configured;
         }
-        Optional<String> declared = layout.declaredProfile(component)
-                .filter(profile -> layout.holdsSourcesFor(component, profile));
-        if (declared.isPresent() || component.isEmpty()) {
-            return declared.orElse(DEFAULT_PROFILE);
+        Optional<String> applied = appliedProfile(component);
+        if (applied.isPresent() || component.isEmpty()) {
+            return applied.orElse(DEFAULT_PROFILE);
         }
         return layout.profileFor(component).orElse(DEFAULT_PROFILE);
+    }
+
+    /**
+     * The profiles a component has been held to: the one the project
+     * declares for it, then every test Sheriff's history records on it.
+     *
+     * <p>Both, as a project that declares {@code JAVA} and was also run
+     * under {@code JAVA_HEXAGONAL} by hand is held to the two.
+     *
+     * @param component the component, relative to the mount, possibly empty
+     * @return those profiles, comma-separated, or empty when nothing
+     *     declares one and the history records none
+     */
+    private Optional<String> appliedProfile(String component) {
+        ProjectLayout layout = layout();
+        List<String> applied = new ArrayList<>();
+        layout.declaredProfile(component).filter(profile -> layout.holdsSourcesFor(component, profile))
+                .ifPresent(applied::add);
+        applied.addAll(new SheriffHistory(layout.mount()).testsOn(component));
+        return applied.isEmpty() ? Optional.empty() : Optional.of(String.join(PROFILE_SEPARATOR, applied));
+    }
+
+    /**
+     * The profile the tools and the hooks check a component under, when it
+     * is one they check.
+     *
+     * <p>By default only a component Sheriff has been applied to: one its
+     * history records a test on, or one the project declares a profile for.
+     * A Codex session on a repository nobody had ever run Sheriff on was
+     * sent to repair the whole of it under {@code JAVA}, which its sources
+     * called for, before writing what it was asked for. {@code
+     * SHERIFF_SCOPE=all} checks every component, as before.
+     *
+     * @param component the component, relative to the mount
+     * @return what {@link #profileFor} gives it, or empty when it is not
+     *     checked
+     */
+    public Optional<String> checkedProfile(String component) {
+        boolean every = EVERY_COMPONENT.equals(value(SCOPE, APPLIED_ONLY).strip());
+        return every || appliedProfile(component).isPresent() ? Optional.of(profileFor(component)) : Optional.empty();
     }
 
     /**

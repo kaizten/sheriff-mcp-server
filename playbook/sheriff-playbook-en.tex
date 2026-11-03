@@ -824,8 +824,34 @@ java -jar ~/.local/share/sheriff-agent/sheriff-mcp.jar --install-hooks
 \section{Configuring your project}
 \label{sec:configure}
 
-Nothing needs configuring. This section is for when you want something other
-than what the tools work out by themselves.
+Nothing needs configuring in a project Sheriff has already been run on. This
+section is for when you want something other than what the tools work out by
+themselves.
+
+\subsection{Which components are checked}\label{sec:scope}
+
+The tools and the hooks check only a component Sheriff has been applied to:
+one Sheriff's history names, or one the project declares a profile for
+(section~\ref{sec:profile}). Sheriff writes its history,
+\path{sheriff_history.json}, at the root of the repository every time it is run
+on it; the tools never write it. A component is checked under every test the
+history records on it and the profile it declares: one Sheriff ran under
+\code{JAVA} and \code{JAVA_HEXAGONAL} is checked under both.
+
+On any other component \code{sheriff_test} answers that Sheriff has never been
+applied to it, the assistant does what you asked without Sheriff, and the hooks
+let its edits through. To have it checked, run Sheriff on it once from the
+repository's root, with each profile it must meet:
+
+\begin{command}{bash}
+docker run --rm -v "$PWD:/data" --workdir / kaizten/sheriff:latest \
+  test -u file:/data -c back-end -t JAVA
+\end{command}
+
+or declare its profile. To check every component, as earlier versions did,
+set \code{SHERIFF_SCOPE} to \code{all} (section~\ref{sec:settings}).
+\code{--check}, the Maven plugin and the repair loop check the component they
+are given either way.
 
 \subsection{What is analyzed}
 
@@ -848,7 +874,8 @@ the tools say that no tests were run.
 
 \subsection{Declare the architecture}\label{sec:profile}
 
-With nothing declared, a Java project is checked under \code{JAVA}: style and
+With nothing declared, a Java project is checked under \code{JAVA}, or under
+the tests Sheriff's history records (section~\ref{sec:scope}): style and
 documentation. If it follows a hexagonal or DDD architecture, declare it once
 and every tool (server, hooks, \code{--check} and Maven plugin) takes it into
 account. In the \code{pom.xml}, which the modules inherit:
@@ -1047,8 +1074,8 @@ code is updated. The image is always Kaizten's latest; it is no setting.
 
 \subsubsection*{The analysis} With which rules, and for how long.
 
-\setting{SHERIFF_PROFILE}{empty: the one the project declares or, with none,
-  the one its sources call for}{a Sheriff profile: \code{JAVA},
+\setting{SHERIFF_PROFILE}{empty: the one the project declares and those
+  Sheriff's history records or, with none, the one its sources call for}{a Sheriff profile: \code{JAVA},
   \code{JAVA_HEXAGONAL}, \code{JAVA_DDD}, \code{TYPESCRIPT},
   \code{TYPESCRIPT_HEXAGONAL}, \code{VUEJS}}{The rule profile to analyze with,
   over the project's declaration, for the components written in its language
@@ -1056,6 +1083,12 @@ code is updated. The image is always Kaizten's latest; it is no setting.
   profile in the project (section~\ref{sec:profile}), which every tool reads
   the same way. An architecture profile always runs beside its language's base
   profile, never instead of it.}
+
+\setting{SHERIFF_SCOPE}{\code{applied}}{\code{applied} or \code{all}}{Which
+  components the tools and the hooks check. \code{applied}: only those Sheriff
+  has been applied to, the ones its history names or the project declares a
+  profile for (section~\ref{sec:scope}). \code{all}: every component, under the
+  profile its sources call for when it has no other.}
 
 \setting{SHERIFF_TIMEOUT}{\code{300} (\code{900} through WSL's Docker)}{seconds,
   1 or more}{How long one run of Sheriff may take before it is stopped. Raise
@@ -1475,6 +1508,10 @@ for the check again.}
 component it analyzes, and on Windows with WSL's Docker a project on
 \code{C:} takes far longer than one on WSL's own disk. Raise
 \code{SHERIFF_TIMEOUT}.}
+\problem{\code{is not checked: Sheriff has never been applied to it}}{No
+test of Sheriff's is recorded on the component and the project declares no
+profile for it, so the tools leave it alone. Run Sheriff on it once, or declare
+its profile (section~\ref{sec:scope}).}
 \problem{\code{Nothing was analyzed}}{The component holds no sources of the
 profile's language. Name the component (\ask{check the api module}) or check
 the profile the project declares.}

@@ -152,7 +152,8 @@ public final class Composition {
      * @param processes how external commands are run
      * @param profiles the profile for each component the hooks guard; the
      *     MCP server's jar passes the language its sources are in, so the
-     *     hooks guard a TypeScript component as TypeScript
+     *     hooks guard a TypeScript component as TypeScript, and the empty
+     *     string for a component they do not guard
      */
     public Composition(Configuration configuration, ProcessRunner processes, UnaryOperator<String> profiles) {
         this(configuration, processes, profiles, configuration::verificationCommandFor);

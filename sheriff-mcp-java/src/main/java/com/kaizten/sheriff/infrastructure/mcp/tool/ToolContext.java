@@ -96,6 +96,13 @@ record ToolContext(McpConfig config, SheriffRunner runner, RuleCatalog catalog, 
             + "Java, TypeScript, Vue, Perl and Python; a project in another language has nothing it can analyze. "
             + "Otherwise, check the component and the profile.%n" + NextStep.MARK + " none: tell the user "
             + "nothing was analyzed and why, and run the project's own tests if it has any.";
+    private static final String NOT_CHECKED =
+            "%s is not checked: Sheriff has never been applied to it. Sheriff's history (sheriff_history.json in "
+            + "%s) records no test on it and the project declares no profile for it. For the user, if it should "
+            + "be checked: run Sheriff on it once with the profiles it must meet, declare its profile "
+            + "(sheriff.profile in its pom.xml, profile in .sheriff.properties), or set SHERIFF_SCOPE=all to "
+            + "check every component.%n" + NextStep.MARK + " none, Sheriff does not check %s: do what was "
+            + "asked without these tools.";
 
     /**
      * The command that runs a component's own tests.
@@ -383,6 +390,24 @@ record ToolContext(McpConfig config, SheriffRunner runner, RuleCatalog catalog, 
             }
         }
         return line.toString();
+    }
+
+    /**
+     * What to answer a call on a component these tools do not check, as
+     * Sheriff has never been applied to it.
+     *
+     * <p>Only when the call names no profile: one that names it asks for
+     * that check by hand.
+     *
+     * @param arguments the call's arguments
+     * @param component the component the call is about
+     * @return the answer, or empty when the component is checked
+     */
+    Optional<String> notChecked(Map<String, Object> arguments, String component) {
+        if (!textArgument(arguments, PROFILE_ARGUMENT).isEmpty() || config.checkedProfile(component).isPresent()) {
+            return Optional.empty();
+        }
+        return Optional.of(String.format(NOT_CHECKED, component, config.repository(), component));
     }
 
     /**

@@ -48,6 +48,13 @@ import com.kaizten.sheriff.infrastructure.mcp.SessionReport;
  */
 final class ToolsTest {
 
+    /**
+     * Sheriff's history of a repository it was run on by hand, as the image
+     * of 30 October writes it: one entry per test, with its components.
+     */
+    private static final String HISTORY = "{\"file:/data\":[%s]}";
+    private static final String HISTORY_ENTRY = "{\"components\":[\"%s\"],\"test\":\"%s\",\"executions\":[]}";
+
     @TempDir
     Path repository;
 
@@ -55,12 +62,19 @@ final class ToolsTest {
     Path state;
 
     /**
-     * The component most tests name, as a folder: a component that is not one
-     * is refused before Sheriff runs.
+     * The component most tests name, as a folder Sheriff has been applied to:
+     * a component that is not one is refused before Sheriff runs, and one
+     * Sheriff's history does not name is not checked.
      */
     @org.junit.jupiter.api.BeforeEach
     void layOutTheComponent() throws IOException {
         Files.createDirectories(repository.resolve("app"));
+        appliedBefore(String.format(HISTORY_ENTRY, "app", "JAVA"), String.format(HISTORY_ENTRY, "lib", "JAVA"),
+                String.format(HISTORY_ENTRY, "loose", "JAVA"));
+    }
+
+    private void appliedBefore(String... entries) throws IOException {
+        Files.writeString(repository.resolve("sheriff_history.json"), String.format(HISTORY, String.join(",", entries)));
     }
 
     private Tools tools(List<SheriffRule> catalog, ProcessOutcome... outcomes) {
@@ -98,6 +112,73 @@ final class ToolsTest {
         assertEquals(List.of(false, false, true), List.of(autofix.get("readOnlyHint"), autofix.get("destructiveHint"),
                 autofix.get("openWorldHint")));
         assertTrue(hints.values().stream().allMatch(annotations -> ((Map<?, ?>) annotations).get("title") != null));
+    }
+
+    @Test
+    @DisplayName("a component Sheriff has never been applied to is not checked, and Sheriff does not run")
+    void aComponentSheriffWasNeverAppliedToIsNotChecked() throws IOException {
+        Files.createDirectories(repository.resolve("web"));
+        List<List<String>> commands = new ArrayList<>();
+        McpConfig config = new McpConfig(Map.of("SHERIFF_REPO", repository.toString(), "XDG_STATE_HOME", state.toString()));
+        ProcessRunner recording = (command, directory, environment, timeout) -> {
+            commands.add(command);
+            return ProcessOutcome.completed(0, "", "");
+        };
+        Tools tools = new Tools(config, new SheriffRunner(recording, config.image(), repository, Duration.ofSeconds(30)),
+                List::of);
+
+        for (String tool : List.of("sheriff_test", "sheriff_fix")) {
+            ToolOutcome outcome = tools.call(tool, Map.of("component", "web"));
+
+            assertFalse(outcome.isError(), outcome.text());
+            assertTrue(outcome.text().contains("web is not checked: Sheriff has never been applied to it"),
+                    outcome.text());
+            assertTrue(outcome.text().endsWith("Next step: none, Sheriff does not check web: do what was asked "
+                    + "without these tools."), outcome.text());
+        }
+        assertEquals(List.of(), commands);
+    }
+
+    @Test
+    @DisplayName("a call is answered as not checked only when it names no profile and Sheriff was never applied")
+    void onlyACallWithNoProfileOnANeverAppliedComponentIsNotChecked() {
+        ToolContext context = new ToolContext(new McpConfig(Map.of("SHERIFF_REPO", repository.toString(),
+                "XDG_STATE_HOME", state.toString())), null, null, null, null, null, null, null, null, null, null, null);
+
+        assertTrue(context.notChecked(Map.of(), "web").orElseThrow().startsWith("web is not checked"));
+        assertEquals(Optional.empty(), context.notChecked(Map.of("profile", "JAVA"), "web"));
+        assertEquals(Optional.empty(), context.notChecked(Map.of(), "app"));
+    }
+
+    @Test
+    @DisplayName("a component is checked under every test Sheriff's history records on it")
+    void everyTestTheHistoryRecordsIsChecked() throws IOException {
+        appliedBefore(String.format(HISTORY_ENTRY, "app", "JAVA"), String.format(HISTORY_ENTRY, "app", "JAVA_HEXAGONAL"),
+                String.format(HISTORY_ENTRY, "other", "TYPESCRIPT"));
+        Files.writeString(repository.resolve("app/A.java"), "class A {}");
+
+        String text = tools(List.of(), ProcessOutcome.completed(0, "", ""), ProcessOutcome.completed(0, "", ""))
+                .call("sheriff_test", Map.of("component", "app")).text();
+
+        assertTrue(text.contains("app passes the JAVA,JAVA_HEXAGONAL analysis"), text);
+    }
+
+    @Test
+    @DisplayName("a profile named in the call, or SHERIFF_SCOPE=all, checks a component with no history")
+    void aComponentWithNoHistoryIsCheckedWhenAskedFor() throws IOException {
+        Files.delete(repository.resolve("sheriff_history.json"));
+        Files.writeString(repository.resolve("app/A.java"), "class A {}");
+        McpConfig every = new McpConfig(Map.of("SHERIFF_REPO", repository.toString(), "XDG_STATE_HOME",
+                state.toString(), "SHERIFF_SCOPE", "all"));
+        Tools all = new Tools(every, new SheriffRunner(new QueuedProcessRunner(ProcessOutcome.completed(0, "", "")),
+                every.image(), repository, Duration.ofSeconds(30)), List::of);
+
+        String named = tools(List.of(), ProcessOutcome.completed(0, "", ""))
+                .call("sheriff_test", Map.of("component", "app", "profile", "JAVA")).text();
+        String scoped = all.call("sheriff_test", Map.of("component", "app")).text();
+
+        assertTrue(named.contains("app passes the JAVA analysis"), named);
+        assertTrue(scoped.contains("app passes the JAVA analysis"), scoped);
     }
 
     @Test

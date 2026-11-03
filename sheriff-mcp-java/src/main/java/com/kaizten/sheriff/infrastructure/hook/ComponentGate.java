@@ -261,6 +261,10 @@ public final class ComponentGate {
     /**
      * The component a file belongs to.
      *
+     * <p>Not one with no profile to check it under: the MCP server's jar
+     * gives none to a component Sheriff has never been applied to, which its
+     * tools do not check either.
+     *
      * @param filePath the file that is about to be edited
      * @return its component, or the empty string when it is not one this gate
      *     guards
@@ -280,6 +284,9 @@ public final class ComponentGate {
         }
         String component = relative.getName(0).toString();
         if (component.equals(configuration.agentDirectory().getFileName().toString())) {
+            return "";
+        }
+        if (composition.profileFor(component).isEmpty()) {
             return "";
         }
         List<String> allowed = allowedComponents();
