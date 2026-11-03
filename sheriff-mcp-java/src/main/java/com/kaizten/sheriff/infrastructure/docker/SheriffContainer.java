@@ -4,20 +4,18 @@ import com.kaizten.sheriff.infrastructure.process.ProcessOutcome;
 import com.kaizten.sheriff.infrastructure.process.ProcessRunner;
 import com.kaizten.sheriff.infrastructure.process.ProcessStatus;
 import com.kaizten.sheriff.infrastructure.process.TemporaryFolders;
+import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.nio.file.attribute.PosixFilePermission;
-import java.nio.file.attribute.PosixFilePermissions;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.EnumSet;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
@@ -127,9 +125,10 @@ public final class SheriffContainer {
     private static final Set<String> TOKEN_COMMANDS = Set.of(TEST_COMMAND, FIX_COMMAND);
     private static final String LINE_END = "\n";
     private static final int SUBCOMMAND = 0;
-    private static final String POSIX_VIEW = "posix";
-    private static final Set<PosixFilePermission> OWNER_ONLY = EnumSet.of(PosixFilePermission.OWNER_READ,
-            PosixFilePermission.OWNER_WRITE);
+    private static final boolean ALLOWED = true;
+    private static final boolean NOT_ALLOWED = false;
+    private static final boolean OWNER_ALONE = true;
+    private static final boolean EVERY_USER = false;
     private final ProcessRunner processes;
     private final String image;
     private final Path repositoryRoot;
@@ -338,7 +337,9 @@ public final class SheriffContainer {
      * The arguments with the GitHub token's file among them, for a
      * {@code test} or {@code fix} on a component when there is a token, with
      * the file written: Sheriff's other commands take no token, and a run on
-     * no component has no state folder of its own to hold it.
+     * no component has no state folder of its own to hold it. The file is
+     * made its owner's alone before the token goes into it, through
+     * {@link File}, which needs no POSIX file system.
      *
      * @param arguments what to pass to Sheriff
      * @param ownFolder whether the run has a state folder of its own
@@ -348,14 +349,16 @@ public final class SheriffContainer {
      */
     private List<String> withToken(List<String> arguments, boolean ownFolder, Path file) throws IOException {
         Optional<String> token = tokens.get();
-        if (!ownFolder || token.isEmpty() || arguments.isEmpty()
-                || !TOKEN_COMMANDS.contains(arguments.get(SUBCOMMAND))) {
+        if (!ownFolder || token.isEmpty() || !TOKEN_COMMANDS.contains(arguments.get(SUBCOMMAND))) {
             return arguments;
         }
         Files.deleteIfExists(file);
-        if (file.getFileSystem().supportedFileAttributeViews().contains(POSIX_VIEW)) {
-            Files.createFile(file, PosixFilePermissions.asFileAttribute(OWNER_ONLY));
-        }
+        Files.createFile(file);
+        File created = file.toFile();
+        created.setReadable(NOT_ALLOWED, EVERY_USER);
+        created.setWritable(NOT_ALLOWED, EVERY_USER);
+        created.setReadable(ALLOWED, OWNER_ALONE);
+        created.setWritable(ALLOWED, OWNER_ALONE);
         Files.writeString(file, TOKEN_FLAG + LINE_END + token.get() + LINE_END, StandardCharsets.UTF_8);
         List<String> given = new ArrayList<>(arguments);
         given.add(SUBCOMMAND + NEXT, ARGUMENTS_IN_CONTAINER);

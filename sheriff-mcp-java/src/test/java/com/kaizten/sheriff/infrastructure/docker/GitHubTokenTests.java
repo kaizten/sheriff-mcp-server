@@ -1,7 +1,11 @@
 package com.kaizten.sheriff.infrastructure.docker;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -35,5 +39,24 @@ class GitHubTokenTests {
     @DisplayName("the tests' property wins over the variable, so no one's token reaches them")
     void thePropertyWins() {
         assertEquals(Optional.empty(), GitHubToken.fromProcess());
+    }
+
+    @Test
+    @DisplayName("with no property, the variable is read")
+    void withNoPropertyTheVariableIsRead() {
+        String property = System.clearProperty("sheriff.github.token");
+        try {
+            assertEquals(GitHubToken.accepted(System.getenv("GITHUB_TOKEN")), GitHubToken.fromProcess());
+        } finally {
+            System.setProperty("sheriff.github.token", property);
+        }
+    }
+
+    @Test
+    void cannotBeInstantiated() throws NoSuchMethodException {
+        Constructor<GitHubToken> constructor = GitHubToken.class.getDeclaredConstructor();
+        constructor.setAccessible(true);
+        InvocationTargetException refused = assertThrows(InvocationTargetException.class, constructor::newInstance);
+        assertTrue(refused.getCause() instanceof UnsupportedOperationException);
     }
 }
