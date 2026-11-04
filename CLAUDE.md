@@ -244,7 +244,11 @@ again. `scripts/ci-local.sh` still runs `install.ps1` in PowerShell 7.
 
 `image.yml` publishes `ghcr.io/kaizten/sheriff-mcp-server` when CI passes on
 `main`, only builds it on a pull request, and fails rather than publish the
-rule catalog (the Dockerfile copies one that sits beside it).
+rule catalog (the Dockerfile copies one that sits beside it). The Dockerfile
+pins its base images by digest and Node and the Claude Code CLI by version,
+so one commit builds the same image twice; what apt installs is not pinned.
+The image runs as root, as it talks to the host's Docker through a mounted
+socket.
 
 `release.yml` publishes a release when a tag `v<version>` is pushed: it fails
 unless the tag is the version the jar reports and the jar is free of the
