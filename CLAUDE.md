@@ -268,9 +268,9 @@ socket.
 
 `release.yml` publishes a release when a tag `v<version>` is pushed: it fails
 unless the tag is the version the jar reports and the jar is free of the
-catalog, and then runs the install line on Linux and macOS. A tag with a
-suffix is a prerelease, which the install line never picks: that is how a
-release is tried first, and on Windows, which no workflow reaches now, it has
+catalog, and then runs the install line on Linux. A tag with a suffix is a
+prerelease, which the install line never picks: that is how a release is
+tried first, and on macOS and Windows, which no workflow reaches now, it has
 to be tried by hand.
 
 **A version names every commit until the next release**, so the jar also
