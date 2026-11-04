@@ -133,7 +133,7 @@ public final class McpServer {
                                                    under its section, what it takes, and a field to
                                                    change it in your file or this project's
               java -jar sheriff-mcp.jar --install-hooks [--user]
-                                                   guard this project with the two Claude Code
+                                                   guard this project with the three Claude Code
                                                    hooks, in .claude/settings.json, or with --user
                                                    every project, in ~/.claude/settings.json
                                                    (--uninstall-hooks [--user] takes them out)

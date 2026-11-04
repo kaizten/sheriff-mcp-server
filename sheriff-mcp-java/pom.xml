@@ -24,6 +24,8 @@
     <artifactId>sheriff-mcp</artifactId>
     <version>0.1.10</version>
     <packaging>jar</packaging>
+    <description>Sheriff, Kaizten's code standards analyzer, as MCP tools for coding assistants, with the repair loop, the hooks and the CI gate in one jar.</description>
+    <url>https://www.kaizten.com</url>
 
     <properties>
         <maven.compiler.source>17</maven.compiler.source>

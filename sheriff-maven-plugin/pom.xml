@@ -9,6 +9,8 @@
     <artifactId>sheriff-maven-plugin</artifactId>
     <version>0.1.10</version>
     <packaging>maven-plugin</packaging>
+    <description>Sheriff's check as a Maven goal bound to package, and sheriff:fix, which repairs what Sheriff can and fails on what is left.</description>
+    <url>https://www.kaizten.com</url>
 
     <properties>
         <maven.compiler.source>17</maven.compiler.source>

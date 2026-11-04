@@ -11,8 +11,9 @@ import java.util.Map;
 import java.util.function.UnaryOperator;
 
 /**
- * The same jar as the two Claude Code hooks, {@code --hook-gate} and
- * {@code --hook-stop}, working the project out the way the server does.
+ * The same jar as the three Claude Code hooks, {@code --hook-gate},
+ * {@code --hook-stop} and {@code --hook-turn}, working the project out the
+ * way the server does.
  *
  * <p>The hooks themselves are the agent's: the gate that refuses an edit to a
  * component that already fails, and the Stop hook that refuses to end a turn
