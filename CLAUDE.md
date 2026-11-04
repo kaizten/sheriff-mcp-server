@@ -242,6 +242,11 @@ short; its code and its steps (Git Bash, Windows PowerShell, Java on no PATH,
 winget) stay, and putting `windows-latest` back in the matrix runs them
 again. `scripts/ci-local.sh` still runs `install.ps1` in PowerShell 7.
 
+Every action a workflow uses is pinned by commit, with its exact version in a
+comment beside it (`actions/checkout@fbc6f39... # v5.1.0`): a tag can be moved
+to other code, and `release.yml` runs with `contents: write`. To update one,
+change both.
+
 `image.yml` publishes `ghcr.io/kaizten/sheriff-mcp-server` when CI passes on
 `main`, only builds it on a pull request, and fails rather than publish the
 rule catalog (the Dockerfile copies one that sits beside it).
