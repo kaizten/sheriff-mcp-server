@@ -438,7 +438,7 @@ and Maven knows where it is.
 <plugin>
   <groupId>com.kaizten</groupId>
   <artifactId>sheriff-maven-plugin</artifactId>
-  <version>0.1.11</version>
+  <version>0.1.12</version>
   <executions><execution><goals><goal>check</goal></goals></execution></executions>
 </plugin>
 ```
@@ -906,8 +906,8 @@ It carries no rule catalog, and extracts one on first use.
 **A release** is published by `.github/workflows/release.yml` when a tag
 `v<version>` is pushed, the version being the one in the poms: the jar built
 and tested there, its checksum, the two installers and the playbook in both
-languages. Then it runs the install line on Linux, macOS and Windows (both
-PowerShells) against what it published. A tag with a suffix (`v0.1.1-rc.1`)
+languages. Then it runs the install line on Linux against what it
+published. A tag with a suffix (`v0.1.1-rc.1`)
 is a prerelease, which the install line never picks: it is how a release is
 tried before its real tag.
 

@@ -89,9 +89,9 @@ It reads the steps out of `ci.yml` by name and runs them as written, in a
 HOME, a Java `user.home` and a PATH of their own (with the real `claude` the
 installers would set this machine up), plus `install.ps1` in PowerShell 7 in
 a container, `install.sh` under bash 3.2, the workflows' syntax and the
-playbook. It cannot reach macOS, which only GitHub tries, nor Windows
-PowerShell 5.1, cmd, Git Bash or winget, which nothing tries while Windows is
-out of the workflows; it says so. A new CI step
+playbook. It cannot reach macOS, Windows PowerShell 5.1, cmd, Git Bash or
+winget, which nothing tries while macOS and Windows are out of the
+workflows; it says so. A new CI step
 that can run on Linux belongs in it too.
 
 No module declares the aggregator as its parent, so each still builds on its
@@ -110,7 +110,7 @@ java -jar target/sheriff-mcp.jar --agent --help
 # The Maven plugin (needs the MCP module installed first)
 cd sheriff-maven-plugin
 mvn install
-mvn com.kaizten:sheriff-maven-plugin:0.1.11:check    # on any Maven module
+mvn com.kaizten:sheriff-maven-plugin:0.1.12:check    # on any Maven module
 ```
 
 `mvn -q test` is the wrong verification command: `-q` suppresses the lines
@@ -243,13 +243,15 @@ closed"; re-run the script after pulling.
 `.github/workflows/ci.yml` runs on every push to `main` and every pull
 request: `mvn -B install`, then `scripts/e2e.sh` against the pulled image (a
 red e2e with a green build can be a new image rather than the code). On Linux
-and macOS it also runs the installer as a user would: with no assistant, then
-with stand-in `claude`, `codex` and `agy` that only record their calls, under
-`/bin/bash` (3.2 on macOS). **Windows is out of both matrices** (`ci.yml`
-and `release.yml`) while the product is not meant for it, to keep the runs
-short; its code and its steps (Git Bash, Windows PowerShell, Java on no PATH,
-winget) stay, and putting `windows-latest` back in the matrix runs them
-again. `scripts/ci-local.sh` still runs `install.ps1` in PowerShell 7.
+it also runs the installer as a user would: with no assistant, then with
+stand-in `claude`, `codex` and `agy` that only record their calls, under
+`/bin/bash`. **macOS and Windows are out of both matrices** (`ci.yml` and
+`release.yml`) while nobody uses the product there, to keep the runs short
+(a macOS runner could wait longer than a build takes); their code and steps
+(bash 3.2, Git Bash, Windows PowerShell, Java on no PATH, winget) stay, and
+putting `macos-latest` or `windows-latest` back in the matrix runs them
+again. `scripts/ci-local.sh` still runs `install.sh` under bash 3.2 and
+`install.ps1` in PowerShell 7.
 
 Every action a workflow uses is pinned by commit, with its exact version in a
 comment beside it (`actions/checkout@fbc6f39... # v5.1.0`): a tag can be moved

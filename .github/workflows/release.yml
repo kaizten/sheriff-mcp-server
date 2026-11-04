@@ -6,11 +6,11 @@
 # prerelease, which is how the whole path is tried before the real tag: the
 # one line a user runs never picks a prerelease.
 #
-# Then the installer is run as a user runs it, on Linux and macOS, against
-# what was just published, with no checkout and no GitHub token. A red there
-# means the release does not install. Windows is out of the matrix while the
-# product is not meant for it; its steps stay, for windows-latest to run them
-# again.
+# Then the installer is run as a user runs it, on Linux, against what was
+# just published, with no checkout and no GitHub token. A red there means the
+# release does not install. macOS and Windows are out of the matrix while
+# nobody uses the product there; their steps stay, for macos-latest or
+# windows-latest to run them again.
 #
 # Never with the rule catalog: it is Kaizten's content, read out of their
 # image. The checkout has none, and the jar is checked for one anyway.
@@ -125,7 +125,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     steps:
