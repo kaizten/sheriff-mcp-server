@@ -7,8 +7,14 @@
 # source tree: the builder resolves dependencies and produces the shaded jar,
 # and the runtime image carries only that jar plus what the agent needs to
 # talk to the outside world.
+#
+# Every image it starts from is pinned by digest, its tag beside it to read,
+# and so are Node and the Claude Code CLI, so that one commit builds the same
+# image twice: a tag moves under it, and the CLI was whatever npm had that
+# day. What apt installs is not pinned (the distribution's own versions).
+# Updating one means changing its digest or version here.
 
-FROM maven:3.9-eclipse-temurin-21 AS builder
+FROM maven:3.9-eclipse-temurin-21@sha256:99e61abcff91a9b1333463bd8451fb18495d6eba9250ac66a338b518f8278320 AS builder
 WORKDIR /build
 
 # Dependencies first, as their own layer: the pom changes far less often than
@@ -30,7 +36,9 @@ RUN mvn -q -B package -DskipTests
 COPY Dockerfile rules_catalog.jso[n] SHERIFF_RULES.m[d] /extras/
 RUN rm /extras/Dockerfile
 
-FROM eclipse-temurin:21-jre
+FROM node:22-bookworm-slim@sha256:4b150b48b4116e2a22f2c39cc27025fbf4f153e2078fd3b14d159fdb5c7279da AS node
+
+FROM eclipse-temurin:21-jre@sha256:0b99b3376fbb50dbf9c0af8535fdd5b8eb0d3fdfc8b1e4967f383b6919f6901a
 
 # docker-cli, not docker.io: this image only ever talks to the host's daemon
 # through the mounted socket, so it needs the client binary, not an engine.
@@ -78,11 +86,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # interface (OLLAMA_HOST=0.0.0.0), with
 # OPENAI_BASE_URL=http://host.docker.internal:11434/v1. Prefer --network host
 # unless you have a reason not to.
-# Node 22, the long-term release: 20 reached its end of life in April 2026.
-RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
-    && apt-get install -y --no-install-recommends nodejs \
-    && rm -rf /var/lib/apt/lists/* \
-    && npm install -g @anthropic-ai/claude-code
+# Node 22, the long-term release (20 reached its end of life in April 2026),
+# taken from Node's own image rather than a setup script piped into bash.
+COPY --from=node /usr/local/bin/node /usr/local/bin/node
+COPY --from=node /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/npm
+RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
+    && ln -s ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx \
+    && npm install -g @anthropic-ai/claude-code@2.1.305 \
+    && npm cache clean --force
 
 WORKDIR /agent
 COPY --from=builder /build/target/sheriff-mcp.jar ./sheriff-mcp.jar
