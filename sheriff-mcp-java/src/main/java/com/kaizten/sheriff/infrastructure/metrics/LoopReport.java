@@ -28,9 +28,14 @@ import java.util.UUID;
 import java.util.function.Supplier;
 
 /**
- * One run of the repair loop as a single JSON document, written when it
- * ends, so runs can be compared: across configurations, backends, models and
- * projects.
+ * One run of the repair loop as a single JSON document, so runs can be
+ * compared: across configurations, backends, models and projects.
+ *
+ * <p>Written as the run goes, not only when it ends: after every analysis
+ * and every pass, with {@code state} {@code running} and the outcome's fields
+ * {@code null}, so a run of many passes can be followed and a run killed
+ * midway still leaves what it did. The end writes it once more, with
+ * {@code state} {@code finished}. A comparison reads only finished runs.
  *
  * <p>It holds what the run was asked to do with (its configuration, the
  * tools' version and Sheriff's image, the project and its commit), what it
@@ -53,6 +58,7 @@ public final class LoopReport implements RunMetrics {
 
     private static final String SCHEMA_FIELD = "schema";
     private static final String KIND_FIELD = "kind";
+    private static final String STATE_FIELD = "state";
     private static final String ID_FIELD = "id";
     private static final String STARTED_FIELD = "started";
     private static final String FINISHED_FIELD = "finished";
@@ -104,6 +110,15 @@ public final class LoopReport implements RunMetrics {
      * What a loop's report says it is, beside the reports of other kinds.
      */
     public static final String KIND = "loop";
+    /**
+     * What {@code state} says while the run goes on.
+     */
+    public static final String RUNNING = "running";
+    /**
+     * What {@code state} says once the run has ended, as the field that
+     * says when.
+     */
+    public static final String FINISHED = FINISHED_FIELD;
     private final Path file;
     private final Map<String, Object> context;
     private final Supplier<AnalysisResult> lastLook;
@@ -115,11 +130,13 @@ public final class LoopReport implements RunMetrics {
     private final Map<String, Integer> givenErrors = new HashMap<>();
     private AnalysisResult first;
     private AnalysisResult last;
+    private boolean announced;
+    private boolean warned;
 
     /**
      * A report of one run, which starts now.
      *
-     * @param file where it is written when the run ends
+     * @param file where it is written, as the run goes and when it ends
      * @param context what the run was asked to do with, section by section:
      *     each value a map, written as it is
      * @param lastLook an analysis of the component as it is, made only when
@@ -149,6 +166,7 @@ public final class LoopReport implements RunMetrics {
     @Override
     public void record(PassMetrics pass) {
         passes.add(pass);
+        write(document(null, last, false, null));
     }
 
     /**
@@ -165,6 +183,7 @@ public final class LoopReport implements RunMetrics {
             first = analysis;
         }
         last = analysis;
+        write(document(null, last, passes.isEmpty() || passes.get(passes.size() - ONE).errorsAfter() != null, null));
     }
 
     /**
@@ -203,10 +222,10 @@ public final class LoopReport implements RunMetrics {
     /**
      * The whole report.
      *
-     * @param summary how the run ended
-     * @param left the last analysis, of what the run left
+     * @param summary how the run ended, {@code null} while it goes on
+     * @param left the last analysis, of what the run left so far
      * @param measured whether that analysis came after the last pass
-     * @param finished when the run ended
+     * @param finished when the run ended, {@code null} while it goes on
      * @return the document
      */
     ObjectNode document(RunSummary summary, AnalysisResult left, boolean measured, Instant finished) {
@@ -214,17 +233,23 @@ public final class LoopReport implements RunMetrics {
         root.put(SCHEMA_FIELD, SCHEMA);
         root.put(KIND_FIELD, KIND);
         root.put(ID_FIELD, id);
+        root.put(STATE_FIELD, summary == null ? RUNNING : FINISHED);
         root.put(STARTED_FIELD, started.toString());
-        root.put(FINISHED_FIELD, finished.toString());
-        root.put(ELAPSED_FIELD, Duration.between(started, finished).toMillis());
-        root.put(OK_FIELD, summary.ok());
-        root.put(STOPPED_FIELD, summary.stoppedReason().wireName());
-        root.put(ITERATIONS_FIELD, summary.iterationsUsed());
-        root.set(MAX_ITERATIONS_FIELD, json.valueToTree(summary.maxIterations()));
-        root.put(REPAIR_FIELD, summary.repairPassUsed());
-        root.set(PARKED_FIELD, json.valueToTree(summary.parkedFiles()));
-        root.set(BRANCH_FIELD, json.valueToTree(summary.workingBranch()));
-        root.set(TESTS_FIELD, json.valueToTree(summary.testsPassed()));
+        root.set(FINISHED_FIELD, json.valueToTree(finished == null ? null : finished.toString()));
+        root.put(ELAPSED_FIELD, Duration.between(started, finished == null ? Instant.now() : finished).toMillis());
+        if (summary == null) {
+            List.of(OK_FIELD, STOPPED_FIELD, ITERATIONS_FIELD, MAX_ITERATIONS_FIELD, REPAIR_FIELD, PARKED_FIELD,
+                    BRANCH_FIELD, TESTS_FIELD).forEach(root::putNull);
+        } else {
+            root.put(OK_FIELD, summary.ok());
+            root.put(STOPPED_FIELD, summary.stoppedReason().wireName());
+            root.put(ITERATIONS_FIELD, summary.iterationsUsed());
+            root.set(MAX_ITERATIONS_FIELD, json.valueToTree(summary.maxIterations()));
+            root.put(REPAIR_FIELD, summary.repairPassUsed());
+            root.set(PARKED_FIELD, json.valueToTree(summary.parkedFiles()));
+            root.set(BRANCH_FIELD, json.valueToTree(summary.workingBranch()));
+            root.set(TESTS_FIELD, json.valueToTree(summary.testsPassed()));
+        }
         new TreeMap<>(context).forEach((section, values) -> root.set(section, json.valueToTree(values)));
         root.set(INITIAL_FIELD, counts(first));
         ObjectNode leftCounts = counts(left);
@@ -374,9 +399,15 @@ public final class LoopReport implements RunMetrics {
             } catch (AtomicMoveNotSupportedException exception) {
                 Files.move(partial, file, StandardCopyOption.REPLACE_EXISTING);
             }
-            System.out.printf(WRITTEN, file);
+            if (!announced) {
+                announced = true;
+                System.out.printf(WRITTEN, file);
+            }
         } catch (IOException exception) {
-            System.out.printf(NOT_WRITTEN, file, exception.getMessage());
+            if (!warned) {
+                warned = true;
+                System.out.printf(NOT_WRITTEN, file, exception.getMessage());
+            }
         }
     }
 }

@@ -567,6 +567,8 @@ class SettingsTests {
         assertEquals("SHERIFF_GATE_TTL is 60 in " + userFile() + ". The tools take it when the next session starts; "
                 + "the hooks, from their next run.", Settings.change(environment, project, "SHERIFF_GATE_TTL", "60",
                         false));
+        assertEquals("SHERIFF_REPORT is 1 in " + userFile() + ". The tools take it at once, this session included.",
+                Settings.change(environment, project, "SHERIFF_REPORT", "1", false));
     }
 
     @Test

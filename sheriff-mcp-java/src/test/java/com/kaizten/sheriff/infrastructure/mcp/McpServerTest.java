@@ -380,12 +380,31 @@ final class McpServerTest {
         Path state = workspace.resolve("state");
         McpConfig on = new McpConfig(Map.of("SHERIFF_REPORT", "1", "XDG_STATE_HOME", state.toString(),
                 "SHERIFF_REPO", workspace.toString()), workspace);
-        SessionReport report = McpServer.sessionReport(on,
-                com.kaizten.sheriff.infrastructure.docker.ImageProvisioning.alreadyReady()).orElseThrow();
-        assertEquals(state.resolve("sheriff-mcp").resolve("reports"), report.file().getParent());
-        assertTrue(report.file().getFileName().toString().matches("session-\\d{8}-\\d{6}-.+\\.json"),
-                report.file().toString());
+        Path file = McpServer.sessionReport(on,
+                com.kaizten.sheriff.infrastructure.docker.ImageProvisioning.alreadyReady()).file().orElseThrow();
+        assertEquals(state.resolve("sheriff-mcp").resolve("reports"), file.getParent());
+        assertTrue(file.getFileName().toString().matches("session-\\d{8}-\\d{6}-.+\\.json"), file.toString());
         assertTrue(McpServer.sessionReport(new McpConfig(Map.of(), workspace),
-                com.kaizten.sheriff.infrastructure.docker.ImageProvisioning.alreadyReady()).isEmpty());
+                com.kaizten.sheriff.infrastructure.docker.ImageProvisioning.alreadyReady()).file().isEmpty());
+    }
+
+    @Test
+    @DisplayName("SHERIFF_REPORT turned on while Codex's session was open wrote nothing of the work it did next")
+    void aSessionReportStartsWhenTheSettingIsTurnedOn() throws IOException {
+        Path state = workspace.resolve("state");
+        Path config = workspace.resolve("config");
+        McpConfig server = new McpConfig(Map.of("XDG_CONFIG_HOME", config.toString(), "XDG_STATE_HOME",
+                state.toString(), "SHERIFF_REPO", workspace.toString()), workspace);
+        SessionReport report = McpServer.sessionReport(server,
+                com.kaizten.sheriff.infrastructure.docker.ImageProvisioning.alreadyReady());
+        report.called("sheriff_task", Map.of(), java.time.Duration.ZERO, false);
+        assertTrue(report.file().isEmpty());
+
+        Files.createDirectories(config.resolve("sheriff-mcp"));
+        Files.writeString(config.resolve("sheriff-mcp").resolve("sheriff.properties"), "SHERIFF_REPORT=1\n");
+        report.called("sheriff_test", Map.of(), java.time.Duration.ZERO, false);
+
+        Path file = report.file().orElseThrow();
+        assertTrue(Files.readString(file).contains("\"calls\" : 2"), "every call since the session started");
     }
 }

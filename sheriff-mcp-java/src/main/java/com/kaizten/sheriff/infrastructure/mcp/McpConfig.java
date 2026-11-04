@@ -387,11 +387,15 @@ public final class McpConfig {
      * debugging mode {@code SHERIFF_REPORT} turns on, beside the reports of
      * the loop's runs.
      *
+     * <p>Read from the files each time, not from the settings the server
+     * started with, so turning it on reports the session already open.
+     *
      * @return {@code $XDG_STATE_HOME/sheriff-mcp/reports}, or the same under
      *     {@code ~/.local/state}, or empty when reports are off
      */
     public Optional<Path> reportsDirectory() {
-        return ENABLED.equals(value(REPORT, NO_VALUE).strip())
+        String report = Settings.layered(environment, settingsProject()).getOrDefault(REPORT, NO_VALUE);
+        return ENABLED.equals(report.strip())
                 ? Optional.of(stateDirectory().resolve(REPORTS_SUBDIRECTORY)) : Optional.empty();
     }
 

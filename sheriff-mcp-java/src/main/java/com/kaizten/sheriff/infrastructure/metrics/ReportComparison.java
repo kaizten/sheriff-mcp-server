@@ -43,6 +43,7 @@ public final class ReportComparison {
 
     private static final String JSON_SUFFIX = ".json";
     private static final String KIND_FIELD = "kind";
+    private static final String STATE_FIELD = "state";
     private static final String SCHEMA_FIELD = "schema";
     private static final String CONFIGURATION_FIELD = "configuration";
     private static final String PROJECT_FIELD = "project";
@@ -228,7 +229,8 @@ public final class ReportComparison {
             report = null;
         }
         if (report != null && LoopReport.KIND.equals(report.path(KIND_FIELD).asText())
-                && report.path(SCHEMA_FIELD).asInt() == LoopReport.SCHEMA) {
+                && report.path(SCHEMA_FIELD).asInt() == LoopReport.SCHEMA
+                && !LoopReport.RUNNING.equals(report.path(STATE_FIELD).asText())) {
             reports.add(report);
             names.add(file.getFileName().toString());
         } else if (report != null && SESSION_KIND.equals(report.path(KIND_FIELD).asText())

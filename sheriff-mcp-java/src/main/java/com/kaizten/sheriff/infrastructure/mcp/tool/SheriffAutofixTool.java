@@ -49,6 +49,8 @@ final class SheriffAutofixTool {
     private static final String LOGS_DIRECTORY = "logs";
     private static final String REPORT_LINE = "%nThe run's report, for comparing runs: %s";
     private static final String NO_REPORT = "";
+    private static final String REPORT_VARIABLE = "SHERIFF_REPORT";
+    private static final String REPORT_ON = "1";
     private static final String VERIFIED_WITH = "%nThe project's own tests were run with: %s";
     private static final String PROTOTYPE_TESTS = "%nSHERIFF_PROTOTYPE is 1, so the loop left them alone.";
     private static final String SUMMARY =
@@ -144,6 +146,7 @@ final class SheriffAutofixTool {
         if (!maxIterations.isEmpty()) {
             environment.put(MAX_ITERATIONS_VARIABLE, maxIterations);
         }
+        reportAsNow(config, environment);
         Path agentDirectory = catalogFile.toAbsolutePath().getParent();
         Configuration configuration = new Configuration(environment, agentDirectory);
         Composition composition = Composition.real(configuration);
@@ -152,6 +155,22 @@ final class SheriffAutofixTool {
         return renderSummary(component, profile, configuration.backend(), summary, tested)
                 + report.map(file -> String.format(REPORT_LINE, file)).orElse(NO_REPORT)
                 + testsTrailer(configuration.prototype(), configuration.verificationCommand());
+    }
+
+    /**
+     * Whether the run is reported, as the settings say now rather than as
+     * they said when the session started: turned on mid-session, the next
+     * run is reported.
+     *
+     * @param config the server's configuration, which reads the files again
+     * @param environment the loop's environment, changed in place
+     */
+    private static void reportAsNow(McpConfig config, Map<String, String> environment) {
+        if (config.reportsDirectory().isPresent()) {
+            environment.put(REPORT_VARIABLE, REPORT_ON);
+        } else {
+            environment.remove(REPORT_VARIABLE);
+        }
     }
 
     /**

@@ -2,10 +2,12 @@ package com.kaizten.sheriff.infrastructure.mcp.tool;
 
 import com.kaizten.sheriff.infrastructure.mcp.ServerVersion;
 import com.kaizten.sheriff.infrastructure.mcp.task.Task;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Supplier;
 
 /**
  * {@code sheriff_task}: a task's command, state and result, or the session's
@@ -18,12 +20,17 @@ import java.util.Optional;
  * version was only in the handshake, which Codex does not show the model:
  * asked which version was installed, it searched the project and said it
  * could not tell.
+ *
+ * <p>It also says where this session's report is, or that it writes none:
+ * asked for the report of its session, Codex, its context compacted, said the
+ * tools write no JSON.
  */
 final class SheriffTaskTool {
 
     private static final String DESCRIPTION =
             "The state and result of a task, such as a sheriff_autofix running in the background, by "
-            + "its id; with no id, this server's version and Sheriff image, and the tasks of this session.";
+            + "its id; with no id, this server's version and Sheriff image, this session's report, and the "
+            + "tasks of this session.";
     private static final String TITLE = "Check a Sheriff task";
     private static final ToolAnnotations ANNOTATIONS = ToolAnnotations.readingOnly(TITLE);
     private static final String ID_ARGUMENT = "id";
@@ -39,15 +46,21 @@ final class SheriffTaskTool {
     private static final String TASK_RESULT = "%n%nResult:%n%s";
     private static final String NEWLINE = "\n";
     private static final String VERSION_LINE = "sheriff-mcp %s, running Sheriff's image %s.";
+    private static final String REPORT_LINE = "This session's report: %s";
+    private static final String NO_REPORT = "This session writes no report: SHERIFF_REPORT is off. Turned on, the "
+            + "session writes one from its next call, with every call it has made.";
     private final ToolContext context;
+    private final Supplier<Optional<Path>> report;
 
     /**
      * Wires the tool to what it shares with the others.
      *
      * @param context the session's tasks
+     * @param report where this session's report is, empty when it writes none
      */
-    SheriffTaskTool(ToolContext context) {
+    SheriffTaskTool(ToolContext context, Supplier<Optional<Path>> report) {
         this.context = context;
+        this.report = report;
     }
 
     /**
@@ -70,7 +83,8 @@ final class SheriffTaskTool {
         String id = ToolContext.textArgument(arguments, ID_ARGUMENT);
         if (id.isEmpty()) {
             String image = context.image().get().orElse(context.config().image());
-            return String.format(VERSION_LINE, ServerVersion.described(), image) + NEWLINE
+            String reportLine = report.get().map(file -> String.format(REPORT_LINE, file)).orElse(NO_REPORT);
+            return String.format(VERSION_LINE, ServerVersion.described(), image) + NEWLINE + reportLine + NEWLINE
                     + listing(context.tasks().all());
         }
         Optional<Task> task = context.tasks().find(id);

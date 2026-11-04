@@ -148,6 +148,16 @@ class ReportComparisonTests {
     }
 
     @Test
+    @DisplayName("a run still going, or killed before it ended, is not compared as a run")
+    void aRunningRunIsPassedOver() throws IOException {
+        run("a.json", "claude_cli", 0, 2, 1000, true);
+        LoopReport going = new LoopReport(folder.resolve("b.json"), Map.of(), () -> AnalysisResult.failure("no"));
+        going.analyzed(AnalysisResult.of(List.of(error("A", "R1"))));
+        assertTrue(Files.exists(folder.resolve("b.json")));
+        assertEquals(1, ReportComparison.of(List.of(folder)).runs());
+    }
+
+    @Test
     @DisplayName("sessions are compared apart, by client and project and by session, beside the runs")
     void sessionsAreComparedApart() throws IOException {
         run("a.json", "claude_cli", 0, 2, 1000, true);

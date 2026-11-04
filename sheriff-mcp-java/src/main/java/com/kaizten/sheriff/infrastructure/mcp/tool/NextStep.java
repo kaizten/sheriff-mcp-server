@@ -34,8 +34,8 @@ final class NextStep {
             + "them, in %s, each file from the last line up, as the line numbers are those of this analysis. "
             + "Leave the other files for now: the next answer lists them. Then %s again. These are the work, errors "
             + "that were already there included: do not ask the user whether to fix them, and do not stop "
-            + "before a call reports 0 errors. Only a false positive of the checker may stay; name it and "
-            + "say why.";
+            + "before a call reports 0 errors. Do not leave one as a false positive yourself: one that stays "
+            + "through the work on it is set aside by these answers, which say when that work is over.";
     private static final String TESTS = "%n" + STEP_MARK + " run the project's tests (%s). If they pass, the "
             + "component is done. If you change any file to make them pass, %s again.";
     private static final String DONE = "%n" + STEP_MARK + " none, the component is done: it meets the ";

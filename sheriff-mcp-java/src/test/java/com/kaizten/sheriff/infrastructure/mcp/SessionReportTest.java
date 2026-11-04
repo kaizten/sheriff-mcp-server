@@ -78,6 +78,59 @@ final class SessionReportTest {
     }
 
     @Test
+    @DisplayName("a call is written while it runs, each analysis as it comes, so a long repair can be followed")
+    void aCallIsWrittenWhileItRuns() throws IOException {
+        Path file = folder.resolve("session.json");
+        SessionReport report = new SessionReport(file, Map.of());
+        report.started("sheriff_fix", Map.of("component", "app"));
+        JsonNode started = read(file);
+        assertEquals("sheriff_fix", started.get("running").get(0).get("tool").asText());
+        assertEquals(0, started.get("calls").size());
+        report.analyzed("app", "JAVA", errors(error("A", "R1"), error("B", "R2")), errors(error("B", "R2")), 1);
+        assertEquals(1, read(file).get("running").get(0).get("analyses").size());
+        report.called("sheriff_fix", Map.of("component", "app"), Duration.ofSeconds(6), false);
+        JsonNode ended = read(file);
+        assertEquals(0, ended.get("running").size());
+        assertEquals(1, ended.get("calls").get(0).get("analyses").size());
+    }
+
+    @Test
+    @DisplayName("a call answered at once while a repair runs takes none of the repair's analyses")
+    void aCallOnAnotherThreadKeepsItsOwnAnalyses() throws Exception {
+        Path file = folder.resolve("session.json");
+        SessionReport report = new SessionReport(file, Map.of());
+        report.started("sheriff_fix", Map.of());
+        report.analyzed("app", "JAVA", null, errors(error("A", "R1")), 0);
+        Thread other = new Thread(() -> {
+            report.started("sheriff_task", Map.of());
+            report.called("sheriff_task", Map.of(), Duration.ZERO, false);
+        });
+        other.start();
+        other.join();
+        report.called("sheriff_fix", Map.of(), Duration.ZERO, false);
+        JsonNode session = read(file);
+        assertEquals(0, session.get("calls").get(0).get("analyses").size(), "sheriff_task's");
+        assertEquals(1, session.get("calls").get(1).get("analyses").size(), "sheriff_fix's");
+    }
+
+    @Test
+    @DisplayName("a report turned on mid-session holds every call since it started, and one turned off stops")
+    void aReportFollowsTheSetting() throws IOException {
+        Path file = folder.resolve("session.json");
+        java.util.concurrent.atomic.AtomicBoolean on = new java.util.concurrent.atomic.AtomicBoolean();
+        SessionReport report = new SessionReport("session.json",
+                () -> on.get() ? java.util.Optional.of(folder) : java.util.Optional.empty(), Map.of());
+        report.called("sheriff_test", Map.of(), Duration.ZERO, false);
+        assertFalse(Files.exists(file));
+        on.set(true);
+        report.called("sheriff_fix", Map.of(), Duration.ZERO, false);
+        assertEquals(2, read(file).get("totals").get("calls").asInt());
+        on.set(false);
+        report.called("sheriff_fix", Map.of(), Duration.ZERO, false);
+        assertEquals(2, read(file).get("totals").get("calls").asInt());
+    }
+
+    @Test
     @DisplayName("a session that analyzed nothing, from a client that gave no name, still says so")
     void anEmptySessionIsWritten() throws IOException {
         Path file = folder.resolve("session.json");
