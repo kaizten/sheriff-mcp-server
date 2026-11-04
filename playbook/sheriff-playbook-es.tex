@@ -246,7 +246,7 @@ imagen de Sheriff: unos 4\,GB la primera vez y, después, solo lo que cambie.
 \begin{answer}[Salida del instalador]
 Using Java 17 at /usr/bin/java
 Downloading sheriff-mcp.jar from the latest release of kaizten/sheriff-mcp-server...
-Installed sheriff-mcp 0.1.10 into /home/ana/.local/share/sheriff-agent
+Installed sheriff-mcp 0.1.11 into /home/ana/.local/share/sheriff-agent
 Sheriff's hooks are in /home/ana/.claude/settings.json, for every project Claude Code opens:
   before an edit     refuse new code on a component that already fails the standards
   when a turn ends   refuse to finish while what the turn changed has errors
@@ -1585,12 +1585,14 @@ interactiva y apruébalo con \code{/hooks}.}
 
 Incluye tres cosas: la versión (\code{--version} con el jar, o pregunta
 \ask{¿qué versión de Sheriff tengo?}: el asistente llama a \tool{sheriff_task},
-que también dice qué imagen de Sheriff tienes descargada, como
-\code{kaizten/sheriff:latest, built on 2026-10-13 (sha256:1ad796a36fa6)}),
+que también dice de qué commit se construyó el jar y qué imagen de Sheriff
+tienes descargada, como \code{sheriff-mcp 0.1.10 (1409e39), running Sheriff's
+image kaizten/sheriff:latest, built on 2026-11-04 (sha256:81b3ffe9d141)}),
 el identificador de
 la tarea que aparece en la respuesta (\code{Task 4047f176.}) y, si puedes, el
 archivo \path{~/.local/state/sheriff-mcp/tasks/<id>/task.json}, que guarda con
-qué versión del jar y con qué imagen exacta de Sheriff se hizo el análisis. Se
+qué versión y commit del jar y con qué imagen exacta de Sheriff se hizo el
+análisis. Se
 conservan las 50 tareas más recientes.
 
 % ---------------------------------------------------------------------------

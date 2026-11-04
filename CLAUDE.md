@@ -110,7 +110,7 @@ java -jar target/sheriff-mcp.jar --agent --help
 # The Maven plugin (needs the MCP module installed first)
 cd sheriff-maven-plugin
 mvn install
-mvn com.kaizten:sheriff-maven-plugin:0.1.10:check    # on any Maven module
+mvn com.kaizten:sheriff-maven-plugin:0.1.11:check    # on any Maven module
 ```
 
 `mvn -q test` is the wrong verification command: `-q` suppresses the lines
@@ -341,8 +341,9 @@ installers and both workflows compare it with a release's. Do not move to a
   running nothing. So
   `SheriffContainer` passes `GITHUB_TOKEN`, when it has that form, in
   `@/data/sheriff-arguments`, a file of arguments Sheriff reads as its own
-  (JCommander's `@`), owner-only in the state folder and deleted after the
-  run: on the command line every user of the machine would see it. A fake
+  (JCommander's `@`), created owner-only in the state folder (on POSIX in
+  one call, never at the umask's permissions) and deleted after the run: on
+  the command line every user of the machine would see it. A fake
   token in the right form makes `JavaPomValidation` "Cannot complete Maven
   dependency/version checks", which is how `scripts/e2e.sh` scenario 25 tells
   it arrived. The tests set `sheriff.github.token` to `none`, which wins over
