@@ -16,9 +16,10 @@
 # PyYAML, Java and Maven; Docker for PowerShell, bash 3.2 and e2e; latexmk for
 # the playbook. What needs none of those is never skipped.
 #
-# What only GitHub reaches, and the summary says so: Windows PowerShell 5.1,
-# cmd, Git Bash, winget and macOS. A green here is not a green there; it is a
-# push that is no longer the first try.
+# What nothing here reaches, and the summary says so: macOS, Windows
+# PowerShell 5.1, cmd, Git Bash and winget, which the workflows leave out too
+# while macOS and Windows are out of their matrices. A green here is a push
+# that is no longer the first try.
 set -euo pipefail
 
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -268,7 +269,7 @@ fi
 echo
 printf '%s\n' "${results[@]}"
 echo
-echo "Only GitHub reaches: macOS. Nothing reaches Windows PowerShell 5.1, cmd, Git Bash or winget now: Windows is out of the workflows."
+echo "Nothing reaches macOS, Windows PowerShell 5.1, cmd, Git Bash or winget now: macOS and Windows are out of the workflows."
 if (( failures > 0 )); then
   echo "$failures failed: fix them before pushing."
   exit 1
