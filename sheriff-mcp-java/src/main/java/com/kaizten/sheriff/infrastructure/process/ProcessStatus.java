@@ -24,5 +24,12 @@ public enum ProcessStatus {
      * The command was still running when its deadline passed and was killed,
      * so whatever it had produced is incomplete.
      */
-    TIMED_OUT
+    TIMED_OUT,
+
+    /**
+     * The command was stopped because what ran it was cancelled (its thread
+     * interrupted), or never started for that reason, so whatever it had
+     * produced is incomplete.
+     */
+    CANCELLED
 }

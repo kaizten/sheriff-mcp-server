@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.kaizten.sheriff.infrastructure.process.FakeProcessRunner;
 import com.kaizten.sheriff.infrastructure.process.ProcessOutcome;
 import com.kaizten.sheriff.infrastructure.process.ProcessRunner;
+import com.kaizten.sheriff.infrastructure.process.ProcessStatus;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -110,6 +111,31 @@ class SheriffContainerTests {
         ProcessOutcome outcome = container(runner).run(List.of("test"));
         assertEquals("did not respond within 5s.", outcome.failure());
         assertEquals(List.of("docker", "rm", "-f", "sheriff-agent-test"), runner.commands().get(1));
+    }
+
+    @Test
+    @DisplayName("a cancelled run has its container removed too, with the interrupt set aside for the removal")
+    void aCancelledRunHasItsContainerRemoved() {
+        List<Boolean> interruptedWhenRun = new ArrayList<>();
+        ProcessRunner runner = (command, directory, environment, timeout) -> {
+            interruptedWhenRun.add(Thread.currentThread().isInterrupted());
+            if (command.contains("run")) {
+                Thread.currentThread().interrupt();
+                return ProcessOutcome.cancelled("was cancelled, and stopped.");
+            }
+            return ProcessOutcome.completed(0, "", "");
+        };
+        ProcessOutcome outcome;
+        boolean interruptedAfter;
+        try {
+            outcome = new SheriffContainer(runner, "kaizten/sheriff:latest", REPOSITORY, Duration.ofSeconds(5),
+                    () -> "sheriff-agent-test").run(List.of("test"));
+        } finally {
+            interruptedAfter = Thread.interrupted();
+        }
+        assertEquals(ProcessStatus.CANCELLED, outcome.status());
+        assertEquals(List.of(false, false), interruptedWhenRun, "the removal ran with no interrupt pending");
+        assertTrue(interruptedAfter, "and the interrupt is back for the call to stop on");
     }
 
     @Test

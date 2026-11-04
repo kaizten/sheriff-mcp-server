@@ -8,8 +8,11 @@ import com.kaizten.sheriff.infrastructure.mcp.ServerVersion;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.PrintStream;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -71,6 +74,8 @@ public final class JsonRpcServer {
     private static final String PING_METHOD = "ping";
     private static final String TOOLS_LIST_METHOD = "tools/list";
     private static final String TOOLS_CALL_METHOD = "tools/call";
+    private static final String CANCELLED_METHOD = "notifications/cancelled";
+    private static final String REQUEST_ID_FIELD = "requestId";
     private static final String UNKNOWN_METHOD = "Unknown method: %s";
     private static final String PROTOCOL_VERSION_FIELD = "protocolVersion";
     private static final String CAPABILITIES_FIELD = "capabilities";
@@ -106,6 +111,10 @@ public final class JsonRpcServer {
     private final String instructions;
     private final ObjectMapper json = new ObjectMapper();
     private final Object writing = new Object();
+    private final Object calling = new Object();
+    private final Set<String> queuedCalls = new HashSet<>();
+    private final Map<String, Thread> runningCalls = new HashMap<>();
+    private final Set<String> cancelledCalls = new HashSet<>();
     private volatile BiConsumer<String, String> clientNamed = (name, version) -> { };
 
     /**
@@ -342,6 +351,7 @@ public final class JsonRpcServer {
 
     /**
      * Answers one raw line of input: a {@code tools/call} on a calls' thread,
+     * a {@code notifications/cancelled} by cancelling the call it names, and
      * anything else at once.
      *
      * <p>A tool that runs neither Sheriff nor the tests has a thread of its
@@ -367,11 +377,76 @@ public final class JsonRpcServer {
             write(output, error(null, INVALID_REQUEST, NOT_AN_OBJECT));
             return;
         }
-        if (message.has(ID_FIELD) && TOOLS_CALL_METHOD.equals(message.path(METHOD_FIELD).asText(EMPTY_METHOD))) {
+        String method = message.path(METHOD_FIELD).asText(EMPTY_METHOD);
+        if (!message.has(ID_FIELD) && CANCELLED_METHOD.equals(method)) {
+            cancel(message.path(PARAMS_FIELD).path(REQUEST_ID_FIELD).toString());
+        } else if (message.has(ID_FIELD) && TOOLS_CALL_METHOD.equals(method)) {
             boolean quick = answersAtOnce.test(message.path(PARAMS_FIELD).path(NAME_ARGUMENT_FIELD).asText());
-            (quick ? quickCalls : calls).execute(() -> write(output, answer(message)));
+            String call = message.get(ID_FIELD).toString();
+            synchronized (calling) {
+                queuedCalls.add(call);
+            }
+            (quick ? quickCalls : calls).execute(() -> respond(message, call, output));
         } else {
             write(output, answer(message));
+        }
+    }
+
+    /**
+     * Runs one tool call and writes its response, unless the client
+     * cancelled it.
+     *
+     * <p>One cancelled while it waited in the queue never starts; one
+     * cancelled while it runs has its thread interrupted, which stops the
+     * Sheriff container and the tests it is running ({@code SystemProcessRunner}
+     * kills a command whose wait is interrupted, and {@code SheriffContainer}
+     * removes its container), and its response is not written, as MCP asks of
+     * a cancelled request. The interrupt is cleared once the call is over, so
+     * the thread's next call starts clean.
+     *
+     * @param message the request
+     * @param call its id, as JSON text
+     * @param output where the response goes
+     */
+    private void respond(JsonNode message, String call, PrintStream output) {
+        synchronized (calling) {
+            queuedCalls.remove(call);
+            if (cancelledCalls.remove(call)) {
+                return;
+            }
+            runningCalls.put(call, Thread.currentThread());
+        }
+        ObjectNode response = answer(message);
+        boolean wanted;
+        synchronized (calling) {
+            runningCalls.remove(call);
+            wanted = !cancelledCalls.remove(call);
+            Thread.interrupted();
+        }
+        if (wanted) {
+            write(output, response);
+        }
+    }
+
+    /**
+     * Cancels a tool call the client no longer wants: Claude Code sends
+     * {@code notifications/cancelled} when its user presses Esc during a call
+     * and when a call outlasts its time limit (measured on 2.1.318); Codex
+     * sent none when one outlasted its {@code tool_timeout_sec} (0.164).
+     *
+     * @param call the id of the request to cancel, as JSON text; one that is
+     *     neither queued nor running is passed over
+     */
+    private void cancel(String call) {
+        synchronized (calling) {
+            Thread running = runningCalls.get(call);
+            if (running == null && !queuedCalls.contains(call)) {
+                return;
+            }
+            cancelledCalls.add(call);
+            if (running != null) {
+                running.interrupt();
+            }
         }
     }
 

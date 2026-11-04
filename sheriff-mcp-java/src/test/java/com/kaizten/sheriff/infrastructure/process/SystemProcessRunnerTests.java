@@ -5,12 +5,15 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 /**
  * Tests for the real process runner, against real processes. Mocking the JDK
@@ -133,5 +136,72 @@ class SystemProcessRunnerTests {
         assertEquals(ProcessStatus.UNAVAILABLE, outcome.status());
         assertFalse(outcome.ran());
         assertTrue(outcome.failure().contains("definitely-not-installed-xyz"));
+    }
+
+    /**
+     * The pid a shell started in the background wrote to a file, once it has.
+     */
+    private static long childPid(Path file) throws Exception {
+        for (int attempt = 0; attempt < 200 && (!Files.exists(file) || Files.readString(file).isBlank()); attempt++) {
+            Thread.sleep(25);
+        }
+        return Long.parseLong(Files.readString(file).strip());
+    }
+
+    private static boolean dies(long pid) throws InterruptedException {
+        for (int attempt = 0; attempt < 80; attempt++) {
+            if (ProcessHandle.of(pid).map(handle -> !handle.isAlive()).orElse(true)) {
+                return true;
+            }
+            Thread.sleep(25);
+        }
+        return false;
+    }
+
+    @Test
+    @DisplayName("a run whose thread is interrupted is cancelled, and the command and what it started are killed")
+    void aCancelledRunKillsTheCommandAndItsChildren(@TempDir Path folder) throws Exception {
+        Path pid = folder.resolve("pid");
+        AtomicReference<ProcessOutcome> outcome = new AtomicReference<>();
+        Thread call = new Thread(() -> outcome.set(runner.run(
+                List.of("sh", "-c", "sleep 30 & echo $! > '" + pid + "'; wait"), HERE, Map.of(), GENEROUS)));
+        call.start();
+        long child = childPid(pid);
+
+        call.interrupt();
+        call.join(Duration.ofSeconds(10).toMillis());
+
+        assertEquals(ProcessStatus.CANCELLED, outcome.get().status());
+        assertTrue(dies(child), "the shell's sleep, which outlived a shell killed alone, is gone");
+    }
+
+    @Test
+    @DisplayName("a command that outlives its deadline is killed with what it started")
+    void aTimedOutRunKillsItsChildrenToo(@TempDir Path folder) throws Exception {
+        Path pid = folder.resolve("pid");
+
+        ProcessOutcome outcome = runner.run(
+                List.of("sh", "-c", "sleep 30 & echo $! > '" + pid + "'; wait"), HERE, Map.of(), Duration.ofSeconds(1));
+
+        assertEquals(ProcessStatus.TIMED_OUT, outcome.status());
+        assertTrue(dies(childPid(pid)));
+    }
+
+    @Test
+    @DisplayName("an interrupted thread starts no command at all, and stays interrupted")
+    void anInterruptedThreadStartsNothing(@TempDir Path folder) {
+        Path touched = folder.resolve("touched");
+        Thread.currentThread().interrupt();
+        ProcessOutcome outcome;
+        boolean stillInterrupted;
+        try {
+            outcome = runner.run(List.of("sh", "-c", "touch '" + touched + "'"), HERE, Map.of(), GENEROUS);
+        } finally {
+            stillInterrupted = Thread.interrupted();
+        }
+
+        assertEquals(ProcessStatus.CANCELLED, outcome.status());
+        assertFalse(Files.exists(touched));
+        assertTrue(stillInterrupted);
     }
 }

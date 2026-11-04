@@ -661,6 +661,58 @@ check "and one of another form is not passed, so Sheriff still runs" \
 check "it leaves no file of arguments behind" \
   '[[ -z "$(find "${XDG_CACHE_HOME:-$HOME/.cache}/sheriff-mcp/state" -name sheriff-arguments 2>/dev/null)" ]]'
 
+echo "26. A call the client cancels stops: its Sheriff container is gone and it is not answered"
+cancelling="$work/cancelling"
+component "$cancelling/app"
+repository "$cancelling"
+# Claude Code sends notifications/cancelled when its user presses Esc during a
+# call (measured on 2.1.318). The call used to run to its end regardless,
+# Sheriff's container and the repair included, and the next call waited.
+cat > "$work/canceller.py" <<'PY'
+import json, subprocess, sys, time
+def containers():
+    names = subprocess.run(["docker", "ps", "--filter", "name=sheriff-agent-", "--format", "{{.Names}}"],
+                           capture_output=True, text=True).stdout.split()
+    return set(names)
+before = containers()
+server = subprocess.Popen(sys.argv[2:], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                          stderr=subprocess.DEVNULL, text=True)
+def send(message):
+    server.stdin.write(json.dumps(message) + "\n")
+    server.stdin.flush()
+send({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-06-18"}})
+server.stdout.readline()
+send({"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "sheriff_fix", "arguments": {"component": "app"}}})
+running = set()
+for attempt in range(240):
+    running = containers() - before
+    if running:
+        break
+    time.sleep(0.1)
+send({"jsonrpc": "2.0", "method": "notifications/cancelled", "params": {"requestId": 2, "reason": "AbortError: user-cancel"}})
+cancelled = time.time()
+later = set()
+while time.time() - cancelled < 10:
+    later |= containers() - before - running
+    time.sleep(0.1)
+send({"jsonrpc": "2.0", "id": 3, "method": "ping"})
+server.stdin.close()
+ids = [json.loads(line).get("id") for line in server.stdout]
+server.wait(timeout=600)
+print(json.dumps({"started": bool(running), "started_after": sorted(later), "answered": ids,
+                  "left": sorted(containers() - before)}))
+PY
+(cd "$cancelling" && XDG_STATE_HOME="$work/state26" XDG_CACHE_HOME="$lone/cache" \
+  python3 "$work/canceller.py" -- java -jar "$mcp_jar") >"$work/26.out" 2>&1
+check "the call started a Sheriff container" \
+  'python3 -c "import json,sys; sys.exit(not json.load(open(sys.argv[1]))[\"started\"])" "$work/26.out"'
+check "once the client cancels it, the repair starts no other" \
+  'python3 -c "import json,sys; sys.exit(json.load(open(sys.argv[1]))[\"started_after\"] != [])" "$work/26.out"'
+check "and no container of it is left" \
+  'python3 -c "import json,sys; sys.exit(json.load(open(sys.argv[1]))[\"left\"] != [])" "$work/26.out"'
+check "the cancelled call is never answered, and the next request is" \
+  'python3 -c "import json,sys; sys.exit(json.load(open(sys.argv[1]))[\"answered\"] != [3])" "$work/26.out"'
+
 echo
 if (( failures > 0 )); then
   echo "$failures check(s) failed. The repositories and outputs are kept in $work."
