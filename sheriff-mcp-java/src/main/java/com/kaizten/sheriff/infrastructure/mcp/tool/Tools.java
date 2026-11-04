@@ -66,6 +66,7 @@ public final class Tools implements AutoCloseable {
             + "how to fix it; %s lists the settings and changes one:%s";
     private static final String SETTINGS_PROBLEM = "%n  - %s";
     private static final String SERVER_VERSION_FIELD = "server_version";
+    private static final String SERVER_COMMIT_FIELD = "server_commit";
     private final TaskRegistry tasks;
     private final Map<String, Tool> byName;
     private final ImageProvisioning image;
@@ -240,6 +241,7 @@ public final class Tools implements AutoCloseable {
     private static Map<String, String> provenance(ImageProvisioning image) {
         Map<String, String> provenance = new LinkedHashMap<>();
         provenance.put(SERVER_VERSION_FIELD, ServerVersion.current());
+        provenance.put(SERVER_COMMIT_FIELD, ServerVersion.commit());
         provenance.putAll(image.identity());
         return provenance;
     }

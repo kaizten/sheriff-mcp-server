@@ -253,6 +253,15 @@ suffix is a prerelease, which the install line never picks: that is how a
 release is tried first, and on Windows, which no workflow reaches now, it has
 to be tried by hand.
 
+**A version names every commit until the next release**, so the jar also
+records the commit it was built from (`git-commit-id-maven-plugin`, through
+git itself; `unknown` in a build with no repository, as the image's):
+`sheriff_task` says `0.1.10 (6ff458f)`, and task records and reports carry it
+as `server_commit` and `commit`. `--version` prints the version alone, as the
+installers and both workflows compare it with a release's. Do not move to a
+`-SNAPSHOT` version: `ServerUpdates.newer` reads `0.1.11-SNAPSHOT` as
+`0.1.0` and would offer to update it to the release before it.
+
 ## Things about Sheriff that will waste your time otherwise
 
 - **Sheriff analyzes a *subdirectory* of what it mounts.** So a component is

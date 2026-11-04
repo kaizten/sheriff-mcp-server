@@ -180,6 +180,7 @@ public final class McpServer {
     private static final String SHERIFF_SECTION = "sheriff";
     private static final String PROJECT_SECTION = "project";
     private static final String VERSION_FIELD = "version";
+    private static final String COMMIT_FIELD = "commit";
     private static final String REPOSITORY_FIELD = "repository";
     private static final String SHUTDOWN_THREAD = "sheriff-shutdown";
     /**
@@ -313,7 +314,7 @@ public final class McpServer {
         String name = String.format(SESSION_REPORT_NAME, LocalDateTime.now().format(SESSION_STAMP), folder)
                 .replaceAll(NAME_UNSAFE, NAME_SAFE);
         return config.reportsDirectory().map(reports -> new SessionReport(reports.resolve(name), Map.of(TOOLS_SECTION,
-                Map.of(VERSION_FIELD, ServerVersion.current()),
+                Map.of(VERSION_FIELD, ServerVersion.current(), COMMIT_FIELD, ServerVersion.commit()),
                 SHERIFF_SECTION, image.identity(),
                 PROJECT_SECTION, Map.of(REPOSITORY_FIELD, project.toString()))));
     }
