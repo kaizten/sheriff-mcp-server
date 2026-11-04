@@ -262,7 +262,7 @@ public final class HookInstaller {
             if (withGate) {
                 rewritePermissions(root, add);
             }
-            write(settings, root);
+            write(settings, root, add);
             output.print(add ? String.format(installed, settings, jar) : String.format(UNINSTALLED, settings));
             return SUCCESS;
         } catch (IOException exception) {
@@ -450,10 +450,17 @@ public final class HookInstaller {
      *
      * @param settings the file
      * @param root its new content
+     * @param add whether Sheriff's lines were put in, or taken out
      * @throws IOException when it cannot be written, or is a link to nothing
      */
-    private void write(Path settings, ObjectNode root) throws IOException {
-        ConfigFile.replace(settings, ConfigFile.json(json, root));
+    private void write(Path settings, ObjectNode root, boolean add) throws IOException {
+        String content = ConfigFile.json(json, root);
+        Path originals = ConfigFile.originalsBeside(jar);
+        if (add) {
+            ConfigFile.installing(settings, content, originals);
+        } else {
+            ConfigFile.uninstalling(settings, content, originals);
+        }
     }
 
     /**

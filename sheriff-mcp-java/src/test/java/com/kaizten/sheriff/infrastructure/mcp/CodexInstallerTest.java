@@ -76,7 +76,7 @@ final class CodexInstallerTest {
                 hooks.toString());
 
         assertEquals(0, HookInstaller.forCodex(jar, codexHome(), home, out, true, Map.of()).uninstall());
-        assertFalse(read("hooks.json").contains("--hook-stop"), "an uninstall finds the wrapped hooks too");
+        assertFalse(Files.exists(codexHome().resolve("hooks.json")), "an uninstall finds the wrapped hooks too");
     }
 
     @Test
@@ -323,9 +323,11 @@ final class CodexInstallerTest {
     void uninstallingTakesTheEnvironmentOutWithTheEntry() throws Exception {
         installer(false).pullingAlways().install();
 
+        Files.writeString(codexHome().resolve("config.toml"), "model = \"gpt-5\"\n" + read("config.toml"));
         installer(false).uninstall();
 
         assertFalse(read("config.toml").contains("SHERIFF_PULL"), read("config.toml"));
+        assertTrue(read("config.toml").contains("model = \"gpt-5\""), "what the user added since stays");
     }
 
     @Test
@@ -334,12 +336,13 @@ final class CodexInstallerTest {
         Files.writeString(codexHome().resolve("config.toml"), "[tui]\nscreen_reader_detection_done = true\n");
 
         installer(false).install();
+        assertTrue(Files.exists(home.resolve(".local/share/sheriff-agent/originals")), "kept beside the jar");
         assertEquals(0, installer(false).uninstall());
 
         assertEquals(List.of("[tui]", "screen_reader_detection_done = true"),
                 Files.readAllLines(codexHome().resolve("config.toml")));
         assertFalse(Files.exists(codexHome().resolve("AGENTS.md")), "the file only ever held Sheriff's block");
-        assertFalse(read("hooks.json").contains("--hook-stop"));
+        assertFalse(Files.exists(codexHome().resolve("hooks.json")), "the install created it, so it goes");
     }
 
     @Test

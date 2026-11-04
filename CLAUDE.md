@@ -174,7 +174,16 @@ code 2.
 
 Every installer writes an assistant's file through `ConfigFile`: whole,
 where a symbolic link points, and **with the permissions it had**, since
-these files can hold tokens. Claude Code's settings go out in Claude Code's
+these files can hold tokens. **An uninstall leaves each file as it was**:
+the first install keeps it (or that it did not exist) in `originals/` beside
+the jar, readable by its owner alone, and the uninstall writes that back byte
+for byte when what is left means the same, removes a file the install created
+when nothing is left in it, and otherwise takes out only Sheriff's lines.
+Taking the lines out alone left `{}` files and Antigravity's servers
+reformatted. `scripts/uninstall.sh` runs the three uninstallers with the
+installed jar, `claude mcp remove`, and removes the install folder, cache,
+state and the hooks' temporary folders (`--disable` only the first part);
+`ci.yml` runs it after the installer. There is no `uninstall.ps1` yet. Claude Code's settings go out in Claude Code's
 own format (`ConfigFile.json`), so a reinstall changes only its own lines.
 The server, and the hooks written for the user, run the Java the installer
 found, by its absolute path (`SHERIFF_JAVA`, read

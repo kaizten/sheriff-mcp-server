@@ -155,8 +155,9 @@ final class HookInstallerTest {
         assertTrue(hooks.at("/PreToolUse/0/hooks/0/command").asText().endsWith("--hook-gate"));
         assertTrue(hooks.at("/Stop/0/hooks/0/command").asText().endsWith("--hook-stop"));
         assertTrue(output.toString(StandardCharsets.UTF_8).contains("--uninstall-hooks --user"));
+        assertTrue(Files.exists(installedJar().resolveSibling("originals")), "the install noted the file was not there");
         assertEquals(0, user.uninstall());
-        assertFalse(settings(home).has("hooks"));
+        assertFalse(Files.exists(home.resolve(".claude/settings.json")), "the install created it, so it goes");
     }
 
     @Test
@@ -238,7 +239,7 @@ final class HookInstallerTest {
         installer(project, installedJar()).install();
         installer(project, installedJar()).uninstall();
 
-        assertFalse(settings(project).has("permissions"), settings(project).toString());
+        assertFalse(Files.exists(project.resolve(".claude/settings.json")), "the install created it, so it goes");
     }
 
     @Test

@@ -88,7 +88,7 @@ jobs:
       - name: Assets
         run: |
           mkdir dist
-          cp sheriff-mcp-java/target/sheriff-mcp.jar scripts/install.sh scripts/install.ps1 dist/
+          cp sheriff-mcp-java/target/sheriff-mcp.jar scripts/install.sh scripts/install.ps1 scripts/uninstall.sh dist/
           cp playbook/build/sheriff-playbook-es.pdf playbook/build/sheriff-playbook-en.pdf dist/
           (cd dist && sha256sum sheriff-mcp.jar > sheriff-mcp.jar.sha256)
       - name: Publish

@@ -204,10 +204,10 @@ public final class AntigravityInstaller {
             rewriteServer(servers, add);
             rewritePermissions(settings, add);
             if (add || Files.exists(serversFile())) {
-                write(serversFile(), servers);
+                write(serversFile(), servers, add);
             }
             if (add || Files.exists(settingsFile())) {
-                write(settingsFile(), settings);
+                write(settingsFile(), settings, add);
             }
             return true;
         } catch (IOException exception) {
@@ -332,11 +332,17 @@ public final class AntigravityInstaller {
      *
      * @param file the file
      * @param root its new content
+     * @param add whether Sheriff's entries were put in, or taken out
      * @throws IOException when it cannot be written
      */
-    private void write(Path file, ObjectNode root) throws IOException {
-        ConfigFile.replace(file, json.writerWithDefaultPrettyPrinter().writeValueAsString(root)
-                + System.lineSeparator());
+    private void write(Path file, ObjectNode root, boolean add) throws IOException {
+        String content = json.writerWithDefaultPrettyPrinter().writeValueAsString(root) + System.lineSeparator();
+        Path originals = ConfigFile.originalsBeside(jar);
+        if (add) {
+            ConfigFile.installing(file, content, originals);
+        } else {
+            ConfigFile.uninstalling(file, content, originals);
+        }
     }
 
     /**
