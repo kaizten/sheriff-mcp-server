@@ -52,7 +52,7 @@ final class JsonRpcServerTest {
     void initializeAnswersWithTheServerIdentityAndAFallbackVersion() throws Exception {
         ObjectNode response = server("", false).handle(request("initialize", Map.of()));
 
-        assertEquals("2025-06-18", response.at("/result/protocolVersion").asText());
+        assertEquals("2025-11-25", response.at("/result/protocolVersion").asText());
         assertEquals("sheriff", response.at("/result/serverInfo/name").asText());
     }
 
@@ -67,10 +67,13 @@ final class JsonRpcServerTest {
     }
 
     @Test
+    @DisplayName("every version it supports is answered as asked, the one Claude Code asks for included")
     void initializeEchoesBackAVersionItSupports() throws Exception {
-        ObjectNode response = server("", false).handle(request("initialize", Map.of("protocolVersion", "2025-03-26")));
+        for (String version : List.of("2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25")) {
+            ObjectNode response = server("", false).handle(request("initialize", Map.of("protocolVersion", version)));
 
-        assertEquals("2025-03-26", response.at("/result/protocolVersion").asText());
+            assertEquals(version, response.at("/result/protocolVersion").asText());
+        }
     }
 
     @Test
@@ -78,7 +81,7 @@ final class JsonRpcServerTest {
     void initializeAnswersAnUnknownVersionWithItsOwn() throws Exception {
         ObjectNode response = server("", false).handle(request("initialize", Map.of("protocolVersion", "1999-01-01")));
 
-        assertEquals("2025-06-18", response.at("/result/protocolVersion").asText());
+        assertEquals("2025-11-25", response.at("/result/protocolVersion").asText());
     }
 
     @Test

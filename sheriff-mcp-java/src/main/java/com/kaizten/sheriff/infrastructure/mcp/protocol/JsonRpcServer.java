@@ -53,9 +53,10 @@ public final class JsonRpcServer {
 
     private static final String FIRST_PROTOCOL_VERSION = "2024-11-05";
     private static final String STREAMABLE_PROTOCOL_VERSION = "2025-03-26";
-    private static final String FALLBACK_PROTOCOL_VERSION = "2025-06-18";
-    private static final List<String> SUPPORTED_PROTOCOL_VERSIONS =
-            List.of(FIRST_PROTOCOL_VERSION, STREAMABLE_PROTOCOL_VERSION, FALLBACK_PROTOCOL_VERSION);
+    private static final String STRUCTURED_PROTOCOL_VERSION = "2025-06-18";
+    private static final String LATEST_PROTOCOL_VERSION = "2025-11-25";
+    private static final List<String> SUPPORTED_PROTOCOL_VERSIONS = List.of(FIRST_PROTOCOL_VERSION,
+            STREAMABLE_PROTOCOL_VERSION, STRUCTURED_PROTOCOL_VERSION, LATEST_PROTOCOL_VERSION);
     private static final int PARSE_ERROR = -32700;
     private static final int INVALID_REQUEST = -32600;
     private static final int METHOD_NOT_FOUND = -32601;
@@ -220,9 +221,16 @@ public final class JsonRpcServer {
      * The {@code initialize} handshake's result.
      *
      * <p>The version is the client's only when this server knows it; any
-     * other is answered with the one this server was built against, and the
-     * client decides whether it can speak that. It used to echo whatever was
-     * asked, {@code 1999-01-01} included.
+     * other is answered with the latest this server supports, as MCP asks,
+     * and the client decides whether it can speak that. It used to echo
+     * whatever was asked, {@code 1999-01-01} included.
+     *
+     * <p>{@code 2025-11-25}, which Claude Code 2.1.318 asks for, asks nothing
+     * new of a server of tools over stdio: what it adds is optional or the
+     * client's or HTTP's. Its two clarifications hold here already: a tool's
+     * invalid arguments are answered as the tool's error ({@code isError}),
+     * not the protocol's, and the tools' schemas use only keywords JSON
+     * Schema 2020-12, now its default dialect, reads the same.
      *
      * @param params what the client asked for
      * @return the protocol version, capabilities and identity to answer with
@@ -233,7 +241,7 @@ public final class JsonRpcServer {
         JsonNode requested = params.path(PROTOCOL_VERSION_FIELD);
         String version = SUPPORTED_PROTOCOL_VERSIONS.contains(requested.asText())
                 ? requested.asText()
-                : FALLBACK_PROTOCOL_VERSION;
+                : LATEST_PROTOCOL_VERSION;
         ObjectNode body = json.createObjectNode();
         body.put(PROTOCOL_VERSION_FIELD, version);
         ObjectNode capabilities = json.createObjectNode();
