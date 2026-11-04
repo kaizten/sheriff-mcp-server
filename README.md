@@ -616,11 +616,15 @@ price, also on a subscription; Codex reports none, and its fixer adds `--json`
 to a `codex exec` so that it reports its tokens.
 
 **A run's report.** With `SHERIFF_REPORT=1`, a setting of your own file (or a
-variable), every run of the loop, `sheriff_autofix`'s included, ends by
-writing one JSON document of itself to
+variable), every run of the loop, `sheriff_autofix`'s included, writes one JSON document
+of itself to
 `~/.local/state/sheriff-mcp/reports/loop-<when>-<component>-<backend>.json`
-(under `XDG_STATE_HOME` when it is set), and says where; `--json-report PATH`
-writes the same to `PATH` with the setting off. It holds counts, rule codes
+(under `XDG_STATE_HOME` when it is set), and says where. It is written as the
+run goes, after every analysis and every pass, with `state` `running` and the
+outcome's fields `null`, and once more when it ends, with `state` `finished`,
+so a long run can be followed and one killed midway still leaves what it did;
+`--compare-reports` reads only finished ones. `--json-report PATH` writes the
+same to `PATH` with the setting off. It holds counts, rule codes
 and paths, never a finding's text, which can quote code:
 
 | Field | What it holds |
@@ -640,9 +644,14 @@ its batch) is analyzed once more, so `final` is what is in the tree.
 
 **A session's report.** With the same setting, every session of the MCP
 server writes `session-<when>-<project folder>.json` beside them, rewritten
-after every call, so a session a client stops without warning (Codex does)
-still has it. It says which assistant connected (`client`: the name and
-version its `initialize` gave),
+as the session goes: when a call starts, after each analysis it makes and
+when it ends, with a call not yet answered under `running`. So a repair that
+takes minutes can be followed, and a session a client stops without warning
+(Codex does) still has it. The setting is read at every write, not when the
+session starts: turned on in a session already open, its report starts at
+the next call and holds every call since the session began; `sheriff_task`
+with no id names the file, or says it has none. It says which assistant
+connected (`client`: the name and version its `initialize` gave),
 this jar's version, Sheriff's image and the project, and every call: its
 `tool` and `arguments`, `elapsed_ms`, whether it `failed`, and the
 `analyses` it made, rule by rule, `before` and `after` for a repair. Its

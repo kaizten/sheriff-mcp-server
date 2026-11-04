@@ -14,10 +14,13 @@ import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.TreeMap;
 import java.util.UUID;
+import java.util.function.Supplier;
 
 /**
  * One session of the MCP server as a single JSON document, rewritten whole
@@ -32,9 +35,18 @@ import java.util.UUID;
  * is never kept, as Sheriff pastes code and build output into it. What the
  * client's model spent is not visible to the server, and is not guessed.
  *
- * <p>Written after each call rather than at the end, as a client may stop the
- * server without letting it end (Codex does). Writing never fails a call: a
- * report that cannot be written is said once on standard error.
+ * <p>Written as the session goes rather than at the end, as a client may
+ * stop the server without letting it end (Codex does): when a call starts,
+ * after each analysis it makes and when it ends, so a repair that takes
+ * minutes is seen round by round. A call not yet answered is under
+ * {@code running}. Writing never fails a call: a report that cannot be
+ * written is said once on standard error.
+ *
+ * <p>Whether it is written is asked at every write, not once at the start:
+ * a session kept open while {@code SHERIFF_REPORT} was turned on wrote
+ * nothing, and the user asked for the report of the work it had just done.
+ * Turned on mid-session, the report holds every call since the session
+ * started; turned off, it stops being written.
  */
 public final class SessionReport {
 
@@ -52,6 +64,7 @@ public final class SessionReport {
     private static final String ELAPSED_FIELD = "elapsed_ms";
     private static final String FAILED_FIELD = "failed";
     private static final String ANALYSES_FIELD = "analyses";
+    private static final String RUNNING_FIELD = "running";
     private static final String COMPONENT_FIELD = "component";
     private static final String PROFILE_FIELD = "profile";
     private static final String BEFORE_FIELD = "before";
@@ -80,13 +93,16 @@ public final class SessionReport {
      * What a session's report says it is, beside a loop's.
      */
     public static final String KIND = "session";
-    private final Path file;
+    private final String name;
+    private final Supplier<Optional<Path>> folder;
     private final Map<String, Object> context;
     private final Instant started = Instant.now();
     private final String id = UUID.randomUUID().toString().substring(ID_START, ID_LENGTH);
     private final ObjectMapper json = new ObjectMapper();
     private final ArrayNode calls = json.createArrayNode();
     private final List<ObjectNode> analyses = new ArrayList<>();
+    private final Map<Thread, ObjectNode> running = new HashMap<>();
+    private final Map<Thread, Instant> runningSince = new HashMap<>();
     private final Map<String, Integer> byTool = new TreeMap<>();
     private final Map<String, ObjectNode> lastByComponent = new TreeMap<>();
     private ObjectNode first;
@@ -97,24 +113,39 @@ public final class SessionReport {
     private boolean warned;
 
     /**
-     * A report of the session that starts now.
+     * A report of the session that starts now, always written to one file.
      *
      * @param file where it is written
      * @param context the sections that do not change during the session,
      *     each a map: the tools, Sheriff's image, the project
      */
     public SessionReport(Path file, Map<String, Object> context) {
-        this.file = file;
+        this(file.getFileName().toString(), () -> Optional.of(file.toAbsolutePath().getParent()), context);
+    }
+
+    /**
+     * A report of the session that starts now, written while its folder is
+     * given.
+     *
+     * @param name the file's name in that folder
+     * @param folder where reports go, asked at every write: empty while
+     *     reports are off
+     * @param context the sections that do not change during the session,
+     *     each a map: the tools, Sheriff's image, the project
+     */
+    public SessionReport(String name, Supplier<Optional<Path>> folder, Map<String, Object> context) {
+        this.name = name;
+        this.folder = folder;
         this.context = Map.copyOf(context);
     }
 
     /**
-     * Where the report is written.
+     * Where the report is written now.
      *
-     * @return that file
+     * @return that file, or empty while reports are off
      */
-    public Path file() {
-        return file;
+    public Optional<Path> file() {
+        return folder.get().map(reports -> reports.resolve(name));
     }
 
     /**
@@ -148,7 +179,6 @@ public final class SessionReport {
         ObjectNode left = counts(after);
         analysis.set(AFTER_FIELD, left);
         analysis.put(ROUNDS_FIELD, rounds);
-        analyses.add(analysis);
         if (first == null) {
             first = analysis.deepCopy();
             first.set(AFTER_FIELD, before == null ? left : counts(before));
@@ -159,6 +189,29 @@ public final class SessionReport {
         last.put(PROFILE_FIELD, profile);
         last.setAll(left);
         lastByComponent.put(component, last);
+        ObjectNode call = running.get(Thread.currentThread());
+        if (call == null) {
+            analyses.add(analysis);
+        } else {
+            ((ArrayNode) call.get(ANALYSES_FIELD)).add(analysis);
+        }
+        write();
+    }
+
+    /**
+     * Opens one call, written under {@code running} until it ends.
+     *
+     * @param tool the tool called
+     * @param arguments what it was called with
+     */
+    public synchronized void started(String tool, Map<String, Object> arguments) {
+        ObjectNode call = json.createObjectNode();
+        call.put(TOOL_FIELD, tool);
+        call.set(ARGUMENTS_FIELD, json.valueToTree(new TreeMap<>(arguments)));
+        call.putArray(ANALYSES_FIELD);
+        running.put(Thread.currentThread(), call);
+        runningSince.put(Thread.currentThread(), Instant.now());
+        write();
     }
 
     /**
@@ -175,7 +228,11 @@ public final class SessionReport {
         call.set(ARGUMENTS_FIELD, json.valueToTree(new TreeMap<>(arguments)));
         call.put(ELAPSED_FIELD, took.toMillis());
         call.put(FAILED_FIELD, failed);
-        call.set(ANALYSES_FIELD, json.valueToTree(analyses));
+        ObjectNode open = running.remove(Thread.currentThread());
+        runningSince.remove(Thread.currentThread());
+        ArrayNode made = open == null ? json.createArrayNode() : (ArrayNode) open.get(ANALYSES_FIELD);
+        analyses.forEach(made::add);
+        call.set(ANALYSES_FIELD, made);
         analyses.clear();
         byTool.merge(tool, ONE, Integer::sum);
         failures += failed ? ONE : NONE;
@@ -207,6 +264,10 @@ public final class SessionReport {
         totals.set(FIRST_FIELD, first == null ? json.nullNode() : first);
         totals.set(LAST_FIELD, json.valueToTree(lastByComponent));
         root.set(CALLS_FIELD, calls.deepCopy());
+        ArrayNode open = root.putArray(RUNNING_FIELD);
+        Instant now = Instant.now();
+        running.forEach((thread, call) -> open.add(call.deepCopy()
+                .put(ELAPSED_FIELD, Duration.between(runningSince.get(thread), now).toMillis())));
         return root;
     }
 
@@ -232,6 +293,11 @@ public final class SessionReport {
      * Writes the report whole: to a file beside it, then moved into place.
      */
     private void write() {
+        Optional<Path> target = file();
+        if (target.isEmpty()) {
+            return;
+        }
+        Path file = target.get();
         Path partial = file.resolveSibling(file.getFileName() + PARTIAL_SUFFIX);
         try {
             Files.createDirectories(file.toAbsolutePath().getParent());

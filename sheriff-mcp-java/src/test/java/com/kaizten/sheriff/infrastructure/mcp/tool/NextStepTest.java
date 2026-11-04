@@ -22,6 +22,15 @@ class NextStepTest {
     }
 
     @Test
+    @DisplayName("told a false positive may stay, Codex left 92 errors it judged in conflict with the project's formatter")
+    void errorsLeftByHandAreNotTheModelsToLeave() {
+        String step = NextStep.afterRepair(java.util.Set.of(), java.util.List.of("app/src/A.java"), CALL);
+        assertFalse(step.contains("may stay"), step);
+        assertTrue(step.contains("Do not leave one as a false positive yourself"), step);
+        isOneStepLast(step);
+    }
+
+    @Test
     @DisplayName("a clean change is measured through the repair with verify")
     void aCleanChangeIsMeasured() {
         String step = NextStep.afterCleanToMeasure(CALL);

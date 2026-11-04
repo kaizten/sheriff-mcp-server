@@ -1741,4 +1741,15 @@ final class ToolsTest {
         assertEquals("javadoc", session.get("calls").get(0).get("arguments").get("query").asText());
         assertTrue(session.get("calls").get(1).get("failed").asBoolean());
     }
+
+    @Test
+    @DisplayName("asked for its session's JSON report, Codex, its context compacted, said the tools write none")
+    void sheriffTaskWithNoIdSaysWhereTheSessionsReportIs() {
+        Path file = state.resolve("session.json");
+        Tools reporting = tools(List.of()).reportingTo(new SessionReport(file, Map.of()));
+
+        assertTrue(reporting.call("sheriff_task", Map.of()).text().contains("This session's report: " + file));
+        assertTrue(tools(List.of()).call("sheriff_task", Map.of()).text()
+                .contains("This session writes no report: SHERIFF_REPORT is off."));
+    }
 }

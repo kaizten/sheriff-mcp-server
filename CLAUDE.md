@@ -958,7 +958,10 @@ alone do not say (each analysis, what a pass is given, the end), so its
 lambdas still compile; `PassMeter` forwards them. The report keeps the old
 `--json-report` fields at its top, adds the configuration, versions, project
 and commit (`Composition.reportContext`), the first and last analyses, the
-passes and their totals, and is written whole when the run ends. Counts,
+passes and their totals, and is written whole after every analysis and pass
+(`state` `running`, the outcome's fields `null`) and when the run ends
+(`finished`), so a run can be followed; `ReportComparison` passes over a
+running one. Counts,
 codes and paths only: a finding's description quotes code. When the last
 pass was never measured it analyzes once more, so `final` is what the tree
 holds. `scripts/e2e.sh` scenario 22 checks `final` against a check after.
@@ -975,10 +978,15 @@ HEAD for every run.
 **A session of the MCP server is reported too**, with the same setting
 (`SessionReport`, `McpServer.sessionReport`): `JsonRpcServer.onClient` hands
 it the name and version `initialize` gives, `SheriffRunner.reportingTo` every
-full analysis and repair, and `Tools.call` each call when it ends. It is
-rewritten whole after every call, as Codex stops the server without letting
-it end, and holds the client, the calls and their counts, never a model's
-tokens, which the server does not see. `--compare-reports` reads sessions
+full analysis and repair, and `Tools.call` each call when it starts and ends.
+It is rewritten whole at each of those, a call in progress under `running`
+(kept per thread, as `sheriff_task` answers beside a running repair), as
+Codex stops the server without letting it end. It asks `SHERIFF_REPORT` at
+every write, not at start: a session open when the user turned it on wrote
+nothing of the work that followed, so turned on mid-session it holds every
+call since the start, and `sheriff_config` says it counts at once. It holds
+the client, the calls and their counts, never a model's tokens, which the
+server does not see. `--compare-reports` reads sessions
 too and compares them apart, by client and project. `scripts/e2e.sh`
 scenario 23 runs a session with a named client.
 

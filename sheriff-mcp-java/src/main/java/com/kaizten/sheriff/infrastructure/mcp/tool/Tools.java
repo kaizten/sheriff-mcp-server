@@ -194,7 +194,7 @@ public final class Tools implements AutoCloseable {
         this.settings = new SheriffConfigTool(context);
         for (Tool tool : List.of(new SheriffTestTool(context).definition(), new SheriffFixTool(context).definition(),
                 new SheriffGuidelinesTool(context).definition(), new SheriffAutofixTool(context).definition(),
-                new SheriffTaskTool(context).definition(), settings.definition())) {
+                new SheriffTaskTool(context, () -> session.flatMap(SessionReport::file)).definition(), settings.definition())) {
             definitions.put(tool.name(), tool);
         }
         this.byName = Collections.unmodifiableMap(definitions);
@@ -286,6 +286,7 @@ public final class Tools implements AutoCloseable {
      */
     public ToolOutcome call(String name, Map<String, Object> arguments) {
         long started = System.nanoTime();
+        session.ifPresent(report -> report.started(name, arguments == null ? Map.of() : arguments));
         ToolOutcome outcome = answer(name, arguments);
         session.ifPresent(report -> report.called(name, arguments == null ? Map.of() : arguments,
                 Duration.ofNanos(System.nanoTime() - started), outcome.isError()));

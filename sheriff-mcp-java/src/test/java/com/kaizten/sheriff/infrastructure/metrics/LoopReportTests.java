@@ -104,6 +104,23 @@ class LoopReportTests {
     }
 
     @Test
+    @DisplayName("a run's report is written as it goes, running until the run ends, so it can be followed")
+    void aRunIsWrittenAsItGoes() throws IOException {
+        Path file = folder.resolve("run.json");
+        LoopReport report = fullRun(file);
+        JsonNode running = read(file);
+        assertEquals(LoopReport.RUNNING, running.get("state").asText());
+        assertTrue(running.get("finished").isNull());
+        assertTrue(running.get("ok").isNull());
+        assertEquals(2, running.get("passes").size());
+        assertEquals(3, running.get("initial").get("total").asInt());
+        report.finished(SUCCESS);
+        JsonNode finished = read(file);
+        assertEquals(LoopReport.FINISHED, finished.get("state").asText());
+        assertTrue(finished.get("ok").asBoolean());
+    }
+
+    @Test
     @DisplayName("a run that stopped before its last pass was measured is analyzed once more")
     void anUnmeasuredLastPassIsAnalyzedAgain() throws IOException {
         Path file = folder.resolve("run.json");

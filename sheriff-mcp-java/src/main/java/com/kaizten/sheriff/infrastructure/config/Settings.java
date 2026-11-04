@@ -16,6 +16,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Scanner;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
@@ -79,10 +80,13 @@ public final class Settings {
             + "choose it for whoever opens it.";
     private static final String NO_FILE = "There is no file of yours to write to: none of HOME, XDG_CONFIG_HOME or "
             + "APPDATA is set.";
-    private static final String CHANGED = "%s is %s in %s. The tools take it when the next session starts; the "
-            + "hooks, from their next run.";
-    private static final String RESET = "%s is back to its default (%s) in %s. The tools take it when the next "
-            + "session starts; the hooks, from their next run.";
+    private static final String CHANGED = "%s is %s in %s. %s";
+    private static final String RESET = "%s is back to its default (%s) in %s. %s";
+    private static final String NEXT_SESSION = "The tools take it when the next session starts; the hooks, from their "
+            + "next run.";
+    private static final String AT_ONCE = "The tools take it at once, this session included.";
+    private static final String REPORT_SETTING = "SHERIFF_REPORT";
+    private static final Set<String> READ_AT_ONCE = Set.of(REPORT_SETTING);
     private static final String OVERRIDDEN = " While the environment variable %s is set (to %s), it wins over the "
             + "file.";
     private static final String NAME_SEPARATOR = ", ";
@@ -449,10 +453,11 @@ public final class Settings {
         } catch (IOException exception) {
             throw new IllegalArgumentException(exception.getMessage(), exception);
         }
+        String when = READ_AT_ONCE.contains(name) ? AT_ONCE : NEXT_SESSION;
         String done = trimmed.isEmpty()
                 ? String.format(RESET, name, setting.defaultValue().isEmpty() ? WORKED_OUT : setting.defaultValue(),
-                        file)
-                : String.format(CHANGED, name, trimmed, file);
+                        file, when)
+                : String.format(CHANGED, name, trimmed, file, when);
         return isSet(environment, name) ? done + String.format(OVERRIDDEN, name, environment.get(name)) : done;
     }
 
