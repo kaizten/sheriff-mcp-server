@@ -10,6 +10,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileAttribute;
+import java.nio.file.attribute.PosixFilePermission;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
@@ -129,6 +132,10 @@ public final class SheriffContainer {
     private static final boolean NOT_ALLOWED = false;
     private static final boolean OWNER_ALONE = true;
     private static final boolean EVERY_USER = false;
+    private static final String OWNER_READ_WRITE = "rw-------";
+    private static final String POSIX_VIEW = "posix";
+    private static final FileAttribute<Set<PosixFilePermission>> OWNER_ONLY =
+            PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString(OWNER_READ_WRITE));
     private final ProcessRunner processes;
     private final String image;
     private final Path repositoryRoot;
@@ -353,8 +360,8 @@ public final class SheriffContainer {
      * {@code test} or {@code fix} on a component when there is a token, with
      * the file written: Sheriff's other commands take no token, and a run on
      * no component has no state folder of its own to hold it. The file is
-     * made its owner's alone before the token goes into it, through
-     * {@link File}, which needs no POSIX file system.
+     * its owner's alone before the token goes into it (see
+     * {@link #createOwnerOnly(Path)}).
      *
      * @param arguments what to pass to Sheriff
      * @param ownFolder whether the run has a state folder of its own
@@ -368,16 +375,39 @@ public final class SheriffContainer {
             return arguments;
         }
         Files.deleteIfExists(file);
+        createOwnerOnly(file);
+        Files.writeString(file, TOKEN_FLAG + LINE_END + token.get() + LINE_END, StandardCharsets.UTF_8);
+        List<String> given = new ArrayList<>(arguments);
+        given.add(SUBCOMMAND + NEXT, ARGUMENTS_IN_CONTAINER);
+        return given;
+    }
+
+    /**
+     * Creates an empty file only its owner can read or write.
+     *
+     * <p>On a POSIX file system it is created with those permissions, so
+     * there is no moment in which it has the umask's (usually
+     * {@code rw-r--r--}) and another user could open it and keep reading
+     * after the token is written. Elsewhere (Windows) it is created and then
+     * narrowed through {@link File}, best effort: there {@code File} cannot
+     * take reading away from other users and says so by returning
+     * {@code false}, and the state folder, in the user's profile, is the
+     * user's alone already.
+     *
+     * @param file the file to create, which must not exist
+     * @throws IOException when it cannot be created
+     */
+    private static void createOwnerOnly(Path file) throws IOException {
+        if (file.getFileSystem().supportedFileAttributeViews().contains(POSIX_VIEW)) {
+            Files.createFile(file, OWNER_ONLY);
+            return;
+        }
         Files.createFile(file);
         File created = file.toFile();
         created.setReadable(NOT_ALLOWED, EVERY_USER);
         created.setWritable(NOT_ALLOWED, EVERY_USER);
         created.setReadable(ALLOWED, OWNER_ALONE);
         created.setWritable(ALLOWED, OWNER_ALONE);
-        Files.writeString(file, TOKEN_FLAG + LINE_END + token.get() + LINE_END, StandardCharsets.UTF_8);
-        List<String> given = new ArrayList<>(arguments);
-        given.add(SUBCOMMAND + NEXT, ARGUMENTS_IN_CONTAINER);
-        return given;
     }
 
     /**
