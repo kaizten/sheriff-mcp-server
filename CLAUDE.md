@@ -280,14 +280,11 @@ installers and both workflows compare it with a release's. Do not move to a
   knows both halves. `SheriffContainer` does not mount the parent: it mounts a
   state folder of the component's own at `/data` and the component alone at
   `/data/<component>`, so Sheriff's arguments and paths are unchanged but it
-  sees nothing beside the component. With the parent mounted, a neighbour's
-  `domain/` folder changed what `JAVA_HEXAGONAL` reported for a component
-  (masked through the tools by the base profile and `KnownFalsePositives`, but
-  not by design), and a single-module project's parent got Sheriff's
-  root-owned state files. Its time grows with what it mounts, and through
-  WSL's Docker from `/mnt/c` by orders of magnitude (seconds on WSL's own
-  disk, minutes from `C:`, past `SHERIFF_TIMEOUT`'s 300 s); whether mounting
-  the component alone shortens the `C:` case has not been measured.
+  sees nothing beside the component: a neighbour's `domain/` folder changed
+  what `JAVA_HEXAGONAL` reported, and a single-module project's parent got
+  Sheriff's root-owned state files. Its time grows with what it mounts, and
+  through WSL's Docker from `/mnt/c` by orders of magnitude, past
+  `SHERIFF_TIMEOUT`'s 300 s.
 - **Sheriff analyzes every file of the component, what its build wrote
   included, and cannot be told to leave a folder out.** After a Gradle build
   almost all of a project's errors can be in `build/generated`. So
@@ -297,10 +294,9 @@ installers and both workflows compare it with a release's. Do not move to a
   changes. It goes by the build file, not by name alone, since a `build/` may
   be a project's own source. `scripts/e2e.sh` scenario 20 checks it.
 - **`test` exits 0 however many errors it found**, and with a profile it does
-  not know; only a component that does not exist exits 1. `fix` used to exit
-  1 whatever happened; with the image of 16 October (`sha256:4127439f`) it
-  exits 0 when it runs and 1 when it cannot start. Decide what happened from
-  the output, or by analyzing again.
+  not know; only a component that does not exist exits 1. `fix` exits 0 when
+  it runs and 1 when it cannot start. Decide what happened from the output,
+  or by analyzing again.
 - **A fixer that cannot run looks like one that changed nothing**, and one
   that lies looks like one that worked. Two defences, both needed:
   - A fixer that *fails* says so on stdout: `Could not apply fixer for error
@@ -309,21 +305,16 @@ installers and both workflows compare it with a release's. Do not move to a
   - A fixer that *exits 0 having done nothing* says nothing. Only analyzing
     again catches it, so a repair is always followed by another analysis.
     Never report a repair from the list of fixers that were run, nor from
-    a finding's status in `fix --report`'s JSON: a fixer that clears every
-    finding of its rule in a file marks one `fixed` and the rest
-    `unattempted` (4 of 26 `EmptyLinesInMethod` on PetClinic, image of 29
-    October 17:29, `sha256:05a1f4a4`). That image's `remaining` is an
-    analysis (`remainingVerified`; 1,432 and 1,406 in two rounds, the same
-    as a `test` after each), and `--dry-run` says `planned` or `skipped`
-    per finding, but plans every finding of a file where one run fixes only
-    the first rule (28 planned, 2 fixed).
-  Of the image's two jar fixers, `BracesForStatements` works (images of 28
-  and 29 October: it braces a classic `for`), and `FolderNameUnderscore`
-  renames `my_pkg` to `mypkg` and its files' `package` line, but no other
-  file's `import` of it (image of 30 October 12:49, `sha256:46f6caf2`): the
-  build breaks, the report says `fixed` and the analysis after it finds
-  nothing. Only the project's tests catch it, which is why a repair is
-  verified by them.
+    a finding's status in `fix --report`'s JSON or its "Errors fixed": a
+    fixer that clears every finding of its rule in a file marks one `fixed`
+    and the rest `unattempted`, one that says "no changes required" is
+    counted as fixing them all, and `--dry-run` plans findings one run never
+    reaches.
+  And a fixer can break the build and be right by Sheriff:
+  `FolderNameUnderscore` renames a package's folder and its files'
+  `package` line but no other file's `import` of it, and the analysis after
+  finds nothing. Only the project's tests catch that, which is why a repair
+  is verified by them.
 - **`fix -f` with no `--fixers` is not every fixer, nor only the state's.**
   Its default set leaves fixers out and runs some regardless of the state.
   With `--fixers A,B` it runs only those. So `sheriff_fix` with no arguments
@@ -331,24 +322,23 @@ installers and both workflows compare it with a release's. Do not move to a
   while the count drops: one call, the same end state every time.
 - **`fix` is recursive unless told not to**: after its fixers it analyzes
   again and repairs what it finds, so a finding taken out of the record it
-  reads comes back and is repaired anyway (image of 3 November, 18:51,
-  `sha256:72dafc66`: given only a tab's finding, it repaired the comment's
-  lines taken out too; with `--disable-recursive`, only the tab). So
+  reads comes back and is repaired anyway (given only a tab's finding, it
+  repaired the comment's lines taken out too; measured). So
   `SheriffRepair` passes `--disable-recursive` to every `fix`: its own
   rounds repair again, each measured by an analysis.
 - **A bad `--test` profile exits 0 too**, printing a usage banner to stdout
   and the reason to stderr. Locating the findings array by the first `[`
   parses the banner instead. So does a `fix` argument it refuses, among
-  them `--type DETERMINISTIC` as its help lists it (image of 26 October):
-  `SheriffRepair` passes `--type deterministic`, lower case, as `fix` would
-  run its AI fixer too with credentials within reach, and a `fix` that
-  answers with the banner did not run. With `sha256:05a1f4a4` a `fix` with
-  no `--type` does the same, as `all` needs `--ai-provider`.
+  them `--type DETERMINISTIC` as its help lists it, and no `--type` at all,
+  as `all` needs `--ai-provider`: `SheriffRepair` passes
+  `--type deterministic`, lower case, as `fix` would run its AI fixer too with
+  credentials within reach, and a `fix` that answers with the banner did not
+  run.
 - **`test` and `fix` take a GitHub token only as `--github-token`**, not
   from the environment, and without one skip the checks of a `pom.xml`'s
   dependencies on GitHub Packages; one not of GitHub's form
   (`GitHubToken`'s pattern) makes them print the usage banner and exit 0,
-  running nothing (image of 2 November, `sha256:1522c9a2`). So
+  running nothing. So
   `SheriffContainer` passes `GITHUB_TOKEN`, when it has that form, in
   `@/data/sheriff-arguments`, a file of arguments Sheriff reads as its own
   (JCommander's `@`), owner-only in the state folder and deleted after the
@@ -362,10 +352,10 @@ installers and both workflows compare it with a release's. Do not move to a
   `COMMAND: node ...` line each, before any findings; the analyzer drops
   them, or a clean TypeScript run reads as "not JSON".
 - **Sheriff finds its TypeScript analyzer in `./node_modules`**, under `/`,
-  so `SheriffContainer` runs it with `--workdir /`. The image of 29 October
-  (`sha256:e03d9daf`) declares `WORKDIR /data`, and there every TypeScript
-  analysis reported 0 errors and exited 0, Node's "Cannot find module" on
-  stdout; `scripts/e2e.sh` scenarios 9 and 10 catch it.
+  so `SheriffContainer` runs it with `--workdir /`: the image declares
+  `WORKDIR /data`, where every TypeScript analysis reports 0 errors and exits
+  0, Node's "Cannot find module" on stdout. `scripts/e2e.sh` scenarios 9 and
+  10 catch it.
 - **Every run drops three `sheriff_*.json` files at the root of the mount**,
   which is the component's state folder,
   `${XDG_CACHE_HOME:-~/.cache}/sheriff-mcp/state/<digest of its path>`
@@ -379,10 +369,9 @@ installers and both workflows compare it with a release's. Do not move to a
   is the fallback) and `sheriff_tracked_files.json` gives
   `AnalysisResult.trackedFiles`, whose hashes name what a repair changed
   (`changedSince`); both can be exported. `sheriff_summary.json` is always
-  `{ }` and ignored. Newer images also leave `sheriff_history.json` (every
-  run appended) and, since 29 October, `sheriff_tracked_components.json` (a
-  hash per component); they stay in the state folder, as a run with them
-  kept found the same errors (measured).
+  `{ }` and ignored. `sheriff_history.json` (every run appended) and
+  `sheriff_tracked_components.json` (a hash per component) stay in the state
+  folder, as a run with them kept found the same errors (measured).
 - **Sheriff is incremental, so its state is cleared *before* every run too.**
   It skips every file whose hash is in `sheriff_tracked_files.json`, which
   records no profile and no rule version: state left by one profile makes the
@@ -411,8 +400,7 @@ installers and both workflows compare it with a release's. Do not move to a
   architecture must add checks, never take the base ones away.
 
 - **The image has a `metrics` command** (`--coverage`, `--mutation`,
-  `--crap`, `--complexity`; image of 16 October), which this repository does
-  not use. It refuses to start without `--token`, a GitHub Packages token it
+  `--crap`, `--complexity`), which this repository does not use. It refuses to start without `--token`, a GitHub Packages token it
   writes into a Maven `settings.xml` and an `.npmrc` for Kaizten's private
   packages; it measures whole components, not a change; its mutation runs the
   PIT a project's `pom.xml` configures, found through `help:effective-pom`;
@@ -422,8 +410,8 @@ installers and both workflows compare it with a release's. Do not move to a
 
 ## The rule catalog is the spine
 
-Sheriff ships no rule documentation. `rules_catalog.json` (about 530 rules,
-under a hundred with a deterministic fixer) is **extracted from the image**
+Sheriff ships no rule documentation. `rules_catalog.json` (several hundred rules,
+some with a deterministic fixer) is **extracted from the image**
 by the agent:
 
 ```bash
@@ -495,44 +483,44 @@ sets it for every scenario but 24, which checks the default.
 (`Settings`, its catalog in `src/main/resources/settings.tsv`, a line per
 setting): an environment variable, then the project's `.sheriff.properties`,
 then `${XDG_CONFIG_HOME:-~/.config}/sheriff-mcp/sheriff.properties` (under
-`APPDATA` on Windows), then the default. `McpConfig` and `Configuration` layer
-their environment through it, so every setting read as a variable is a
-setting. The user's file is found only through the environment given, as the
-cache is, so a test built from a bare map reads no one's file; the server
-writes it at its defaults, every line commented out, when it starts and finds
-none, and when it finds one adds at its end, the same way, the settings it
-does not name, so one a newer version brings is listed too; nothing in it is
-touched. Settings a cloned project must not choose for whoever opens it
-(`AI_BACKEND`) are read from the user's file only. Variables were the only way
-before, and Codex passes a server and its hooks almost none. `SHERIFF_IMAGE`
-is no setting for now (Kaizten's call): a variable alone, for development and
-CI, so a file that sets it is told it does nothing; the catalog's
-`project:<image>` scope, which let a project's file set only Kaizten's image,
-stays in `Setting` for when it comes back. `sheriff_config`
-(and `--config`, `--config NAME=VALUE [--project]`) lists them with their
-source and changes one, checking the value first. `--config-ui`, and
-`sheriff_config` with `page`, serve the same as a page (`SettingsPage`, the
-catalog's `## Title` lines its sections and its fifth field each setting's
-name for people, in English and in Spanish from `settings-page-es.tsv`, which
-`SettingsTranslationTest` holds to the catalog's settings and sections) through
-`Settings.change`, on
-`127.0.0.1` under a random token, refusing a foreign `Host` or `Origin` and a
-change that is not JSON, as the files name where code is sent and which image
-runs; it is started from a daemon thread, as the JDK's `HttpServer` dispatcher
-otherwise keeps the JVM alive after the session ends (measured), and closes
-with its Close button, after `SettingsPage.IDLE_LIMIT` unused, or with
-`Tools.close`. `sheriff_config`'s listing and its page answer name the command
-that opens the page (`SettingsPage.openCommand`: the Java and the jar running),
-so a user who asks the assistant how to configure Sheriff is told what to type.
-The API keys are never settings: a variable alone. A value in a file that its setting does not take, a name that is
-no setting, or a user's setting in a project's file is ignored and named
-(`Settings.problems`), by the listing and once a session by the tools'
-answers. The Maven plugin reads the `.sheriff.properties` at the top of its
-build (`SheriffMojo.settingsProject`) and never the user's file, so CI and
-the tools agree on a pinned image; a project's own threshold keys (`coverage=` and the rest) are
-checked as their settings are, and one they do not take is passed over too. A bad variable is named too but left to what reads it, as some
-refuse to start on one. `sheriff_config` is not among the tools the
-installers allow without asking, as it writes the user's files.
+`APPDATA` on Windows), then the default; files, as Codex passes a server and
+its hooks almost no variables. `McpConfig` and `Configuration` layer their
+environment through it, and find the user's file only through the
+environment given, so a test built from a bare map reads no one's file. The
+server writes that file at its defaults, every line commented out, when it
+finds none, and adds at its end the settings it does not name, so a newer
+version's are listed too; nothing else in it is touched.
+
+- Settings a cloned project must not choose for whoever opens it
+  (`AI_BACKEND`, `SHERIFF_REPORT`) are read from the user's file only.
+- `SHERIFF_IMAGE` is no setting for now (Kaizten's call): a variable alone,
+  for development and CI, and a file that sets it is told it does nothing.
+  The catalog's `project:<image>` scope stays in `Setting` for when it comes
+  back. The API keys and `GITHUB_TOKEN` are never settings either.
+- A value its setting does not take, a name that is no setting, or a user's
+  setting in a project's file is ignored and named (`Settings.problems`), by
+  the listing and once a session by the tools' answers. A bad variable is
+  named too but left to what reads it, as some refuse to start on one.
+- `sheriff_config` (and `--config`, `--config NAME=VALUE [--project]`) lists
+  them with their source and changes one, checking the value first. It is not
+  among the tools the installers allow without asking, as it writes the
+  user's files. Its listing names the command that opens the page
+  (`SettingsPage.openCommand`), so a user who asks how to configure Sheriff
+  is told what to type.
+- `--config-ui`, and `sheriff_config` with `page`, serve the same as a page
+  (`SettingsPage`: the catalog's `## Title` lines are its sections, its fifth
+  field each setting's name for people, in Spanish from
+  `settings-page-es.tsv`, which `SettingsTranslationTest` holds to the
+  catalog). It changes through `Settings.change`, on `127.0.0.1` under a
+  random token, refusing a foreign `Host` or `Origin` and a change that is
+  not JSON, as the files name where code is sent and which image runs. It
+  runs on a daemon thread, as the JDK's `HttpServer` dispatcher otherwise
+  keeps the JVM alive (measured), and closes with its Close button, after
+  `SettingsPage.IDLE_LIMIT` unused, or with `Tools.close`.
+- The Maven plugin reads the `.sheriff.properties` at the top of its build
+  (`SheriffMojo.settingsProject`) and never the user's file, so CI and the
+  tools agree on a pinned image; a project's threshold keys (`coverage=` and
+  the rest) are checked as their settings are.
 
 **A project declares its profile once, and the plugin and the MCP must agree
 on where** (`DeclaredProfile`): the `sheriff.profile` property of a
@@ -544,25 +532,25 @@ single-module project ignores its parent, which is its siblings' too. **No
 rule can be taken out**: an exclusion added on a model's claim of a conflict
 was measured and withdrawn. `KnownFalsePositives`, inside the one analyzer,
 drops only findings measured wrong, each on what the source shows, never a
-rule: `FilenamePascalCase` on `package-info.java` and `module-info.java`,
-names Java requires; and, since the image of 29 October,
-`FourSpaceIndentation` on a comment's `*` lines and inside a text block,
-`JavaVariableName` on a `static final` constant and `UnusedImport` on an
-import used as an annotation. On this repository's code, clean under the
-image of 28 October, those three were 13,981 of 14,879 errors under the new
-one, and every `UnusedImport` of the plugin. Since the image of 2 November,
-`JavaBracePlacement` on a switch expression's closing brace alone on its line
-but for its `;`, which the rule flagged on every one, assigned or returned
-(measured). And `JavaPomOutdatedDependency` on a dependency of
-`org.apache.maven` in a `pom.xml` packaged as `maven-plugin`, the Maven the
-plugin requires (see below). A line it cannot read keeps its finding. Its findings are also
-taken out of the record `fix` reads (`SheriffRepair`, through
-`withholdFromState`), as a fixer given one changes code that was right:
-`FourSpaceIndentation`'s fixer takes the space before the `*` of a `/* */`
-comment away. Since the image of 3 November, 18:51 (`sha256:72dafc66`), it
-repairs only the line it is given, so with `fix` not recursive no comment is
-touched (PetClinic: 0 of the 280 lines, 1,154 of 1,368 errors repaired in
-4:41; recursive, 200 lines, and cut at 50 minutes; measured).
+rule; a line it cannot read keeps its finding. It drops:
+
+- `FilenamePascalCase` on `package-info.java` and `module-info.java`, names
+  Java requires;
+- `FourSpaceIndentation` on a comment's `*` lines and inside a text block;
+- `JavaVariableName` on a `static final` constant;
+- `UnusedImport` on an import used as an annotation;
+- `JavaBracePlacement` on a switch expression's closing brace alone on its
+  line but for its `;`;
+- `JavaPomOutdatedDependency` on a dependency of `org.apache.maven` in a
+  `pom.xml` packaged as `maven-plugin`, the Maven the plugin requires (see
+  below).
+
+When an image brought the middle three, they were 13,981 of this repository's
+14,879 errors. They are also taken out of the record `fix` reads
+(`SheriffRepair`, through `withholdFromState`), as a fixer given one changes
+code that was right: `FourSpaceIndentation`'s takes the space before the `*`
+of a `/* */` comment away. As it repairs only the line it is given, and `fix`
+runs not recursive, no comment is touched (measured on PetClinic).
 
 ## The MCP's answers
 
@@ -625,26 +613,21 @@ are left they get a last round of their own; at three the step is to tell the
 user each one and why it cannot be fixed (`NextStep.afterExhausted`). When the
 Stop hook's stops with nothing changed run out, the errors still there are
 left for the end at once. A component whose only errors are left for the end
-does not block an edit at the gate nor send a turn back: a checker's false
-positive (the names Jackson's imported BOM brought into this repository's
-`pom.xml`, until the image of 20 October) held up every new file and every
-turn. A verdict that stopped at the first error knows only one,
-so it never counts as only deferred.
+does not block an edit at the gate nor send a turn back, as one false
+positive of the checker held up every new file and every turn. A verdict
+that stopped at the first error knows only one, so it never counts as only
+deferred.
 
 **A repair of Sheriff's that was undone is not made again.** The same record
 keeps the errors Sheriff's fixers removed; one of them back later had its
-repair undone, which a model does when the repair broke the build, and
-every `sheriff_fix` made it again, as an error a repair removes never counts
-as an attempt. Such an error is left for the end at once, so it
-blocks neither the gate nor the Stop hook, and `SheriffRepair` takes it out
-of `sheriff_errors.json` before every `fix`: `fix` repairs only what that
-record holds, and with a finding taken out neither the default set nor
-`--fixers` naming its rule touched its file (measured on PetClinic, image of
-20 October). The answer names it. Tests that fail after a repair that changed
-nothing name the files an earlier repair of the session changed
-(`AnswerMemory`), and a failed build is shown by `BuildOutput.excerpt`: the
-lines that say why, then its end, as Maven puts the cause first and the
-answer used to show only the class path that follows it.
+repair undone, which a model does when the repair broke the build. Such an
+error is left for the end at once, so it blocks neither the gate nor the
+Stop hook, and `SheriffRepair` takes it out of `sheriff_errors.json` before
+every `fix`, which repairs only what that record holds (measured). The
+answer names it. Tests that fail after a repair that changed nothing name
+the files an earlier repair of the session changed (`AnswerMemory`), and a
+failed build is shown by `BuildOutput.excerpt`: the lines that say why, then
+its end, as Maven puts the cause first.
 
 **A clean component is not finished while a method the change added has no
 test** (`UntestedMethods`): a non-private method with a body in `src/main`
@@ -663,9 +646,9 @@ lines run and branches taken (JaCoCo) and PIT mutants killed
 `sheriff.coverage`, `sheriff.branches` and `sheriff.mutation` where the
 profile is). Branches, as a line run says nothing of the other way its
 condition goes. The mutators are `STRONGER,REMOVE_CONDITIONALS,
-EXPERIMENTAL_ARGUMENT_PROPAGATION` (`sheriff.mutators`): `ALL` made 497
-mutants on PetClinic's `owner` package to their 204, mostly constants no test
-kills; PIT 1.30 no longer has the operand mutators (`AOD`, `ROR`, `UOI`). Only the change, as an old project's coverage would fail every
+EXPERIMENTAL_ARGUMENT_PROPAGATION` (`sheriff.mutators`): `ALL` makes more
+than twice the mutants, mostly constants no test kills, and PIT 1.30 has no
+operand mutators. Only the change, as an old project's coverage would fail every
 change and PIT on a whole project takes hours. The clean step sends the model
 to `sheriff_fix` with `verify` instead of to the tests, as only that measures;
 the Stop hook measures too, with the tests on. Both tools run through the
@@ -674,8 +657,7 @@ line runs no JUnit 5 test, so PIT's JUnit 5 plugin goes in as
 `additionalClasspathElements`, only when a test imports `org.junit.jupiter`,
 since with JUnit 4 alone it stops PIT (measured on Maven 3.10). PIT runs the
 tests in its own runner, without surefire's configuration, and refuses a suite
-with one that fails there ("Tests failing without mutation"), as this
-repository's did over `sheriff.state.home`. So surefire's
+with one that fails there ("Tests failing without mutation"). So surefire's
 `systemPropertyVariables`, from `help:effective-pom` (inherited and
 resolved), go to PIT as its `argLine`; PIT splits that at every space, quotes
 or not, and its test process dies on a value with one, so such a value is
@@ -693,11 +675,9 @@ and word its outcome): Sheriff's default set, then `--fixers` with every rule
 found, again for each profile whose count the round before lowered, until a
 round repairs nothing (`SHERIFF_REPAIR_ROUNDS` sets a limit), each round's
 analysis measuring the one before. It always ends, as a round runs only when
-the count dropped. The limit of three it used to have did not bind on
-PetClinic (290 errors to 241 in three rounds, the third repairing nothing,
-with and without it), but fixers that make room for each other can need more,
-and each round past the limit was work left to a model. The answer says how
-many rounds ran when there were several. A `fix` that
+the count dropped, and has no limit by default, as fixers that make room for
+each other can need many rounds and each one past a limit is work left to a
+model. The answer says how many rounds ran when there were several. A `fix` that
 did not run is a failure, not a repair that found nothing.
 `DeterministicFixerTests` checks the loop and `sheriff_fix` give Sheriff the
 same commands.
@@ -767,8 +747,9 @@ and `SheriffContainer` removes the run's container, which outlives a killed
 `docker run`. Claude Code sends it when its user presses Esc during a call and
 when a call outlasts its time limit (2.1.318); Codex sent none when a call
 outlasted its `tool_timeout_sec` (0.164), and its Esc was not measured.
-`scripts/e2e.sh` scenario 26 cancels a `sheriff_fix`: before this, it went on
-to start three more containers and answered. Background tasks run on one daemon thread;
+`scripts/e2e.sh` scenario 26 cancels a `sheriff_fix`.
+
+Background tasks run on one daemon thread;
 when the client disconnects the server waits for them. A client that stops
 the server instead (Codex sends SIGTERM to the process group, then SIGKILL
 about 0.3 s later) triggers a shutdown hook that records every unfinished
@@ -780,18 +761,18 @@ and moved into place.
 Every Sheriff run holds `MountLock` for its component, across threads and
 processes, with the whole `test`, `fix`, `test` sequence held at once, since
 Sheriff keeps its state in the component's state folder; two components, or
-two single-module projects in one folder, no longer wait for each other. The
-lock files, the record of verdicts (`VerdictCache`), and the
-markers the hooks leave for their next run, live in a folder of the temporary
-directory per user (`TemporaryFolders`; under `sheriff.temp.home` in the
-tests, which left a hundred lock files there each run). Markers older than a week are pruned
-when their folder is written; lock files never are.
+two single-module projects in one folder, do not wait for each other. The
+lock files, the record of verdicts (`VerdictCache`), and the markers the
+hooks leave for their next run live in a folder of the temporary directory
+per user (`TemporaryFolders`; under `sheriff.temp.home` in the tests).
+Markers older than a week are pruned when their folder is written; lock
+files never are.
 
 ## Windows
 
-**It is written to run on Linux, macOS and Windows**, but CI no longer builds
+**It is written to run on Linux, macOS and Windows**, but CI does not build
 on Windows (see CI and releases), and when it did it had no Docker and no
-assistant, so nothing below ever showed in it. What
+assistant, so nothing below was ever checked there. What
 differs lives in `Platform`: `cmd.exe /c` instead of `/bin/sh -c` for the
 project's tests, paths compared with Sheriff's and git's always written with
 `/` (never compare `Path.toString()` with a path Sheriff or git wrote),
@@ -809,9 +790,8 @@ as npm's `claude.cmd` found on the `PATH`. The end-to-end job stays on Linux.
   inside an argument for the program to end the argument at. So
   `SystemProcessRunner` quotes every argument holding one by the rules C
   programs read (`Platform.quotedForCommandLine`), except for `cmd.exe` and
-  `.cmd`/`.bat`, which read their own way. Without it the extractor's
-  `sh -c` scripts reached the container cut, so no catalog was ever
-  extracted on Windows, and a mount with a comma lost its quotes.
+  `.cmd`/`.bat`, which read their own way: without it the extractor's
+  `sh -c` scripts reached the container cut.
 - **Every shell is a different one.** The server and the hooks run commands
   through `cmd.exe`, Claude Code runs its Bash tool in Git Bash, Codex runs
   PowerShell (5.1 for hooks). A command a model is told to run
@@ -848,16 +828,14 @@ Kaizten's rules are not a convention to interpret — they are compiled into
 the image as profiles. When writing code here:
 
 - **Both modules must stay green under `JAVA`.** Check before finishing, and
-  prefer the plugin's own goal for the plugin. Since the image of 19
-  October, `JAVA` checks `pom.xml` too, and its outdated-dependency rule
-  asks the network, so a new release anywhere can turn a module red with no
-  change here. On the plugin it flags `maven-core` and `maven-plugin-api`,
-  whose version is the oldest Maven the plugin runs on, as
-  maven-plugin-plugin writes it into the descriptor (3.10.0 refused Maven
-  3.9). Since the image of 3 November, 18:51 (`sha256:72dafc66`), its fixer
-  applies and would write `maven.version` 3.10.0 (measured), so
-  `KnownFalsePositives` drops that rule on a dependency of `org.apache.maven`
-  in a `pom.xml` packaged as `maven-plugin`, and both modules report 0.
+  prefer the plugin's own goal for the plugin. `JAVA` checks `pom.xml` too,
+  and its outdated-dependency rule asks the network, so a new release
+  anywhere can turn a module red with no change here. On the plugin it flags
+  `maven-core` and `maven-plugin-api`, whose version is the oldest Maven the
+  plugin runs on, as maven-plugin-plugin writes it into the descriptor
+  (3.10.0 refused Maven 3.9), and its fixer would write `maven.version`
+  3.10.0 (measured): `KnownFalsePositives` drops that rule there, and both
+  modules report 0.
 - **JavaDoc is at least three lines** (`/**`, text, `*/`, each on its own
   line) on every method, constructor and field, with `@param` and `@return`.
   No hardcoded strings or numbers in a call, braces on every branch, imports
@@ -978,12 +956,11 @@ holds. `scripts/e2e.sh` scenario 22 checks `final` against a check after.
 **Runs are compared in the jar, not in a script** (`ReportComparison`,
 `--compare-reports PATH... [--csv DIR]`): reports grouped by project
 (component and commit), backend, model and strategy, the mean of the runs,
-with cost per repair as totals divided, by run, and by rule. One
-implementation, as `scripts/benchmark.sh` hands its runs to it instead of its
-own Python, which had drifted (its false-positive filter knew one of the
-four `KnownFalsePositives` drops) and needed a final `--check-only` the report
-now makes unnecessary. `--repo PATH[:COMPONENT]` benchmarks a local project,
-cloned at its HEAD for every run.
+with cost per repair as totals divided, by run, and by rule.
+`scripts/benchmark.sh` hands its runs to it rather than compare them itself,
+so there is one implementation, which drops the same false positives as the
+analyzer. `--repo PATH[:COMPONENT]` benchmarks a local project, cloned at its
+HEAD for every run.
 
 **A session of the MCP server is reported too**, with the same setting
 (`SessionReport`, `McpServer.sessionReport`): `JsonRpcServer.onClient` hands
@@ -1006,7 +983,7 @@ still offered; the cap is counted per rule's batches of files.
 pass's errors on top of either: whole files while they fit, a file that alone
 has more giving its first ones, so a pass of one huge file is still small. The
 cap then counts the passes the errors need too, and with no cap on the files
-only those, as the fallback the grouping gives alone grew the cap every pass.
+only those.
 
 **The iteration cap grows while the passes make progress**, unless one was
 given (`--max-iterations`, `max_iterations` in `sheriff_autofix`). The first
