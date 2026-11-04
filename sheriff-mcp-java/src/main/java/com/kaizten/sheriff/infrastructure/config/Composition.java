@@ -692,6 +692,7 @@ public final class Composition {
     Map<String, Object> reportContext(LoopSettings settings, boolean automaticRepair) {
         Map<String, Object> tools = new LinkedHashMap<>();
         tools.put(VERSION_FIELD, ServerVersion.current());
+        tools.put(COMMIT_FIELD, ServerVersion.commit());
         Map<String, Object> project = new LinkedHashMap<>();
         project.put(REPOSITORY_FIELD, configuration.targetRepository().toString());
         project.put(COMPONENT_FIELD, configuration.component());

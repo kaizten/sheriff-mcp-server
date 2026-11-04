@@ -38,6 +38,8 @@
         <jackson.version>2.22.4</jackson.version>
         <surefire.version>3.2.5</surefire.version>
         <shade.version>3.5.3</shade.version>
+        <!-- Writes the commit a jar is built from beside its version. -->
+        <git-commit-id.version>10.0.1</git-commit-id.version>
         <!-- The version ChangeCoverage measures a change with, so both agree. -->
         <jacoco.version>0.8.15</jacoco.version>
     </properties>
@@ -99,6 +101,37 @@
             </resource>
         </resources>
         <plugins>
+            <!--
+              The commit a jar is built from: a version stays the same for
+              every commit until the next release, so two jars of different
+              code said they were the same. Through git itself, which reads a
+              worktree as a clone; a build with no git, or no repository, as
+              in the image's, records none.
+            -->
+            <plugin>
+                <groupId>io.github.git-commit-id</groupId>
+                <artifactId>git-commit-id-maven-plugin</artifactId>
+                <version>${git-commit-id.version}</version>
+                <executions>
+                    <execution>
+                        <id>commit</id>
+                        <phase>initialize</phase>
+                        <goals>
+                            <goal>revision</goal>
+                        </goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <useNativeGit>true</useNativeGit>
+                    <failOnNoGitDirectory>false</failOnNoGitDirectory>
+                    <failOnUnableToExtractRepoInfo>false</failOnUnableToExtractRepoInfo>
+                    <generateGitPropertiesFile>false</generateGitPropertiesFile>
+                    <abbrevLength>7</abbrevLength>
+                    <includeOnlyProperties>
+                        <includeOnlyProperty>^git.commit.id.abbrev$</includeOnlyProperty>
+                    </includeOnlyProperties>
+                </configuration>
+            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>

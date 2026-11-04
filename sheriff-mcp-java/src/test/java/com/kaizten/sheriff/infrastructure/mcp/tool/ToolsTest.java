@@ -731,6 +731,7 @@ final class ToolsTest {
         String record = Files.readString(state.resolve("sheriff-mcp/tasks").resolve(id).resolve("task.json"));
 
         assertTrue(record.contains("\"server_version\" : \"" + ServerVersion.current() + "\""), record);
+        assertTrue(record.contains("\"server_commit\" : \"" + ServerVersion.commit() + "\""), record);
         assertTrue(record.contains("\"sheriff_image\" : \"kaizten/sheriff:latest\""), record);
         assertTrue(record.contains("\"sheriff_image_digest\" : \"sha256:abc\""), record);
     }
@@ -752,7 +753,7 @@ final class ToolsTest {
     void sheriffTaskWithNoIdSaysWhichVersionIsRunning() {
         String listing = tools(List.of()).call("sheriff_task", Map.of()).text();
 
-        assertTrue(listing.startsWith("sheriff-mcp " + ServerVersion.current() + ", running Sheriff's image "),
+        assertTrue(listing.startsWith("sheriff-mcp " + ServerVersion.described() + ", running Sheriff's image "),
                 listing);
         assertTrue(listing.contains("kaizten/sheriff"), listing);
     }

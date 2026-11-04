@@ -70,7 +70,7 @@ final class SheriffTaskTool {
         String id = ToolContext.textArgument(arguments, ID_ARGUMENT);
         if (id.isEmpty()) {
             String image = context.image().get().orElse(context.config().image());
-            return String.format(VERSION_LINE, ServerVersion.current(), image) + NEWLINE
+            return String.format(VERSION_LINE, ServerVersion.described(), image) + NEWLINE
                     + listing(context.tasks().all());
         }
         Optional<Task> task = context.tasks().find(id);
