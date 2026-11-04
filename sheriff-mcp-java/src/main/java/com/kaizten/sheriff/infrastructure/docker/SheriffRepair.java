@@ -61,6 +61,7 @@ public final class SheriffRepair {
     private static final String FIXERS_FLAG = "--fixers";
     private static final String TYPE_FLAG = "--type";
     private static final String DETERMINISTIC_TYPE = "deterministic";
+    private static final String NOT_RECURSIVE_FLAG = "--disable-recursive";
     private static final String USAGE_BANNER = "Usage: Sheriff";
     private static final String REFUSED_ARGUMENTS = "Sheriff refused the arguments of fix and gave no reason";
     private static final String URI_FLAG = "--uri";
@@ -242,6 +243,12 @@ public final class SheriffRepair {
      * it refuses (the help lists {@code DETERMINISTIC}, which it does not
      * take) prints the banner and exits 0.
      *
+     * <p>And never recursively: by default {@code fix} analyzes again after
+     * its fixers and repairs what it finds, which brings back every finding
+     * taken out of its record (image of 3 November, {@code sha256:72dafc66}:
+     * given only a tab's finding, it repaired the comment taken out too). The
+     * rounds here do that, each measured.
+     *
      * @param extraArguments what goes after the standard arguments
      * @return the fixers Sheriff said it could not apply, and why
      * @throws FixNotRun when the {@code fix} did not run
@@ -250,6 +257,7 @@ public final class SheriffRepair {
         List<String> arguments = new ArrayList<>(List.of(FIX_COMMAND,
                 APPLY_FLAG,
                 TYPE_FLAG, DETERMINISTIC_TYPE,
+                NOT_RECURSIVE_FLAG,
                 URI_FLAG, URI_ARGUMENT,
                 COMPONENT_FLAG, component));
         arguments.addAll(extraArguments);
