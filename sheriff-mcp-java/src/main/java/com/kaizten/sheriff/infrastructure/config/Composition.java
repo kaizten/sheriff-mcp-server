@@ -516,7 +516,7 @@ public final class Composition {
         }
         provisionedCatalog = CatalogProvisioning.choose(null, List.of(configuration.rulesCatalog()), cache.get(),
                 CatalogProvisioning.matching(processes, configuration.image()),
-                CatalogProvisioning.extraction(processes, configuration.image()));
+                CatalogProvisioning.extraction(processes, configuration.image(), configuration.dockerNetwork()));
         return Optional.empty();
     }
 
@@ -541,7 +541,7 @@ public final class Composition {
      * @return that extractor
      */
     public RuleCatalogExtractor ruleCatalogExtractor() {
-        return new RuleCatalogExtractor(processes, configuration.agentDirectory());
+        return new RuleCatalogExtractor(processes, configuration.agentDirectory(), configuration.dockerNetwork());
     }
 
     /**

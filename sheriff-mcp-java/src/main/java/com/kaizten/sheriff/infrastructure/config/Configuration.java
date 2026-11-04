@@ -27,6 +27,7 @@ import java.util.TreeMap;
  */
 public final class Configuration {
 
+    private static final String DOCKER_NETWORK = "SHERIFF_DOCKER_NETWORK";
     private static final String TARGET_REPOSITORY = "TARGET_REPO";
     private static final String IMAGE = "SHERIFF_IMAGE";
     private static final String TEST_TYPE = "SHERIFF_TEST_TYPE";
@@ -306,6 +307,18 @@ public final class Configuration {
      */
     public String pullPolicy() {
         return ImageProvisioning.policyIn(environment);
+    }
+
+    /**
+     * The Docker network the rule catalog is read out of the image on,
+     * from {@code SHERIFF_DOCKER_NETWORK}: a variable alone, for a host whose
+     * Docker cannot build its default bridge ({@code none} gets the
+     * extraction through, as reading the image needs no network).
+     *
+     * @return the network, empty for Docker's default
+     */
+    public Optional<String> dockerNetwork() {
+        return Optional.ofNullable(environment.get(DOCKER_NETWORK)).map(String::strip).filter(name -> !name.isEmpty());
     }
 
     /**

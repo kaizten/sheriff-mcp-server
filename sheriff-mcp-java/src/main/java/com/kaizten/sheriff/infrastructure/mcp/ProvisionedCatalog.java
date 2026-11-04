@@ -128,7 +128,7 @@ public final class ProvisionedCatalog implements RuleCatalog {
         String configured = config.configuredCatalog();
         Path byHand = configured.isEmpty() ? null : Path.of(configured);
         Predicate<Path> fresh = CatalogProvisioning.matching(processes, config.image());
-        CatalogExtraction extraction = CatalogProvisioning.extraction(processes, config.image());
+        CatalogExtraction extraction = CatalogProvisioning.extraction(processes, config.image(), config.dockerNetwork());
         Supplier<CompletableFuture<Path>> provision = () -> imageReady.thenApplyAsync(ignored ->
                 CatalogProvisioning.choose(byHand, config.catalogCandidates(), cache, fresh, extraction));
         Predicate<Path> usable = byHand != null ? catalog -> true : catalog -> Files.isRegularFile(catalog) && fresh.test(catalog);

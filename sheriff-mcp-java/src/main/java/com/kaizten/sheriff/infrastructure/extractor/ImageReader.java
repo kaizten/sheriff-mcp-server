@@ -7,6 +7,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Reads the Sheriff image itself, using only tooling the image already ships —
@@ -91,23 +92,38 @@ public final class ImageReader {
     private static final String HELP_FLAG = "--help";
     private static final String FAILED = "Could not read the image: %s";
     private static final String NETWORK_FLAG = "--network";
-    private static final String NETWORK_VARIABLE = "SHERIFF_DOCKER_NETWORK";
     private static final int AFTER_REMOVE_FLAG = 3;
     private final ProcessRunner processes;
     private final String image;
     private final Path workingDirectory;
+    private final Optional<String> network;
 
     /**
-     * Wires the reader to an image.
+     * Wires the reader to an image, run on Docker's default network.
      *
      * @param processes how to run Docker
      * @param image the Sheriff image to read
      * @param workingDirectory where to run Docker from
      */
     public ImageReader(ProcessRunner processes, String image, Path workingDirectory) {
+        this(processes, image, workingDirectory, Optional.empty());
+    }
+
+    /**
+     * Wires the reader to an image, run on a network of its own when one is
+     * given ({@code SHERIFF_DOCKER_NETWORK}, read by whoever has the
+     * environment, never here).
+     *
+     * @param processes how to run Docker
+     * @param image the Sheriff image to read
+     * @param workingDirectory where to run Docker from
+     * @param network the network to run on, empty for Docker's default
+     */
+    public ImageReader(ProcessRunner processes, String image, Path workingDirectory, Optional<String> network) {
         this.processes = processes;
         this.image = image;
         this.workingDirectory = workingDirectory;
+        this.network = network.map(String::strip).filter(name -> !name.isEmpty());
     }
 
     /**
@@ -240,13 +256,12 @@ public final class ImageReader {
      * @param command the command line, which starts with docker run --rm
      * @return that command line, carrying --network when one is configured
      */
-    private static List<String> withNetwork(List<String> command) {
-        String network = System.getenv(NETWORK_VARIABLE);
-        if (network == null || network.isBlank()) {
+    private List<String> withNetwork(List<String> command) {
+        if (network.isEmpty()) {
             return command;
         }
         List<String> networked = new ArrayList<>(command);
-        networked.addAll(AFTER_REMOVE_FLAG, List.of(NETWORK_FLAG, network.strip()));
+        networked.addAll(AFTER_REMOVE_FLAG, List.of(NETWORK_FLAG, network.get()));
         return List.copyOf(networked);
     }
 }

@@ -7,6 +7,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Pulls Sheriff's whole rule catalog out of its image and writes it down.
@@ -44,16 +45,29 @@ public final class RuleCatalogExtractor {
     private final ProcessRunner processes;
     private final CatalogWriter writer = new CatalogWriter();
     private final Path workingDirectory;
+    private final Optional<String> network;
 
     /**
-     * Wires the extractor.
+     * Wires the extractor, reading the image on Docker's default network.
      *
      * @param processes how to run Docker
-     * @param workingDirectory where to run it from
+     * @param workingDirectory where to run Docker from
      */
     public RuleCatalogExtractor(ProcessRunner processes, Path workingDirectory) {
+        this(processes, workingDirectory, Optional.empty());
+    }
+
+    /**
+     * Wires the extractor, reading the image on the network given.
+     *
+     * @param processes how to run Docker
+     * @param workingDirectory where to run Docker from
+     * @param network the network to read it on, empty for Docker's default
+     */
+    public RuleCatalogExtractor(ProcessRunner processes, Path workingDirectory, Optional<String> network) {
         this.processes = processes;
         this.workingDirectory = workingDirectory;
+        this.network = network;
     }
 
     /**
@@ -67,7 +81,7 @@ public final class RuleCatalogExtractor {
      */
     public List<CatalogEntry> extract(String image, Path jsonPath, Path markdownPath) throws IOException {
         System.out.printf(READING, image);
-        ImageReader reader = new ImageReader(processes, image, workingDirectory);
+        ImageReader reader = new ImageReader(processes, image, workingDirectory, network);
         String treeJson = "";
         List<String> profileNames = List.of();
         try {
