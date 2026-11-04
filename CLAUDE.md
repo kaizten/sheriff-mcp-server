@@ -740,7 +740,17 @@ at a time in order, so a `ping` or a `tools/list` is answered while Sheriff
 or the tests run; `sheriff_guidelines` and `sheriff_task`, which run neither
 (`Tools.answersAtOnce`), have a second thread, so they never wait behind a
 long analysis. Responses are written whole, and when the input ends the calls
-already read are answered first. Background tasks run on one daemon thread;
+already read are answered first. A `notifications/cancelled` stops the call it
+names: one still queued never starts, one running has its thread interrupted
+and is not answered, as MCP asks. An interrupted thread starts no command, and
+`SystemProcessRunner` kills a command whose wait is interrupted or times out
+with every process it started (a shell's child outlived the shell, measured),
+and `SheriffContainer` removes the run's container, which outlives a killed
+`docker run`. Claude Code sends it when its user presses Esc during a call and
+when a call outlasts its time limit (2.1.318); Codex sent none when a call
+outlasted its `tool_timeout_sec` (0.164), and its Esc was not measured.
+`scripts/e2e.sh` scenario 26 cancels a `sheriff_fix`: before this, it went on
+to start three more containers and answered. Background tasks run on one daemon thread;
 when the client disconnects the server waits for them. A client that stops
 the server instead (Codex sends SIGTERM to the process group, then SIGKILL
 about 0.3 s later) triggers a shutdown hook that records every unfinished

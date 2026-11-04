@@ -11,6 +11,8 @@ import com.kaizten.sheriff.infrastructure.mcp.ServerVersion;
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.OutputStream;
+import java.io.PipedReader;
+import java.io.PipedWriter;
 import java.io.PrintStream;
 import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
@@ -292,5 +294,134 @@ final class JsonRpcServerTest {
                 "0.160.0"))));
         named.handle(request("initialize", Map.of()));
         assertEquals(List.of("codex-mcp-client 0.160.0", " "), told);
+    }
+
+    /**
+     * A stream that keeps every line written to it.
+     */
+    private static PrintStream recording(List<String> lines) {
+        return new PrintStream(new OutputStream() {
+            private final StringBuilder line = new StringBuilder();
+
+            @Override
+            public void write(int character) {
+                if (character != '\n') {
+                    line.append((char) character);
+                    return;
+                }
+                lines.add(line.toString());
+                line.setLength(0);
+            }
+        }, true, StandardCharsets.UTF_8);
+    }
+
+    private static String call(int id, String tool) {
+        return "{\"jsonrpc\":\"2.0\",\"id\":" + id + ",\"method\":\"tools/call\",\"params\":{\"name\":\"" + tool
+                + "\"}}\n";
+    }
+
+    private static String cancel(int id) {
+        return "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":" + id
+                + ",\"reason\":\"AbortError: user-cancel\"}}\n";
+    }
+
+    @Test
+    @DisplayName("a call the client cancels while it runs is interrupted and not answered, and the next one runs "
+            + "with no interrupt left over")
+    void aRunningCallThatIsCancelledIsInterruptedAndNotAnswered() throws Exception {
+        CountDownLatch started = new CountDownLatch(1);
+        List<String> seen = new CopyOnWriteArrayList<>();
+        JsonRpcServer server = new JsonRpcServer(List::of, (name, arguments) -> {
+            if (name.equals("next")) {
+                seen.add("next, interrupted: " + Thread.currentThread().isInterrupted());
+                return new ToolOutcome("next", false);
+            }
+            started.countDown();
+            try {
+                new CountDownLatch(1).await(10, TimeUnit.SECONDS);
+                seen.add("slow ran to its end");
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                seen.add("slow interrupted");
+            }
+            return new ToolOutcome("slow", false);
+        }, "sheriff");
+        List<String> lines = new CopyOnWriteArrayList<>();
+        PipedWriter client = new PipedWriter();
+        PipedReader input = new PipedReader(client);
+        Thread serving = new Thread(() -> {
+            try {
+                server.serve(new BufferedReader(input), recording(lines));
+            } catch (java.io.IOException exception) {
+                lines.add("serve failed: " + exception.getMessage());
+            }
+        });
+        serving.start();
+
+        client.write(call(1, "slow"));
+        client.flush();
+        assertTrue(started.await(10, TimeUnit.SECONDS));
+        client.write(cancel(1) + call(2, "next"));
+        client.close();
+        serving.join(TimeUnit.SECONDS.toMillis(10));
+
+        assertEquals(List.of("slow interrupted", "next, interrupted: false"), seen);
+        assertEquals(1, lines.size(), lines.toString());
+        assertTrue(lines.get(0).contains("\"id\":2"), lines.toString());
+    }
+
+    @Test
+    @DisplayName("a call the client cancels while it waits behind another never runs, and is not answered")
+    void aQueuedCallThatIsCancelledNeverRuns() throws Exception {
+        CountDownLatch started = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        List<String> ran = new CopyOnWriteArrayList<>();
+        JsonRpcServer server = new JsonRpcServer(List::of, (name, arguments) -> {
+            ran.add(name);
+            started.countDown();
+            try {
+                release.await(10, TimeUnit.SECONDS);
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+            }
+            return new ToolOutcome(name, false);
+        }, "sheriff");
+        List<String> lines = new CopyOnWriteArrayList<>();
+        PipedWriter client = new PipedWriter();
+        PipedReader input = new PipedReader(client);
+        Thread serving = new Thread(() -> {
+            try {
+                server.serve(new BufferedReader(input), recording(lines));
+            } catch (java.io.IOException exception) {
+                lines.add("serve failed: " + exception.getMessage());
+            }
+        });
+        serving.start();
+
+        client.write(call(1, "first") + call(2, "queued"));
+        client.flush();
+        assertTrue(started.await(10, TimeUnit.SECONDS));
+        client.write(cancel(2));
+        client.flush();
+        Thread.sleep(200);
+        release.countDown();
+        client.close();
+        serving.join(TimeUnit.SECONDS.toMillis(10));
+
+        assertEquals(List.of("first"), ran);
+        assertEquals(1, lines.size(), lines.toString());
+        assertTrue(lines.get(0).contains("\"id\":1"), lines.toString());
+    }
+
+    @Test
+    @DisplayName("a cancellation of a call that is neither queued nor running is passed over, and never answered")
+    void aCancellationOfNoCallIsPassedOver() throws Exception {
+        List<String> lines = new CopyOnWriteArrayList<>();
+        JsonRpcServer server = new JsonRpcServer(List::of, (name, arguments) -> new ToolOutcome(name, false), "sheriff");
+
+        server.serve(new BufferedReader(new StringReader(cancel(9) + call(1, "only"))), recording(lines));
+
+        assertEquals(1, lines.size(), lines.toString());
+        assertTrue(lines.get(0).contains("\"id\":1") && lines.get(0).contains("only"), lines.toString());
     }
 }

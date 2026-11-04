@@ -65,6 +65,17 @@ public record ProcessOutcome(ProcessStatus status,
     }
 
     /**
+     * A command that was stopped, or never started, because what ran it was
+     * cancelled.
+     *
+     * @param failure why it was stopped
+     * @return the outcome
+     */
+    public static ProcessOutcome cancelled(String failure) {
+        return new ProcessOutcome(ProcessStatus.CANCELLED, 0, "", "", failure);
+    }
+
+    /**
      * Whether the command ran and reported success.
      *
      * @return {@code true} only when it both ran and exited zero

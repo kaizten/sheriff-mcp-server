@@ -321,15 +321,30 @@ public final class SheriffContainer {
             List<String> given = withToken(arguments, state.isPresent(), argumentsFile);
             String name = names.get();
             ProcessOutcome outcome = processes.run(command(name, given), directory, Map.of(), timeout);
-            if (outcome.status() == ProcessStatus.TIMED_OUT) {
-                processes.run(List.of(DOCKER, REMOVE_CONTAINER, FORCE, name), repositoryRoot, Map.of(),
-                        REMOVAL_TIMEOUT);
+            if (outcome.status() == ProcessStatus.TIMED_OUT || outcome.status() == ProcessStatus.CANCELLED) {
+                removeContainer(name);
             }
             return outcome;
         } catch (IOException exception) {
             return ProcessOutcome.unavailable(String.format(NO_ARGUMENTS_FILE, directory, exception.getMessage()));
         } finally {
             deleteQuietly(argumentsFile);
+        }
+    }
+
+    /**
+     * Removes a run's container, which killing {@code docker run} leaves
+     * running. A cancelled run's thread is interrupted, and an interrupted
+     * thread starts no command, so the interrupt is set aside for the removal
+     * and put back after it.
+     *
+     * @param name the container's name
+     */
+    private void removeContainer(String name) {
+        boolean cancelled = Thread.interrupted();
+        processes.run(List.of(DOCKER, REMOVE_CONTAINER, FORCE, name), repositoryRoot, Map.of(), REMOVAL_TIMEOUT);
+        if (cancelled) {
+            Thread.currentThread().interrupt();
         }
     }
 

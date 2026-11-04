@@ -28,6 +28,7 @@ import java.util.regex.Pattern;
 public final class SystemProcessRunner implements ProcessRunner {
 
     private static final String TIMEOUT_MESSAGE = "did not respond within %ds.";
+    private static final String CANCELLED_MESSAGE = "was cancelled, and stopped.";
     private static final String UNAVAILABLE_MESSAGE = "'%s' is not installed or not on the PATH.";
     private static final String COULD_NOT_START = "Could not start '%s': %s";
     private static final String NO_SUCH_FILE_PATTERN = "error(=|: )2\\b";
@@ -77,6 +78,9 @@ public final class SystemProcessRunner implements ProcessRunner {
             builder.directory(workingDirectory.toFile());
         }
         builder.environment().putAll(environment);
+        if (Thread.currentThread().isInterrupted()) {
+            return ProcessOutcome.cancelled(CANCELLED_MESSAGE);
+        }
         ExecutorService drains = Executors.newFixedThreadPool(STREAM_COUNT);
         try {
             return runAndCollect(builder, timeout, drains, standardInput);
@@ -84,7 +88,7 @@ public final class SystemProcessRunner implements ProcessRunner {
             return ProcessOutcome.unavailable(launchFailure(command.get(0), exception));
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
-            return ProcessOutcome.unavailable(exception.getMessage());
+            return ProcessOutcome.cancelled(CANCELLED_MESSAGE);
         } finally {
             drains.shutdownNow();
         }
@@ -102,7 +106,8 @@ public final class SystemProcessRunner implements ProcessRunner {
      * @param standardInput what to write to the process's standard input
      * @return what it produced, or the timeout that ended it
      * @throws IOException when the process cannot be started or read
-     * @throws InterruptedException when the wait is interrupted
+     * @throws InterruptedException when the wait is interrupted, with the
+     *     process and its children killed
      */
     private ProcessOutcome runAndCollect(ProcessBuilder builder,
             Duration timeout, ExecutorService drains, String standardInput)
@@ -111,11 +116,31 @@ public final class SystemProcessRunner implements ProcessRunner {
         Future<String> standardOutput = drains.submit(() -> drain(process.getInputStream()));
         Future<String> standardError = drains.submit(() -> drain(process.getErrorStream()));
         drains.submit(() -> feed(process.getOutputStream(), standardInput));
-        if (!process.waitFor(timeout.toSeconds(), TimeUnit.SECONDS)) {
-            process.destroyForcibly();
+        boolean finished;
+        try {
+            finished = process.waitFor(timeout.toSeconds(), TimeUnit.SECONDS);
+        } catch (InterruptedException exception) {
+            stop(process);
+            throw exception;
+        }
+        if (!finished) {
+            stop(process);
             return ProcessOutcome.timedOut(String.format(TIMEOUT_MESSAGE, timeout.toSeconds()));
         }
         return ProcessOutcome.completed(process.exitValue(), await(standardOutput), await(standardError));
+    }
+
+    /**
+     * Kills a process and every process it started, as a child is not
+     * killed with its parent: a shell's {@code sleep} outlived the shell
+     * (measured in {@code SystemProcessRunnerTests}), and Maven runs the
+     * tests in JVMs it forks.
+     *
+     * @param process the process to kill
+     */
+    private static void stop(Process process) {
+        process.descendants().forEach(ProcessHandle::destroyForcibly);
+        process.destroyForcibly();
     }
 
     /**
