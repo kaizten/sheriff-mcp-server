@@ -805,13 +805,21 @@ class HookTests {
             assertEquals(HookExit.ALLOW, capturingStandardError(() -> measured.decide("{\"stop_hook_active\":false}")));
         }
 
-        private List<List<String>> commandsOfAStopWith(Map<String, String> settings) throws IOException {
-            Files.createDirectories(repository.resolve("app/src/main/java"));
-            Files.writeString(repository.resolve("app/src/main/java/A.java"), "class A { public int a() { return 1; } }");
+        /**
+         * The commands a stop runs, in a repository of its own: two stops on
+         * one repository share the gate's record of verdicts, and when both
+         * wrote their file within one tick of the file system's clock the
+         * second reused the first's verdict and ran no Sheriff.
+         */
+        private List<List<String>> commandsOfAStopWith(String folder, Map<String, String> settings)
+                throws IOException {
+            Path project = repository.resolve(folder);
+            Files.createDirectories(project.resolve("app/src/main/java"));
+            Files.writeString(project.resolve("app/src/main/java/A.java"), "class A { public int a() { return 1; } }");
             Map<String, String> environment = new java.util.HashMap<>(settings);
-            environment.put("TARGET_REPO", repository.toString());
+            environment.put("TARGET_REPO", project.toString());
             FakeProcessRunner processes = new FakeProcessRunner(List.of(
-                    ProcessOutcome.completed(0, repository.toRealPath() + "\n", ""),
+                    ProcessOutcome.completed(0, project.toRealPath() + "\n", ""),
                     ProcessOutcome.completed(0, " M app/src/main/java/A.java\0", ""),
                     ProcessOutcome.completed(0, "", "")));
             new Composition(new Configuration(environment, agent), processes).stopHook()
@@ -822,8 +830,8 @@ class HookTests {
         @Test
         @DisplayName("while an idea is tried out, a clean turn ends without git being asked for new methods")
         void aPrototypeAsksNothingOfTheChange() throws IOException {
-            List<List<String>> checked = commandsOfAStopWith(Map.of());
-            List<List<String>> prototype = commandsOfAStopWith(Map.of("SHERIFF_PROTOTYPE", "1"));
+            List<List<String>> checked = commandsOfAStopWith("checked", Map.of());
+            List<List<String>> prototype = commandsOfAStopWith("prototype", Map.of("SHERIFF_PROTOTYPE", "1"));
             assertEquals(List.of("git", "status", "--porcelain", "-z", "--untracked-files=all"),
                     checked.get(checked.size() - 1), "the change is asked for its new methods: " + checked);
             assertEquals("docker", prototype.get(prototype.size() - 1).get(0), "Sheriff is the last: " + prototype);
