@@ -191,6 +191,21 @@ final class ConfigFileTest {
     }
 
     @Test
+    @DisabledOnOs(value = OS.WINDOWS, disabledReason = "creating a symbolic link needs a privilege there")
+    @DisplayName("macOS's temporary folder is reached through a link: a file is kept once, through any path to it")
+    void aFileReachedThroughALinkedFolderIsKeptOnce() throws Exception {
+        Path folder = Files.createDirectories(home.resolve("private-var"));
+        Path linked = Files.createSymbolicLink(home.resolve("var"), folder);
+        Files.writeString(folder.resolve("settings.json"), "{\"model\": \"opus\"}");
+        Path originals = home.resolve("originals");
+
+        ConfigFile.installing(linked.resolve("settings.json"), "{\"model\": \"opus\", \"hooks\": {}}", originals);
+        ConfigFile.uninstalling(folder.resolve("settings.json"), "{\"model\":\"opus\"}", originals);
+
+        assertEquals("{\"model\": \"opus\"}", Files.readString(folder.resolve("settings.json")));
+    }
+
+    @Test
     @DisplayName("where there are no POSIX permissions, as in a zip, the file as it was is kept all the same")
     void theOriginalIsKeptWithoutPosixPermissions() throws Exception {
         Path settings = home.resolve("settings.json");

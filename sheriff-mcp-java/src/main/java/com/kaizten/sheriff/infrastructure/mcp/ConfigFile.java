@@ -236,15 +236,37 @@ final class ConfigFile {
     }
 
     /**
-     * Where a file's copy as it was is kept: named by a digest of its path.
+     * Where a file's copy as it was is kept: named by a digest of its path
+     * with every link in it followed, so one file has one copy however it is
+     * reached (on macOS the temporary folder is under {@code /var}, a link to
+     * {@code /private/var}, and an install through one path and an uninstall
+     * through the other found no copy).
      *
      * @param target the file
      * @param originals the folder they go in
      * @return that copy's path
+     * @throws IOException when the path cannot be followed
      */
-    private static Path recordOf(Path target, Path originals) {
-        byte[] path = target.toAbsolutePath().normalize().toString().getBytes(StandardCharsets.UTF_8);
+    private static Path recordOf(Path target, Path originals) throws IOException {
+        byte[] path = canonical(target).toString().getBytes(StandardCharsets.UTF_8);
         return originals.resolve(UUID.nameUUIDFromBytes(path).toString());
+    }
+
+    /**
+     * A path with every link in it followed: the file's own when it exists,
+     * otherwise its folder's, with its name.
+     *
+     * @param file the path
+     * @return that path
+     * @throws IOException when the path cannot be followed
+     */
+    private static Path canonical(Path file) throws IOException {
+        Path absolute = file.toAbsolutePath().normalize();
+        if (Files.exists(absolute)) {
+            return absolute.toRealPath();
+        }
+        Path parent = absolute.getParent();
+        return parent != null && Files.exists(parent) ? parent.toRealPath().resolve(absolute.getFileName()) : absolute;
     }
 
     /**
