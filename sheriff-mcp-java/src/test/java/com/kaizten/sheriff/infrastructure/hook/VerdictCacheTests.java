@@ -212,7 +212,7 @@ class VerdictCacheTests {
         Path agent = Files.createDirectories(mount.resolve("sheriff-mcp-java"));
         Configuration configuration = new Configuration(Map.of("TARGET_REPO", mount.toString()), agent);
         ComponentGate gate = new ComponentGate(configuration, new Composition(configuration, sheriff),
-                new VerdictCache());
+                VerdictCache.lasting(configuration.gateTtl()));
         assertEquals(0, new SheriffRunner(sheriff, "kaizten/sheriff:latest", mount, Duration.ofSeconds(5))
                 .test("app", PROFILE).total());
         assertEquals(1, runs.get());

@@ -8,6 +8,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.function.Predicate;
 
 /**
@@ -96,10 +97,12 @@ public final class CatalogProvisioning {
      *
      * @param processes how to run Docker
      * @param image the image to read
+     * @param network the Docker network to read it on
+     *     ({@code SHERIFF_DOCKER_NETWORK}), empty for Docker's default
      * @return the extraction
      */
-    public static CatalogExtraction extraction(ProcessRunner processes, String image) {
-        return target -> extract(processes, image, target);
+    public static CatalogExtraction extraction(ProcessRunner processes, String image, Optional<String> network) {
+        return target -> extract(processes, image, target, network);
     }
 
     /**
@@ -142,15 +145,18 @@ public final class CatalogProvisioning {
      * @param processes how to run Docker
      * @param image the image to read
      * @param target where the catalog goes
+     * @param network the Docker network to read the image on, empty for
+     *     Docker's default
      * @throws IOException when it cannot be written
      */
-    private static void extract(ProcessRunner processes, String image, Path target) throws IOException {
+    private static void extract(ProcessRunner processes, String image, Path target, Optional<String> network)
+            throws IOException {
         Path directory = target.toAbsolutePath().getParent();
         Files.createDirectories(directory);
         System.err.printf(EXTRACTING, image, target);
         Path partial = directory.resolve(target.getFileName() + PARTIAL_SUFFIX);
         Path markdown = directory.resolve(MARKDOWN_NAME + PARTIAL_SUFFIX);
-        new RuleCatalogExtractor(processes, directory).extract(image, partial, markdown);
+        new RuleCatalogExtractor(processes, directory, network).extract(image, partial, markdown);
         Files.move(partial, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
         Files.move(markdown, directory.resolve(MARKDOWN_NAME), StandardCopyOption.REPLACE_EXISTING);
     }

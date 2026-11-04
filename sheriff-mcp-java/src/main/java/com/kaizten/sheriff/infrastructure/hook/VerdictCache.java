@@ -58,7 +58,6 @@ public final class VerdictCache {
     private static final String DIRECTORY = "sheriff-verdicts";
     private static final String ENTRY_SUFFIX = ".json";
     private static final String PARTIAL_SUFFIX = ".partial";
-    private static final String TTL_VARIABLE = "SHERIFF_GATE_TTL";
     private static final long DEFAULT_TTL_SECONDS = 900L;
     private static final String COMPONENT_FIELD = "component";
     private static final String PROFILE_FIELD = "profile";
@@ -88,10 +87,14 @@ public final class VerdictCache {
     private final ObjectMapper json = new ObjectMapper();
 
     /**
-     * The user's own cache, with the lifetime {@code SHERIFF_GATE_TTL} gives.
+     * The user's own cache, to record verdicts in: what serves them takes the
+     * lifetime its settings give, through {@link #lasting(Duration)}, as the
+     * hooks do with {@code Configuration.gateTtl()}. This one reads no
+     * variable of the process's, which skipped the project's
+     * {@code .sheriff.properties}, and gives the default lifetime.
      */
     public VerdictCache() {
-        this(TemporaryFolders.forUser(DIRECTORY), Duration.ofSeconds(ttlSeconds()));
+        this(TemporaryFolders.forUser(DIRECTORY), Duration.ofSeconds(DEFAULT_TTL_SECONDS));
     }
 
     /**
@@ -443,23 +446,5 @@ public final class VerdictCache {
      */
     private static long nowInSeconds() {
         return System.currentTimeMillis() / MILLISECONDS_PER_SECOND;
-    }
-
-    /**
-     * How long an entry is served, from {@code SHERIFF_GATE_TTL}.
-     *
-     * @return that many seconds, 900 when the variable is unset or not a
-     *     number
-     */
-    private static long ttlSeconds() {
-        String configured = System.getenv(TTL_VARIABLE);
-        if (configured == null || configured.isBlank()) {
-            return DEFAULT_TTL_SECONDS;
-        }
-        try {
-            return Long.parseLong(configured.strip());
-        } catch (NumberFormatException exception) {
-            return DEFAULT_TTL_SECONDS;
-        }
     }
 }

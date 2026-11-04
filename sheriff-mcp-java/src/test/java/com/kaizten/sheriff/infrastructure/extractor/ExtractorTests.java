@@ -638,6 +638,18 @@ class ExtractorTests {
         }
 
         @Test
+        @DisplayName("the network it is given goes to Docker after --rm, and none given says nothing of one")
+        void theNetworkGivenReachesDocker() {
+            FakeProcessRunner networked = FakeProcessRunner.always(ProcessOutcome.completed(0, "output", ""));
+            new ImageReader(networked, "kaizten/sheriff:latest", Path.of("."), java.util.Optional.of(" none ")).constants();
+            FakeProcessRunner plain = FakeProcessRunner.always(ProcessOutcome.completed(0, "output", ""));
+            new ImageReader(plain, "kaizten/sheriff:latest", Path.of("."), java.util.Optional.of("  ")).constants();
+
+            assertEquals(List.of("docker", "run", "--rm", "--network", "none"), networked.command().subList(0, 5));
+            assertFalse(plain.command().contains("--network"), plain.command().toString());
+        }
+
+        @Test
         @DisplayName("a failure to read the image says why instead of producing an empty catalog")
         void aFailedReadIsAnError() {
             ImageReader reader = new ImageReader(
