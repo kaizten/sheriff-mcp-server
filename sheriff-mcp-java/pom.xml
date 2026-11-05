@@ -22,7 +22,7 @@
 
     <groupId>com.kaizten</groupId>
     <artifactId>sheriff-mcp</artifactId>
-    <version>0.1.12</version>
+    <version>0.1.13</version>
     <packaging>jar</packaging>
     <description>Sheriff, Kaizten's code standards analyzer, as MCP tools for coding assistants, with the repair loop, the hooks and the CI gate in one jar.</description>
     <url>https://www.kaizten.com</url>
