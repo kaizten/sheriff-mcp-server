@@ -1,8 +1,8 @@
 package com.kaizten.sheriff.infrastructure.mcp.tool;
 
 import com.kaizten.sheriff.infrastructure.mcp.ServerVersion;
+import com.kaizten.sheriff.infrastructure.mcp.SessionReport;
 import com.kaizten.sheriff.infrastructure.mcp.task.Task;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -46,21 +46,22 @@ final class SheriffTaskTool {
     private static final String TASK_RESULT = "%n%nResult:%n%s";
     private static final String NEWLINE = "\n";
     private static final String VERSION_LINE = "sheriff-mcp %s, running Sheriff's image %s.";
-    private static final String REPORT_LINE = "This session's report: %s";
+    private static final String REPORT_LINE = "This session's report: %s; the same as text to read in order, "
+            + "every command, round and error included: %s";
     private static final String NO_REPORT = "This session writes no report: SHERIFF_REPORT is off. Turned on, the "
             + "session writes one from its next call, with every call it has made.";
     private final ToolContext context;
-    private final Supplier<Optional<Path>> report;
+    private final Supplier<Optional<SessionReport>> session;
 
     /**
      * Wires the tool to what it shares with the others.
      *
      * @param context the session's tasks
-     * @param report where this session's report is, empty when it writes none
+     * @param session this session's report, empty when there is none
      */
-    SheriffTaskTool(ToolContext context, Supplier<Optional<Path>> report) {
+    SheriffTaskTool(ToolContext context, Supplier<Optional<SessionReport>> session) {
         this.context = context;
-        this.report = report;
+        this.session = session;
     }
 
     /**
@@ -83,7 +84,8 @@ final class SheriffTaskTool {
         String id = ToolContext.textArgument(arguments, ID_ARGUMENT);
         if (id.isEmpty()) {
             String image = context.image().get().orElse(context.config().image());
-            String reportLine = report.get().map(file -> String.format(REPORT_LINE, file)).orElse(NO_REPORT);
+            String reportLine = session.get().flatMap(report -> report.file().flatMap(file -> report.textFile()
+                    .map(text -> String.format(REPORT_LINE, file, text)))).orElse(NO_REPORT);
             return String.format(VERSION_LINE, ServerVersion.described(), image) + NEWLINE + reportLine + NEWLINE
                     + listing(context.tasks().all());
         }

@@ -636,8 +636,12 @@ how many repairs, how many errors left. What the assistant's model spent is
 not visible to Sheriff. The report is written as the session goes, a call
 included while it runs, and the setting counts at once: turned on in a
 session already open, its report holds every call since the session began.
-Asked for its report, the assistant calls \tool{sheriff_task}, which names the
-file.
+Beside it, \path{session-<when>-<project>.txt} is the same session to read
+in order: a summary first, then every call, every command it ran, every round
+of a repair with every error its analysis found, and every answer the
+assistant was given. It can quote your code, so keep it to yourself. Asked
+for its report, the assistant calls \tool{sheriff_task}, which names both
+files.
 \end{note}
 
 \begin{warning}
@@ -1259,7 +1263,8 @@ these settings.
   \path{~/.local/state/sheriff-mcp/reports/}: what it was asked to do with,
   what it started from and left, every pass, and how it stopped, written as
   it goes. Every session of the MCP server writes one too: which assistant
-  connected and every call it made. It counts at once, in the sessions
+  connected and every call it made, with a text beside it to read in order.
+  It counts at once, in the sessions
   already open too. From your file only.}
 
 \subsubsection*{The loop's APIs} Only with \code{AI_BACKEND} set to

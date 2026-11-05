@@ -605,6 +605,7 @@ component "$session/app"
 printf '%s\n' \
   '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientInfo":{"name":"e2e-client","version":"9.9"}}}' \
   '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"sheriff_test","arguments":{"component":"app"}}}' \
+  '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"sheriff_fix","arguments":{"component":"app"}}}' \
   | (cd "$session" && SHERIFF_REPO="$session" SHERIFF_REPORT=1 XDG_STATE_HOME="$work/session-state" \
       java -jar "$mcp_jar" >"$work/23.out" 2>"$work/23.err")
 session_report=$(ls "$work/session-state/sheriff-mcp/reports"/session-*-session.json 2>/dev/null | head -1)
@@ -612,6 +613,16 @@ check "a report of the session is written where the state goes" '[[ -n "$session
 check "it names the client, and the call with the errors Sheriff found" \
   'python3 -I -c "import json,sys; r=json.load(open(sys.argv[1])); c=r[\"calls\"][0][\"analyses\"][0];
 assert r[\"client\"][\"name\"]==\"e2e-client\" and r[\"calls\"][0][\"tool\"]==\"sheriff_test\" and c[\"after\"][\"total\"]>0" "$session_report"'
+check "the repair's call holds its rounds and the commands it ran" \
+  'python3 -I -c "import json,sys; f=json.load(open(sys.argv[1]))[\"calls\"][1];
+assert f[\"tool\"]==\"sheriff_fix\" and f[\"repair_rounds\"] and f[\"repair_rounds\"][0][\"fixers_ran\"]
+assert any(\" fix \" in c[\"command\"] for c in f[\"commands\"])" "$session_report"'
+session_text="${session_report%.json}.txt"
+check "beside it, a text with the summary first" 'head -12 "$session_text" | grep -q "^Summary"'
+check "then the commands, the rounds with every error, and the answers, in order" \
+  'grep -q "#2 \$ docker" "$session_text" && grep -q "#2 round 1 of the repair of app under JAVA" "$session_text" \
+    && grep -q "app/src/main/java/demo/Thermometer.java: " "$session_text" \
+    && grep -q "#2 sheriff_fix ended after" "$session_text" && grep -q "| Next step:" "$session_text"'
 check "and the comparison reads it" \
   'java -jar "$mcp_jar" --agent --compare-reports "$work/session-state/sheriff-mcp/reports" | grep -q "| e2e-client 9.9 | session |"'
 

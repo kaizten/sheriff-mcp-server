@@ -84,6 +84,7 @@ public final class SheriffRepair {
     private final String component;
     private int roundLimit = NO_LIMIT;
     private Predicate<SheriffFinding> withheld = finding -> false;
+    private RepairRoundObserver observer = (round, profile, analysis, fixersRan) -> { };
 
     /**
      * Wires the repair to one component.
@@ -120,6 +121,17 @@ public final class SheriffRepair {
      */
     public SheriffRepair withholding(Predicate<SheriffFinding> findings) {
         this.withheld = findings;
+        return this;
+    }
+
+    /**
+     * The same repair, telling an observer of every round as it happens.
+     *
+     * @param chosen what is told of each round's analyses
+     * @return this repair
+     */
+    public SheriffRepair observedBy(RepairRoundObserver chosen) {
+        this.observer = chosen;
         return this;
     }
 
@@ -180,7 +192,9 @@ public final class SheriffRepair {
                     boolean helping = analysis.total() < previous.get(index);
                     previous.set(index, analysis.total());
                     List<SheriffFinding> repairable = analysis.errors().stream().filter(withheld.negate()).toList();
-                    if (round <= rounds && helping && repairable(repairable, rules)) {
+                    boolean fixing = round <= rounds && helping && repairable(repairable, rules);
+                    observer.analyzed(round, single.profile(), analysis, fixing);
+                    if (fixing) {
                         single.withholdFromState(withheld);
                         codes.addAll(DeterministicPolicy.fixableCodes(repairable, rules));
                         failures.addAll(named.isPresent() ? runFix(List.of(FIXERS_FLAG, named.get()))

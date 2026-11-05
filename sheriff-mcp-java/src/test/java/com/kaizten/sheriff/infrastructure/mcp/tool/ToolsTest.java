@@ -1751,7 +1751,9 @@ final class ToolsTest {
         Path file = state.resolve("session.json");
         Tools reporting = tools(List.of()).reportingTo(new SessionReport(file, Map.of()));
 
-        assertTrue(reporting.call("sheriff_task", Map.of()).text().contains("This session's report: " + file));
+        assertTrue(reporting.call("sheriff_task", Map.of()).text().contains("This session's report: " + file
+                + "; the same as text to read in order, every command, round and error included: "
+                + state.resolve("session.txt")));
         assertTrue(tools(List.of()).call("sheriff_task", Map.of()).text()
                 .contains("This session writes no report: SHERIFF_REPORT is off."));
     }

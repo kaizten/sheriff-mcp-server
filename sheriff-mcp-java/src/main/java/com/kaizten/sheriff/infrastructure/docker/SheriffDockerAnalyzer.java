@@ -305,6 +305,15 @@ public final class SheriffDockerAnalyzer implements CodeAnalyzer {
     }
 
     /**
+     * The profile, or list of them, this analyzer runs Sheriff under.
+     *
+     * @return that profile, as {@code --test} is given it
+     */
+    public String profile() {
+        return testType;
+    }
+
+    /**
      * One analyzer per profile this one runs, since Sheriff runs a single
      * profile at a time: this one itself when it runs only one.
      *

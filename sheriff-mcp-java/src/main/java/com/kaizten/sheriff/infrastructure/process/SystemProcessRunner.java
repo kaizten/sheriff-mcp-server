@@ -72,6 +72,25 @@ public final class SystemProcessRunner implements ProcessRunner {
     @Override
     public ProcessOutcome run(List<String> command, Path workingDirectory, Map<String, String> environment,
             Duration timeout, String standardInput) {
+        long started = System.nanoTime();
+        ProcessOutcome outcome = launched(command, workingDirectory, environment, timeout, standardInput);
+        ProcessObservers.ran(command, workingDirectory, outcome, Duration.ofNanos(System.nanoTime() - started));
+        return outcome;
+    }
+
+    /**
+     * Runs a command as {@link #run} does, before it is told to the
+     * observer of every command.
+     *
+     * @param command the executable and its arguments
+     * @param workingDirectory where to run it
+     * @param environment extra environment variables
+     * @param timeout how long to wait before killing it
+     * @param standardInput what to write, empty for nothing
+     * @return what it produced, including whether it ran at all
+     */
+    private ProcessOutcome launched(List<String> command, Path workingDirectory, Map<String, String> environment,
+            Duration timeout, String standardInput) {
         ProcessBuilder builder = new ProcessBuilder(Platform.quotedForCommandLine(Platform.resolved(Platform.dockerCommand(command)),
                 Platform.windows()));
         if (workingDirectory != null) {

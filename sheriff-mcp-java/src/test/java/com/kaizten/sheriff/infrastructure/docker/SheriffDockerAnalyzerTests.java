@@ -84,6 +84,19 @@ class SheriffDockerAnalyzerTests {
     }
 
     @Test
+    @DisplayName("an analyzer names its profile, and split per profile each names its own")
+    void anAnalyzerNamesItsProfile() {
+        FakeProcessRunner runner = FakeProcessRunner.always(ProcessOutcome.completed(0, "", ""));
+        SheriffDockerAnalyzer both = new SheriffDockerAnalyzer(runner, "kaizten/sheriff:latest", "JAVA,JAVA_HEXAGONAL",
+                "app", repository, Duration.ofSeconds(300));
+
+        assertEquals("JAVA", analyzer(runner).profile());
+        assertEquals("JAVA,JAVA_HEXAGONAL", both.profile());
+        assertEquals(List.of("JAVA", "JAVA_HEXAGONAL"),
+                both.perProfile().stream().map(SheriffDockerAnalyzer::profile).toList());
+    }
+
+    @Test
     void failingFastAddsSheriffsOwnFlagAndNothingElse() {
         assertEquals(List.of("test", "--test", "JAVA", "--uri", "file:/data", "--component", "app", "--fail-fast"),
                 analyzer(FakeProcessRunner.always(ProcessOutcome.completed(0, "", ""))).failingFast().arguments());

@@ -10,6 +10,7 @@ import com.kaizten.sheriff.infrastructure.mcp.protocol.ToolOutcome;
 import com.kaizten.sheriff.infrastructure.mcp.tool.ToolCall;
 import com.kaizten.sheriff.infrastructure.mcp.tool.Tools;
 import com.kaizten.sheriff.infrastructure.process.Platform;
+import com.kaizten.sheriff.infrastructure.process.ProcessObservers;
 import com.kaizten.sheriff.infrastructure.process.ProcessRunner;
 import com.kaizten.sheriff.infrastructure.process.SystemProcessRunner;
 import java.io.BufferedReader;
@@ -289,6 +290,7 @@ public final class McpServer {
         Tools tools = serverTools(config, runner.reportingTo(session), catalog, image, ownJar(),
                 new GitHubReleases(GitHubReleases.REPOSITORY));
         tools.reportingTo(session);
+        ProcessObservers.observeWith(session::command);
         JsonRpcServer server = new JsonRpcServer(tools::definitions, tools::call, tools::answersAtOnce,
                 config.serverName(), instructions());
         server.onClient(session::client);

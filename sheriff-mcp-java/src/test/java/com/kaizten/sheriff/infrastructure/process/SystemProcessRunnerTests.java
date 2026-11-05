@@ -34,6 +34,22 @@ class SystemProcessRunnerTests {
     }
 
     @Test
+    @DisplayName("every command is told to the observer once it ended, on the thread that ran it")
+    void everyCommandIsToldToTheObserver() {
+        List<String> told = new java.util.ArrayList<>();
+        ProcessObservers.observeWith((command, directory, outcome, took) -> told.add(String.join(" ", command) + " "
+                + directory + " " + outcome.exitCode() + " " + Thread.currentThread().getName()));
+        try {
+            runner.run(List.of("sh", "-c", "exit 3"), HERE, Map.of(), GENEROUS);
+        } finally {
+            ProcessObservers.stopObserving();
+        }
+        runner.run(List.of("sh", "-c", "exit 4"), HERE, Map.of(), GENEROUS);
+
+        assertEquals(List.of("sh -c exit 3 " + HERE + " 3 " + Thread.currentThread().getName()), told);
+    }
+
+    @Test
     @DisplayName("a non-zero exit is a completed run, not an unavailable one")
     void separatesFailureFromUnavailability() {
         ProcessOutcome outcome = runner.run(List.of("sh", "-c", "echo bad >&2; exit 3"), HERE, Map.of(), GENEROUS);
