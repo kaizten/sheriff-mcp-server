@@ -846,8 +846,11 @@ history records on it and the profile it declares: one Sheriff ran under
 
 On any other component \code{sheriff_test} answers that Sheriff has never been
 applied to it, the assistant does what you asked without Sheriff, and the hooks
-let its edits through. To have it checked, run Sheriff on it once from the
-repository's root, with each profile it must meet:
+let its edits through. When what you asked for is Sheriff itself
+(\ask{fix Sheriff's errors}), the assistant checks it anyway, under the
+profile its sources call for (\code{JAVA} for Java), and fixes it; the hooks
+still let it be. To have it checked from then on, run Sheriff on it once from
+the repository's root, with each profile it must meet:
 
 \begin{command}{bash}
 docker run --rm -v "$PWD:/data" --workdir / kaizten/sheriff:latest \
@@ -1535,8 +1538,8 @@ component it analyzes, and on Windows with WSL's Docker a project on
 \code{SHERIFF_TIMEOUT}.}
 \problem{\code{is not checked: Sheriff has never been applied to it}}{No
 test of Sheriff's is recorded on the component and the project declares no
-profile for it, so the tools leave it alone. Run Sheriff on it once, or declare
-its profile (section~\ref{sec:scope}).}
+profile for it, so the tools leave it alone unless you ask for Sheriff. Run
+Sheriff on it once, or declare its profile (section~\ref{sec:scope}).}
 \problem{\code{Nothing was analyzed}}{The component holds no sources of the
 profile's language. Name the component (\ask{check the api module}) or check
 the profile the project declares.}

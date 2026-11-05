@@ -99,10 +99,10 @@ record ToolContext(McpConfig config, SheriffRunner runner, RuleCatalog catalog, 
     private static final String NOT_CHECKED =
             "%s is not checked: Sheriff has never been applied to it. Sheriff's history (sheriff_history.json in "
             + "%s) records no test on it and the project declares no profile for it. For the user, if it should "
-            + "be checked: run Sheriff on it once with the profiles it must meet, declare its profile "
+            + "be checked from now on: run Sheriff on it once with the profiles it must meet, declare its profile "
             + "(sheriff.profile in its pom.xml, profile in .sheriff.properties), or set SHERIFF_SCOPE=all to "
-            + "check every component.%n" + NextStep.MARK + " none, Sheriff does not check %s: do what was "
-            + "asked without these tools.";
+            + "check every component.%n" + NextStep.MARK + " if the user asked for Sheriff on %s, %s; if not, "
+            + "none: do what was asked without these tools.";
 
     /**
      * The command that runs a component's own tests.
@@ -397,7 +397,10 @@ record ToolContext(McpConfig config, SheriffRunner runner, RuleCatalog catalog, 
      * Sheriff has never been applied to it.
      *
      * <p>Only when the call names no profile: one that names it asks for
-     * that check by hand.
+     * that check by hand. The step names that call, with the profile the
+     * component's sources call for, for a user who asked for Sheriff: with
+     * "none" alone a model asked to fix Sheriff's errors had no way on, as
+     * the instructions let it name a profile only where a step does.
      *
      * @param arguments the call's arguments
      * @param component the component the call is about
@@ -407,7 +410,8 @@ record ToolContext(McpConfig config, SheriffRunner runner, RuleCatalog catalog, 
         if (!textArgument(arguments, PROFILE_ARGUMENT).isEmpty() || config.checkedProfile(component).isPresent()) {
             return Optional.empty();
         }
-        return Optional.of(String.format(NOT_CHECKED, component, config.repository(), component));
+        return Optional.of(String.format(NOT_CHECKED, component, config.repository(), component,
+                testCall(component, config.profileFor(component))));
     }
 
     /**

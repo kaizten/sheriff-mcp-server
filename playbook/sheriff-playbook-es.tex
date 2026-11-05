@@ -853,8 +853,12 @@ que declara: uno que Sheriff analizó con \code{JAVA} y con
 
 Sobre cualquier otro componente, \code{sheriff_test} responde que Sheriff nunca
 se le ha aplicado, el asistente hace lo que le pediste sin Sheriff y los hooks
-dejan pasar sus ediciones. Para que se revise, ejecuta Sheriff sobre él una vez
-desde la raíz del repositorio, con cada perfil que deba cumplir:
+dejan pasar sus ediciones. Cuando lo que pides es Sheriff
+(\ask{arréglame los errores de Sheriff}), el asistente lo revisa igualmente, con
+el perfil que piden sus fuentes (\code{JAVA} para Java), y lo arregla; los
+hooks siguen sin tocarlo. Para que se revise siempre a partir de entonces,
+ejecuta Sheriff sobre él una vez desde la raíz del repositorio, con cada perfil
+que deba cumplir:
 
 \begin{command}{bash}
 docker run --rm -v "$PWD:/data" --workdir / kaizten/sheriff:latest \
@@ -1554,8 +1558,9 @@ componente que analiza, y en Windows con el Docker de WSL un proyecto en
 \code{SHERIFF_TIMEOUT}.}
 \problem{\code{is not checked: Sheriff has never been applied to it}}{No
 hay ningún test de Sheriff registrado sobre el componente y el proyecto no le
-declara perfil, así que las herramientas no lo tocan. Ejecuta Sheriff sobre él
-una vez, o declara su perfil (sección~\ref{sec:alcance}).}
+declara perfil, así que las herramientas no lo tocan salvo que pidas Sheriff.
+Ejecuta Sheriff sobre él una vez, o declara su perfil
+(sección~\ref{sec:alcance}).}
 \problem{\code{Nothing was analyzed}}{El componente no tiene fuentes del
 lenguaje del perfil. Nombra el componente (\ask{revisa el módulo api}) o revisa
 el perfil que declara el proyecto.}

@@ -117,7 +117,8 @@ final class ToolsTest {
     @Test
     @DisplayName("a component Sheriff has never been applied to is not checked, and Sheriff does not run")
     void aComponentSheriffWasNeverAppliedToIsNotChecked() throws IOException {
-        Files.createDirectories(repository.resolve("web"));
+        Files.createDirectories(repository.resolve("web/src/main/ts"));
+        Files.writeString(repository.resolve("web/src/main/ts/a.ts"), "export const a = 1;");
         List<List<String>> commands = new ArrayList<>();
         McpConfig config = new McpConfig(Map.of("SHERIFF_REPO", repository.toString(), "XDG_STATE_HOME", state.toString()));
         ProcessRunner recording = (command, directory, environment, timeout) -> {
@@ -133,8 +134,9 @@ final class ToolsTest {
             assertFalse(outcome.isError(), outcome.text());
             assertTrue(outcome.text().contains("web is not checked: Sheriff has never been applied to it"),
                     outcome.text());
-            assertTrue(outcome.text().endsWith("Next step: none, Sheriff does not check web: do what was asked "
-                    + "without these tools."), outcome.text());
+            assertTrue(outcome.text().endsWith("Next step: if the user asked for Sheriff on web, call the "
+                    + "sheriff_test tool with component 'web' and profile 'TYPESCRIPT'; if not, none: do what was "
+                    + "asked without these tools."), outcome.text());
         }
         assertEquals(List.of(), commands);
     }
@@ -143,7 +145,8 @@ final class ToolsTest {
     @DisplayName("a call is answered as not checked only when it names no profile and Sheriff was never applied")
     void onlyACallWithNoProfileOnANeverAppliedComponentIsNotChecked() {
         ToolContext context = new ToolContext(new McpConfig(Map.of("SHERIFF_REPO", repository.toString(),
-                "XDG_STATE_HOME", state.toString())), null, null, null, null, null, null, null, null, null, null, null);
+                "XDG_STATE_HOME", state.toString())), null, null, null, null, null, ToolCall.throughMcp(), null, null,
+                null, null, null);
 
         assertTrue(context.notChecked(Map.of(), "web").orElseThrow().startsWith("web is not checked"));
         assertEquals(Optional.empty(), context.notChecked(Map.of("profile", "JAVA"), "web"));

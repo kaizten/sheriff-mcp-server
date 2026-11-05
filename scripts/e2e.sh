@@ -629,12 +629,16 @@ printf '%s\n' \
   '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' \
   '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"sheriff_test","arguments":{"component":"back-end"}}}' \
   '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"sheriff_test","arguments":{"component":"never"}}}' \
+  '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"sheriff_test","arguments":{"component":"never","profile":"JAVA"}}}' \
   | (cd "$applied" && env -u SHERIFF_SCOPE SHERIFF_REPO="$applied" XDG_STATE_HOME="$work/state24" \
       java -jar "$mcp_jar" >"$work/24.out" 2>/dev/null)
 check "the component the history names is checked under both of its tests" \
   'grep -q "back-end has [0-9]* error(s) under JAVA,JAVA_HEXAGONAL" "$work/24.out"'
 check "the one it does not name is not checked" \
   'grep -q "never is not checked: Sheriff has never been applied to it" "$work/24.out"'
+check "its step names the call for a user who asked for Sheriff, with the profile its sources call for" \
+  'grep -q "if the user asked for Sheriff on never, call the sheriff_test tool with component '"'never'"' and profile '"'JAVA'"'" "$work/24.out"'
+check "and that call checks it" 'grep -Eq "never (has [0-9]+ error\(s\) under|passes the) JAVA[ .]" "$work/24.out"'
 for module in back-end never; do
   printf '{"tool_name":"Write","tool_input":{"file_path":"%s"}}' "$applied/$module/src/main/java/demo/Added.java" \
     | env -u SHERIFF_SCOPE CLAUDE_PROJECT_DIR="$applied" XDG_CACHE_HOME="$lone/cache" \
