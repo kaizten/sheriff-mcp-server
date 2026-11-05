@@ -996,8 +996,10 @@ the client, the calls and their counts, never a model's tokens, which the
 server does not see. Each call holds its repair's rounds as they happen
 (`SheriffRepair.observedBy`) and every command it ran, which
 `SystemProcessRunner` tells `ProcessObservers` on the thread that ran it, so
-the runners the tools build for the tests and git count too; a command
-outside a call (the image's pull) is not kept. Beside it, `SessionTranscript`
+the runners the tools build for the tests and git count too, when it starts
+as well as when it ends, as a Sheriff run can take minutes; a command
+outside a call (the image's pull) is not kept. A project of one module names
+the report, not the folder mounted. Beside it, `SessionTranscript`
 writes the same session as a `.txt`: a summary drawn from the JSON, then
 everything in order, each error by its text. The JSON keeps counts only, as
 it is for comparing; the text is for reading. `--compare-reports` reads sessions

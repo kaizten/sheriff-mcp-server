@@ -643,9 +643,10 @@ A run cut right after a pass (its fixer failed, or it changed a file outside
 its batch) is analyzed once more, so `final` is what is in the tree.
 
 **A session's report.** With the same setting, every session of the MCP
-server writes `session-<when>-<project folder>.json` beside them, rewritten
-as the session goes: when a call starts, after each analysis it makes and
-when it ends, with a call not yet answered under `running`. So a repair that
+server writes `session-<when>-<project>.json` beside them (the project's
+folder, or the module's for a project of one module), rewritten as the
+session goes: when a call starts, when each command it runs starts and ends,
+after each analysis it makes and when it ends, with a call not yet answered under `running`. So a repair that
 takes minutes can be followed, and a session a client stops without warning
 (Codex does) still has it. The setting is read at every write, not when the
 session starts: turned on in a session already open, its report starts at
@@ -657,19 +658,21 @@ this jar's version, Sheriff's image and the project, and every call: its
 `analyses` it made, rule by rule, `before` and `after` for a repair, its
 `repair_rounds` as they happen (each round's analysis, rule by rule, and
 whether Sheriff's fixers ran on it) and the `commands` it ran (Sheriff's, the
-tests', git's: the command, where, how it ended and how long it took). Its
+tests', git's: the command, where, how it ended and how long it took), with
+the one still running as `command_running`. Its
 `totals` add up the calls, by tool and failed, their time, the errors the
 first analysis found (`first_errors`) and the last analysis of each component
 (`last_errors`). What the assistant's model spent is not visible to the
 server, and is not in it.
 
-Beside it, `session-<when>-<project folder>.txt` is the same session to read
+Beside it, `session-<when>-<project>.txt` is the same session to read
 from top to bottom, rewritten with the report: a summary (who connected, the
 calls, what is running, the commands and how many did not end well, the
 rounds, and the errors it started from and has now, rule by rule), the calls
 one per line, and then everything in the order it happened: each call with
-its arguments, each command with its exit code and time (the end of its
-output when it did not end well), each round of a repair with every error its
+its arguments, each command at the time it started, as `running` until it
+ends and then with its exit code and time (the end of its output when it did
+not end well), each round of a repair with every error its
 analysis found, each analysis, and the answer the model was given. Unlike the
 JSON, it holds each error's text, which can quote code, as it is for going
 through a session, not for sharing. `sheriff_task` with no id names both.

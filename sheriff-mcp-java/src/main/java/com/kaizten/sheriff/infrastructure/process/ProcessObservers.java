@@ -45,6 +45,16 @@ public final class ProcessObservers {
     }
 
     /**
+     * Tells the observer of one command about to run.
+     *
+     * @param command the command
+     * @param workingDirectory where it runs
+     */
+    static void starting(List<String> command, Path workingDirectory) {
+        observer.starting(command, workingDirectory);
+    }
+
+    /**
      * Tells the observer of one command that ended.
      *
      * @param command the command

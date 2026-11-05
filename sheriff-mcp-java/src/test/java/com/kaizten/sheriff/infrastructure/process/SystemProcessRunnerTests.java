@@ -50,6 +50,31 @@ class SystemProcessRunnerTests {
     }
 
     @Test
+    @DisplayName("a command is told to the observer when it starts too, before it ends")
+    void aCommandIsToldWhenItStarts() {
+        List<String> told = new java.util.ArrayList<>();
+        ProcessObservers.observeWith(new ProcessObserver() {
+            @Override
+            public void starting(List<String> command, Path workingDirectory) {
+                told.add("starting " + String.join(" ", command));
+            }
+
+            @Override
+            public void ran(List<String> command, Path workingDirectory, ProcessOutcome outcome,
+                    Duration took) {
+                told.add("ran " + outcome.exitCode());
+            }
+        });
+        try {
+            runner.run(List.of("sh", "-c", "exit 5"), HERE, Map.of(), GENEROUS);
+        } finally {
+            ProcessObservers.stopObserving();
+        }
+
+        assertEquals(List.of("starting sh -c exit 5", "ran 5"), told);
+    }
+
+    @Test
     @DisplayName("a non-zero exit is a completed run, not an unavailable one")
     void separatesFailureFromUnavailability() {
         ProcessOutcome outcome = runner.run(List.of("sh", "-c", "echo bad >&2; exit 3"), HERE, Map.of(), GENEROUS);

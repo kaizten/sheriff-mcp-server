@@ -389,6 +389,19 @@ final class McpServerTest {
     }
 
     @Test
+    @DisplayName("a single-module project's session is named after it, not after the folder its mount is")
+    void aModuleSessionIsNamedAfterTheModule() throws IOException {
+        Path module = workspace.resolve("petshop");
+        Files.createDirectories(module.resolve("src/main/java"));
+        Files.writeString(module.resolve("pom.xml"), "<project/>");
+        McpConfig on = new McpConfig(Map.of("SHERIFF_REPORT", "1", "XDG_STATE_HOME",
+                workspace.resolve("state").toString()), module);
+        Path file = McpServer.sessionReport(on,
+                com.kaizten.sheriff.infrastructure.docker.ImageProvisioning.alreadyReady()).file().orElseThrow();
+        assertTrue(file.getFileName().toString().endsWith("-petshop.json"), file.toString());
+    }
+
+    @Test
     @DisplayName("SHERIFF_REPORT turned on while Codex's session was open wrote nothing of the work it did next")
     void aSessionReportStartsWhenTheSettingIsTurnedOn() throws IOException {
         Path state = workspace.resolve("state");

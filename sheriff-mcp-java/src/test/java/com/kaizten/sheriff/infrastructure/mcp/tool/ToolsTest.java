@@ -1531,6 +1531,19 @@ final class ToolsTest {
     }
 
     @Test
+    @DisplayName("a repair that left more errors than it found says how many more, not a negative count repaired")
+    void aRepairThatAddedErrorsSaysHowManyMore() throws IOException {
+        mavenComponent("app");
+        String text = tools(List.of(), new ProcessOutcome[] {ProcessOutcome.completed(0, errors("A.java:one"), ""),
+            ProcessOutcome.completed(1, "fixed", ""), ProcessOutcome.completed(1, "fixed", ""),
+            ProcessOutcome.completed(0, errors("A.java:one", "A.java:two", "A.java:three"), "")})
+                .call("sheriff_fix", Map.of("component", "app")).text();
+
+        assertTrue(text.contains("1 error(s) before, 3 after (2 more than before)."), text);
+        assertFalse(text.contains("-2"), text);
+    }
+
+    @Test
     @DisplayName("the errors left for the end are counted per file, under the folder they share when they share one")
     void errorsLeftForTheEndAreCounted() {
         SheriffFinding a = new SheriffFinding("app/src/A.java", "d", "h", "R", "ERROR", Map.of());
