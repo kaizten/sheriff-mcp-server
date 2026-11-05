@@ -643,8 +643,12 @@ llamadas, cuántas reparaciones, cuántos errores quedan. Lo que gastó el model
 del asistente no lo ve Sheriff. El informe se escribe a medida que avanza la
 sesión, también mientras dura una llamada, y el ajuste cuenta en el acto:
 activado en una sesión ya abierta, su informe recoge todas las llamadas desde
-que empezó. Si le pides su informe, el asistente llama a \tool{sheriff_task},
-que dice qué archivo es.
+que empezó. Junto a él, \path{session-<cuándo>-<proyecto>.txt} es la misma
+sesión para leer en orden: primero un resumen y después cada llamada, cada
+orden que ejecutó, cada ronda de una reparación con todos los errores que
+encontró su análisis y cada respuesta que recibió el asistente. Puede citar tu
+código, así que guárdalo para ti. Si le pides su informe, el asistente llama a
+\tool{sheriff_task}, que dice qué archivos son.
 \end{note}
 
 \begin{warning}
@@ -1274,7 +1278,8 @@ del \code{pom.xml} (\code{sheriff.coverage}, \code{sheriff.branches},
   en \path{~/.local/state/sheriff-mcp/reports/}: con qué se le pidió trabajar,
   de qué errores partió y cuáles dejó, cada pasada y por qué paró, escrito a
   medida que avanza. Cada sesión del servidor MCP escribe también el suyo:
-  qué asistente se conectó y cada llamada que hizo. Cuenta en el acto, también
+  qué asistente se conectó y cada llamada que hizo, con un texto al lado para
+  leerlo en orden. Cuenta en el acto, también
   en las sesiones ya abiertas. Solo desde tu fichero.}
 
 \subsubsection*{Las API del bucle} Solo con \code{AI_BACKEND} en

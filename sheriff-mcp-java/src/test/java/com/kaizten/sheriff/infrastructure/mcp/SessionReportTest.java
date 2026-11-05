@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kaizten.sheriff.domain.valueobject.AnalysisResult;
 import com.kaizten.sheriff.domain.valueobject.SheriffFinding;
+import com.kaizten.sheriff.infrastructure.process.ProcessOutcome;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -92,6 +93,80 @@ final class SessionReportTest {
         JsonNode ended = read(file);
         assertEquals(0, ended.get("running").size());
         assertEquals(1, ended.get("calls").get(0).get("analyses").size());
+    }
+
+    @Test
+    @DisplayName("a repair's rounds and a call's commands are kept as they happen, and no command outside a call")
+    void roundsAndCommandsAreKeptAsTheyHappen() throws Exception {
+        Path file = folder.resolve("session.json");
+        SessionReport report = new SessionReport(file, Map.of());
+        report.started("sheriff_fix", Map.of("component", "app"));
+        report.command(List.of("docker", "run", "test"), folder, ProcessOutcome.completed(0, "[]", ""),
+                Duration.ofSeconds(2));
+        report.round("app", "JAVA", 1, errors(error("A", "R1"), error("B", "R2")), true);
+        JsonNode running = read(file).get("running").get(0);
+        assertEquals("docker run test", running.get("commands").get(0).get("command").asText());
+        assertEquals("COMPLETED", running.get("commands").get(0).get("status").asText());
+        assertEquals(2000, running.get("commands").get(0).get("elapsed_ms").asLong());
+        assertEquals(2, running.get("repair_rounds").get(0).get("total").asInt());
+        assertTrue(running.get("repair_rounds").get(0).get("fixers_ran").asBoolean());
+        Thread outside = new Thread(() -> report.command(List.of("docker", "pull"), null,
+                ProcessOutcome.completed(0, "", ""), Duration.ZERO));
+        outside.start();
+        outside.join();
+        report.round("app", "JAVA", 2, errors(error("B", "R2")), false);
+        report.analyzed("app", "JAVA", errors(error("A", "R1"), error("B", "R2")), errors(error("B", "R2")), 1);
+        report.called("sheriff_fix", Map.of("component", "app"), Duration.ofSeconds(9), false, "Next step: none");
+        JsonNode call = read(file).get("calls").get(0);
+        assertEquals(1, call.get("commands").size(), "the pull ran outside any call");
+        assertEquals(List.of(1, 2), List.of(call.get("repair_rounds").get(0).get("round").asInt(),
+                call.get("repair_rounds").get(1).get("round").asInt()));
+        assertFalse(call.get("repair_rounds").get(1).get("fixers_ran").asBoolean());
+        assertTrue(call.get("started").isTextual());
+    }
+
+    @Test
+    @DisplayName("beside the report, a text: a summary, then every call, command, round, error and answer in order")
+    void aTextReadsTheSessionInOrder() throws IOException {
+        Path file = folder.resolve("session-1-shop.json");
+        SessionReport report = new SessionReport(file, Map.of("project", Map.of("repository", "/code/shop")));
+        report.client("codex-mcp-client", "0.166.0");
+        report.started("sheriff_test", Map.of("component", "app"));
+        report.analyzed("app", "JAVA", null, errors(error("/data/app/A.java", "R1")), 0);
+        report.called("sheriff_test", Map.of("component", "app"), Duration.ofMillis(1500), false,
+                "app has 1 error(s) under JAVA.\nNext step: call the sheriff_fix tool");
+        report.started("sheriff_fix", Map.of("component", "app"));
+        report.command(List.of("docker", "run", "fix"), folder, ProcessOutcome.completed(3, "", "it broke"),
+                Duration.ofSeconds(3));
+        report.round("app", "JAVA", 1, errors(error("/data/app/A.java", "R1")), true);
+        report.round("app", "JAVA", 2, errors(), false);
+        report.analyzed("app", "JAVA", errors(error("/data/app/A.java", "R1")), errors(), 1);
+        report.called("sheriff_fix", Map.of("component", "app"), Duration.ofSeconds(70), false,
+                "Next step: none, the component is done");
+        assertEquals(java.util.Optional.of(folder.resolve("session-1-shop.txt")), report.textFile());
+        String text = Files.readString(folder.resolve("session-1-shop.txt"));
+        assertTrue(text.contains("Client:   codex-mcp-client 0.166.0"), text);
+        assertTrue(text.contains("Calls: 2 (sheriff_fix 1, sheriff_test 1), 0 failed, 1 min 11 s in calls"), text);
+        assertTrue(text.contains("Commands run: 1, 1 not ended well"), text);
+        assertTrue(text.contains("Repair rounds with fixers run: 1"), text);
+        assertTrue(text.contains("First analysis: app under JAVA, 1 error(s) in 1 file(s)"), text);
+        assertTrue(text.contains("Now: app under JAVA, 0 error(s) in 0 file(s)"), text);
+        assertTrue(text.contains("1 -> 0 error(s), 1 round(s)"), text);
+        assertTrue(text.contains("app/A.java: a description that quotes code [R1]"), "its errors, by their text");
+        assertTrue(text.contains("            it broke"), "the end of a command that did not end well");
+        List<String> order = List.of("Summary", "What was done, in order", "#1 sheriff_test {component=app} started",
+                "#1 analysis of app under JAVA: 1 error(s)", "| Next step: call the sheriff_fix tool",
+                "#2 $ docker run fix", "exit code 3 after 3.0 s", "#2 round 1 of the repair of app under JAVA",
+                "Sheriff's fixers ran on them", "#2 round 2", "no fixer ran", "#2 repair of app under JAVA: 1 error(s) "
+                + "before, 0 after, in 1 round(s)", "#2 sheriff_fix ended after 1 min 10 s",
+                "| Next step: none, the component is done");
+        int at = 0;
+        for (String part : order) {
+            int found = text.indexOf(part, at);
+            assertTrue(found >= at, part + " after the one before it in:\n" + text);
+            at = found;
+        }
+        assertFalse(Files.exists(folder.resolve("session-1-shop.txt.partial")));
     }
 
     @Test

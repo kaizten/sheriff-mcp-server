@@ -73,6 +73,19 @@ class SheriffRepairTests {
     }
 
     @Test
+    @DisplayName("every round is told as it happens: what its analysis found, and whether fixers ran on it")
+    void everyRoundIsToldAsItHappens() {
+        FakeProcessRunner runner = new FakeProcessRunner(List.of(ProcessOutcome.completed(0, TWO, ""), FIXED, FIXED,
+                ProcessOutcome.completed(0, ONE, ""), FIXED, FIXED, ProcessOutcome.completed(0, ONE, "")));
+        List<String> told = new ArrayList<>();
+
+        repair(runner).observedBy((round, profile, analysis, fixersRan) -> told.add(round + " " + profile + " "
+                + analysis.total() + " " + fixersRan)).everyFixer(List.of());
+
+        assertEquals(List.of("1 JAVA 2 true", "2 JAVA 1 true", "3 JAVA 1 false"), told);
+    }
+
+    @Test
     @DisplayName("with a catalog, only the rules it knows a fixer for are reported as handed over")
     void everyFixerReportsTheCodesTheCatalogKnows() {
         FakeProcessRunner runner = new FakeProcessRunner(List.of(ProcessOutcome.completed(0, TWO, ""), FIXED, FIXED,

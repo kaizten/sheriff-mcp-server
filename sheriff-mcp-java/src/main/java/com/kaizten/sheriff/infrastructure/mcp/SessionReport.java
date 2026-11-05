@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.kaizten.sheriff.domain.valueobject.AnalysisResult;
 import com.kaizten.sheriff.domain.valueobject.SheriffFinding;
+import com.kaizten.sheriff.infrastructure.process.ProcessOutcome;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
@@ -47,6 +48,12 @@ import java.util.function.Supplier;
  * nothing, and the user asked for the report of the work it had just done.
  * Turned on mid-session, the report holds every call since the session
  * started; turned off, it stops being written.
+ *
+ * <p>Each call also holds every round of a repair as it happens, with the
+ * analysis that opened it rule by rule, and every command it ran, with how
+ * it ended. Beside the report, a text of the same name reads the session
+ * from top to bottom ({@link SessionTranscript}): a summary, then all of it
+ * in order, every error by its text included.
  */
 public final class SessionReport {
 
@@ -79,6 +86,18 @@ public final class SessionReport {
     private static final String CALLS_MS_FIELD = "calls_ms";
     private static final String FIRST_FIELD = "first_errors";
     private static final String LAST_FIELD = "last_errors";
+    private static final String COMMANDS_FIELD = "commands";
+    private static final String COMMAND_FIELD = "command";
+    private static final String DIRECTORY_FIELD = "directory";
+    private static final String STATUS_FIELD = "status";
+    private static final String EXIT_CODE_FIELD = "exit_code";
+    private static final String REPAIR_ROUNDS_FIELD = "repair_rounds";
+    private static final String ROUND_FIELD = "round";
+    private static final String FIXERS_RAN_FIELD = "fixers_ran";
+    private static final String COMMAND_SEPARATOR = " ";
+    private static final String JSON_SUFFIX = ".json";
+    private static final String TEXT_SUFFIX = ".txt";
+    private static final String NO_ANSWER = "";
     private static final String NOT_WRITTEN = "The session's report could not be written to %s: %s%n";
     private static final String PARTIAL_SUFFIX = ".partial";
     private static final int ID_LENGTH = 8;
@@ -110,6 +129,9 @@ public final class SessionReport {
     private String clientVersion;
     private int failures;
     private long callsMillis;
+    private final Map<Thread, Integer> numbers = new HashMap<>();
+    private final SessionTranscript transcript = new SessionTranscript();
+    private int opened;
     private boolean warned;
 
     /**
@@ -146,6 +168,17 @@ public final class SessionReport {
      */
     public Optional<Path> file() {
         return folder.get().map(reports -> reports.resolve(name));
+    }
+
+    /**
+     * Where the text of the session is written now, beside the report.
+     *
+     * @return that file, or empty while reports are off
+     */
+    public Optional<Path> textFile() {
+        String text = name.endsWith(JSON_SUFFIX)
+                ? name.substring(ID_START, name.length() - JSON_SUFFIX.length()) + TEXT_SUFFIX : name + TEXT_SUFFIX;
+        return folder.get().map(reports -> reports.resolve(text));
     }
 
     /**
@@ -195,7 +228,71 @@ public final class SessionReport {
         } else {
             ((ArrayNode) call.get(ANALYSES_FIELD)).add(analysis);
         }
+        if (before == null) {
+            transcript.analysis(callNumber(), Instant.now(), component, profile, after);
+        } else {
+            transcript.repair(callNumber(), Instant.now(), component, profile, before, after, rounds);
+        }
         write();
+    }
+
+    /**
+     * Keeps one round of a repair as it happens: the analysis that opened
+     * it, profile by profile, and whether fixers ran on what it found.
+     *
+     * @param component the component repaired
+     * @param profile the profile analyzed
+     * @param round the round, from 1
+     * @param analysis what the analysis found
+     * @param fixersRan whether Sheriff's fixers ran after it
+     */
+    public synchronized void round(String component, String profile, int round, AnalysisResult analysis,
+            boolean fixersRan) {
+        ObjectNode entry = json.createObjectNode();
+        entry.put(COMPONENT_FIELD, component);
+        entry.put(PROFILE_FIELD, profile);
+        entry.put(ROUND_FIELD, round);
+        entry.setAll(counts(analysis));
+        entry.put(FIXERS_RAN_FIELD, fixersRan);
+        ObjectNode call = running.get(Thread.currentThread());
+        if (call != null) {
+            ((ArrayNode) call.get(REPAIR_ROUNDS_FIELD)).add(entry);
+        }
+        transcript.round(callNumber(), Instant.now(), component, profile, round, analysis, fixersRan);
+        write();
+    }
+
+    /**
+     * Keeps one command a call ran, once it ended. A command run outside
+     * any call, such as the image's pull in the background, is not kept.
+     *
+     * @param command the command
+     * @param directory where it ran, {@code null} for the server's own
+     * @param outcome how it ended
+     * @param took how long it ran
+     */
+    public synchronized void command(List<String> command, Path directory, ProcessOutcome outcome, Duration took) {
+        ObjectNode call = running.get(Thread.currentThread());
+        if (call == null) {
+            return;
+        }
+        ObjectNode entry = ((ArrayNode) call.get(COMMANDS_FIELD)).addObject();
+        entry.put(COMMAND_FIELD, String.join(COMMAND_SEPARATOR, command));
+        entry.set(DIRECTORY_FIELD, directory == null ? json.nullNode() : json.valueToTree(directory.toString()));
+        entry.put(STATUS_FIELD, outcome.status().name());
+        entry.put(EXIT_CODE_FIELD, outcome.exitCode());
+        entry.put(ELAPSED_FIELD, took.toMillis());
+        transcript.command(callNumber(), Instant.now(), command, directory, outcome, took);
+        write();
+    }
+
+    /**
+     * The number of the call this thread is making.
+     *
+     * @return it, from 1, or 0 outside any call
+     */
+    private int callNumber() {
+        return numbers.getOrDefault(Thread.currentThread(), NONE);
     }
 
     /**
@@ -205,12 +302,19 @@ public final class SessionReport {
      * @param arguments what it was called with
      */
     public synchronized void started(String tool, Map<String, Object> arguments) {
+        Instant now = Instant.now();
         ObjectNode call = json.createObjectNode();
         call.put(TOOL_FIELD, tool);
         call.set(ARGUMENTS_FIELD, json.valueToTree(new TreeMap<>(arguments)));
+        call.put(STARTED_FIELD, now.toString());
         call.putArray(ANALYSES_FIELD);
+        call.putArray(REPAIR_ROUNDS_FIELD);
+        call.putArray(COMMANDS_FIELD);
         running.put(Thread.currentThread(), call);
-        runningSince.put(Thread.currentThread(), Instant.now());
+        runningSince.put(Thread.currentThread(), now);
+        opened++;
+        numbers.put(Thread.currentThread(), opened);
+        transcript.callStarted(opened, now, tool, arguments);
         write();
     }
 
@@ -223,17 +327,38 @@ public final class SessionReport {
      * @param failed whether it answered with a failure
      */
     public synchronized void called(String tool, Map<String, Object> arguments, Duration took, boolean failed) {
+        called(tool, arguments, took, failed, NO_ANSWER);
+    }
+
+    /**
+     * Closes one call, with the analyses, rounds and commands it made and
+     * the answer it gave, and writes the report.
+     *
+     * @param tool the tool called
+     * @param arguments what it was called with
+     * @param took how long it took
+     * @param failed whether it answered with a failure
+     * @param answer the text the model was given
+     */
+    public synchronized void called(String tool, Map<String, Object> arguments, Duration took, boolean failed,
+            String answer) {
+        int number = callNumber();
+        ObjectNode open = running.remove(Thread.currentThread());
+        runningSince.remove(Thread.currentThread());
+        numbers.remove(Thread.currentThread());
         ObjectNode call = calls.addObject();
         call.put(TOOL_FIELD, tool);
         call.set(ARGUMENTS_FIELD, json.valueToTree(new TreeMap<>(arguments)));
+        call.set(STARTED_FIELD, open == null ? json.nullNode() : open.get(STARTED_FIELD));
         call.put(ELAPSED_FIELD, took.toMillis());
         call.put(FAILED_FIELD, failed);
-        ObjectNode open = running.remove(Thread.currentThread());
-        runningSince.remove(Thread.currentThread());
         ArrayNode made = open == null ? json.createArrayNode() : (ArrayNode) open.get(ANALYSES_FIELD);
         analyses.forEach(made::add);
         call.set(ANALYSES_FIELD, made);
+        call.set(REPAIR_ROUNDS_FIELD, open == null ? json.createArrayNode() : open.get(REPAIR_ROUNDS_FIELD));
+        call.set(COMMANDS_FIELD, open == null ? json.createArrayNode() : open.get(COMMANDS_FIELD));
         analyses.clear();
+        transcript.callEnded(number, Instant.now(), tool, took, failed, answer);
         byTool.merge(tool, ONE, Integer::sum);
         failures += failed ? ONE : NONE;
         callsMillis += took.toMillis();
@@ -290,29 +415,44 @@ public final class SessionReport {
     }
 
     /**
-     * Writes the report whole: to a file beside it, then moved into place.
+     * Writes the report and its text whole, each to a file beside it, then
+     * moved into place.
      */
     private void write() {
         Optional<Path> target = file();
-        if (target.isEmpty()) {
+        Optional<Path> text = textFile();
+        if (target.isEmpty() || text.isEmpty()) {
             return;
         }
         Path file = target.get();
-        Path partial = file.resolveSibling(file.getFileName() + PARTIAL_SUFFIX);
         try {
-            Files.createDirectories(file.toAbsolutePath().getParent());
-            Files.writeString(partial, json.writerWithDefaultPrettyPrinter().writeValueAsString(document()),
-                    StandardCharsets.UTF_8);
-            try {
-                Files.move(partial, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
-            } catch (AtomicMoveNotSupportedException exception) {
-                Files.move(partial, file, StandardCopyOption.REPLACE_EXISTING);
-            }
+            ObjectNode report = document();
+            writeWhole(file, json.writerWithDefaultPrettyPrinter().writeValueAsString(report));
+            writeWhole(text.get(), transcript.render(report));
         } catch (IOException exception) {
             if (!warned) {
                 warned = true;
                 System.err.printf(NOT_WRITTEN, file, exception.getMessage());
             }
+        }
+    }
+
+    /**
+     * Writes one file whole: to a file beside it, then moved into place, so
+     * a reader never sees half of it.
+     *
+     * @param file the file
+     * @param content what it holds
+     * @throws IOException when it cannot be written
+     */
+    private static void writeWhole(Path file, String content) throws IOException {
+        Path partial = file.resolveSibling(file.getFileName() + PARTIAL_SUFFIX);
+        Files.createDirectories(file.toAbsolutePath().getParent());
+        Files.writeString(partial, content, StandardCharsets.UTF_8);
+        try {
+            Files.move(partial, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+        } catch (AtomicMoveNotSupportedException exception) {
+            Files.move(partial, file, StandardCopyOption.REPLACE_EXISTING);
         }
     }
 }

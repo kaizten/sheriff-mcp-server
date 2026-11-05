@@ -3,6 +3,7 @@ package com.kaizten.sheriff.infrastructure.mcp;
 import com.kaizten.sheriff.domain.valueobject.AnalysisResult;
 import com.kaizten.sheriff.domain.valueobject.SheriffFinding;
 import com.kaizten.sheriff.infrastructure.docker.RepairOutcome;
+import com.kaizten.sheriff.infrastructure.docker.RepairRoundObserver;
 import com.kaizten.sheriff.infrastructure.docker.SheriffContainer;
 import com.kaizten.sheriff.infrastructure.docker.SheriffDockerAnalyzer;
 import com.kaizten.sheriff.infrastructure.docker.SheriffRepair;
@@ -197,8 +198,10 @@ public final class SheriffRunner {
         SheriffDockerAnalyzer stateKeeping =
                 new SheriffDockerAnalyzer(processes, image, profile, component, repository, timeout, false);
         SheriffDockerAnalyzer analyzer = exportDirectory.map(stateKeeping::exportingTo).orElse(stateKeeping);
+        RepairRoundObserver observer = (round, analyzed, analysis, fixersRan) -> report
+                .ifPresent(session -> session.round(component, analyzed, round, analysis, fixersRan));
         SheriffRepair repair = new SheriffRepair(container, analyzer, component).withRounds(rounds)
-                .withholding(withheld);
+                .withholding(withheld).observedBy(observer);
         RepairOutcome outcome = referenceCode.isEmpty() ? repair.everyFixer(List.of()) : repair.onlyRules(referenceCode);
         if (outcome.failure().isPresent()) {
             throw new SheriffUnavailableException(outcome.failure().get());

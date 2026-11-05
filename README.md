@@ -654,11 +654,27 @@ with no id names the file, or says it has none. It says which assistant
 connected (`client`: the name and version its `initialize` gave),
 this jar's version, Sheriff's image and the project, and every call: its
 `tool` and `arguments`, `elapsed_ms`, whether it `failed`, and the
-`analyses` it made, rule by rule, `before` and `after` for a repair. Its
+`analyses` it made, rule by rule, `before` and `after` for a repair, its
+`repair_rounds` as they happen (each round's analysis, rule by rule, and
+whether Sheriff's fixers ran on it) and the `commands` it ran (Sheriff's, the
+tests', git's: the command, where, how it ended and how long it took). Its
 `totals` add up the calls, by tool and failed, their time, the errors the
 first analysis found (`first_errors`) and the last analysis of each component
 (`last_errors`). What the assistant's model spent is not visible to the
 server, and is not in it.
+
+Beside it, `session-<when>-<project folder>.txt` is the same session to read
+from top to bottom, rewritten with the report: a summary (who connected, the
+calls, what is running, the commands and how many did not end well, the
+rounds, and the errors it started from and has now, rule by rule), the calls
+one per line, and then everything in the order it happened: each call with
+its arguments, each command with its exit code and time (the end of its
+output when it did not end well), each round of a repair with every error its
+analysis found, each analysis, and the answer the model was given. Unlike the
+JSON, it holds each error's text, which can quote code, as it is for going
+through a session, not for sharing. `sheriff_task` with no id names both.
+Commands the assistant ran itself, and its edits, are not seen by the server
+and are not in it.
 
 **Comparing runs and sessions.** `--compare-reports` reads the reports in the files
 and folders it is given (with none, the current folder), at any depth, and
