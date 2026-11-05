@@ -483,10 +483,15 @@ the mount names (`SheriffHistory`; Sheriff appends every `test` run on the
 repository to it, and these tools never write there, as their runs mount a
 state folder), or one the project declares a profile for. It is checked under
 the declared profile and every test the history records on it, each with its
-base profile. Any other gets an answer that ends with `Next step: none`, and
+base profile. Any other gets an answer whose step is `none` unless the user
+asked for Sheriff, and
 the hooks a profile of `""`, which `ComponentGate.componentFor` does not
 guard: a Codex session on a repository nobody had run Sheriff on repaired the
-whole of it under `JAVA` before writing what it was asked for. A call that
+whole of it under `JAVA` before writing what it was asked for. That answer's
+step names `sheriff_test` with the profile the sources call for, for a user
+who asked for Sheriff (the instructions let a model name a profile only where
+a step does, so with `none` alone one asked to fix Sheriff's errors stopped);
+the steps after carry the profile on. A call that
 names a profile, `--check`, the Maven plugin and the loop check what they are
 given. `SHERIFF_SCOPE=all` checks every component, as before; `scripts/e2e.sh`
 sets it for every scenario but 24, which checks the default.
