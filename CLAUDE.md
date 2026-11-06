@@ -326,6 +326,18 @@ installers and both workflows compare it with a release's. Do not move to a
   `package` line but no other file's `import` of it, and the analysis after
   finds nothing. Only the project's tests catch that, which is why a repair
   is verified by them.
+- **`fix` gives a file's every finding up after its first fixer** (image of
+  5 November 2026): it runs that fixer, counts all of the file's findings
+  fixed even when the fixer changed nothing, runs no other fixer on it, and a
+  second `fix` on the same state finds no error. The braces fixer, which
+  does not handle an `if` on two lines and runs first in the default set,
+  so cost a file every other repair. Each `fix` names the fixers it ran
+  (`Selected error: CODE`, read by `FixersRun`), so `SheriffRepair` keeps,
+  per profile (`FixerAttempts`), the fixers that ran and left their rule's
+  count where it was: they are not given again in that repair, the default
+  set is not run again (it would run them first), and a round runs for the
+  fixers they kept from running though the count did not drop. Until a fixer
+  changes nothing, no round differs. `docs/sheriff/` has the request.
 - **`fix -f` with no `--fixers` is not every fixer, nor only the state's.**
   Its default set leaves fixers out and runs some regardless of the state.
   With `--fixers A,B` it runs only those. So `sheriff_fix` with no arguments
