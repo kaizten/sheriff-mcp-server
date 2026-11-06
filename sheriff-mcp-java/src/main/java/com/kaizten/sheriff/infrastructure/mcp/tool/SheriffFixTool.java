@@ -45,6 +45,8 @@ final class SheriffFixTool {
     private static final String SPECIFIC_FIXER_SCOPE = "the `%s` fixer";
     private static final String FIX_SUMMARY =
             "Ran %s on %s: %d error(s) before, %d after (%d repaired).";
+    private static final String WORSE_SUMMARY =
+            "Ran %s on %s: %d error(s) before, %d after (%d more than before).";
     private static final String ROUNDS = " The fixers ran %d rounds, each measured by a new analysis.";
     private static final int ONE_ROUND = 1;
     private static final String NOT_APPLIED =
@@ -162,8 +164,9 @@ final class SheriffFixTool {
         String scope = referenceCode.isEmpty()
                 ? DEFAULT_FIXER_SCOPE
                 : String.format(SPECIFIC_FIXER_SCOPE, referenceCode);
-        StringBuilder body = new StringBuilder(String.format(FIX_SUMMARY,
-                scope, component, run.before().total(), run.after().total(), repaired));
+        String summary = repaired < NO_ERRORS ? WORSE_SUMMARY : FIX_SUMMARY;
+        StringBuilder body = new StringBuilder(String.format(summary,
+                scope, component, run.before().total(), run.after().total(), Math.abs(repaired)));
         if (run.rounds() > ONE_ROUND) {
             body.append(String.format(ROUNDS, run.rounds()));
         }

@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.kaizten.sheriff.domain.valueobject.AnalysisResult;
 import com.kaizten.sheriff.domain.valueobject.SheriffFinding;
+import com.kaizten.sheriff.infrastructure.process.ProcessObserver;
 import com.kaizten.sheriff.infrastructure.process.ProcessOutcome;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -51,11 +52,11 @@ import java.util.function.Supplier;
  *
  * <p>Each call also holds every round of a repair as it happens, with the
  * analysis that opened it rule by rule, and every command it ran, with how
- * it ended. Beside the report, a text of the same name reads the session
+ * it ended; a command still running is named under {@code command_running}. Beside the report, a text of the same name reads the session
  * from top to bottom ({@link SessionTranscript}): a summary, then all of it
  * in order, every error by its text included.
  */
-public final class SessionReport {
+public final class SessionReport implements ProcessObserver {
 
     private static final String SCHEMA_FIELD = "schema";
     private static final String KIND_FIELD = "kind";
@@ -72,6 +73,7 @@ public final class SessionReport {
     private static final String FAILED_FIELD = "failed";
     private static final String ANALYSES_FIELD = "analyses";
     private static final String RUNNING_FIELD = "running";
+    private static final String COMMAND_RUNNING_FIELD = "command_running";
     private static final String COMPONENT_FIELD = "component";
     private static final String PROFILE_FIELD = "profile";
     private static final String BEFORE_FIELD = "before";
@@ -130,6 +132,7 @@ public final class SessionReport {
     private int failures;
     private long callsMillis;
     private final Map<Thread, Integer> numbers = new HashMap<>();
+    private final Map<Thread, Integer> commandPlaces = new HashMap<>();
     private final SessionTranscript transcript = new SessionTranscript();
     private int opened;
     private boolean warned;
@@ -263,26 +266,55 @@ public final class SessionReport {
     }
 
     /**
-     * Keeps one command a call ran, once it ended. A command run outside
-     * any call, such as the image's pull in the background, is not kept.
+     * Keeps one command a call is starting, named as running until it ends,
+     * so a long one is seen while it runs. A command run outside any call is
+     * not kept.
+     *
+     * @param command the command
+     * @param directory where it runs, {@code null} for the server's own
+     */
+    @Override
+    public synchronized void starting(List<String> command, Path directory) {
+        ObjectNode call = running.get(Thread.currentThread());
+        if (call == null) {
+            return;
+        }
+        call.put(COMMAND_RUNNING_FIELD, String.join(COMMAND_SEPARATOR, command));
+        commandPlaces.put(Thread.currentThread(), transcript.commandStarted(callNumber(), Instant.now(), command,
+                directory));
+        write();
+    }
+
+    /**
+     * Keeps one command a call ran, once it ended, in the place it was kept
+     * when it started. A command run outside any call, such as the image's
+     * pull in the background, is not kept.
      *
      * @param command the command
      * @param directory where it ran, {@code null} for the server's own
      * @param outcome how it ended
      * @param took how long it ran
      */
-    public synchronized void command(List<String> command, Path directory, ProcessOutcome outcome, Duration took) {
+    @Override
+    public synchronized void ran(List<String> command, Path directory, ProcessOutcome outcome, Duration took) {
         ObjectNode call = running.get(Thread.currentThread());
+        Integer place = commandPlaces.remove(Thread.currentThread());
         if (call == null) {
             return;
         }
+        call.remove(COMMAND_RUNNING_FIELD);
         ObjectNode entry = ((ArrayNode) call.get(COMMANDS_FIELD)).addObject();
         entry.put(COMMAND_FIELD, String.join(COMMAND_SEPARATOR, command));
         entry.set(DIRECTORY_FIELD, directory == null ? json.nullNode() : json.valueToTree(directory.toString()));
         entry.put(STATUS_FIELD, outcome.status().name());
         entry.put(EXIT_CODE_FIELD, outcome.exitCode());
         entry.put(ELAPSED_FIELD, took.toMillis());
-        transcript.command(callNumber(), Instant.now(), command, directory, outcome, took);
+        Instant now = Instant.now();
+        if (place == null) {
+            transcript.command(callNumber(), now, command, directory, outcome, took);
+        } else {
+            transcript.commandEnded(place, callNumber(), now.minus(took), command, directory, outcome, took);
+        }
         write();
     }
 

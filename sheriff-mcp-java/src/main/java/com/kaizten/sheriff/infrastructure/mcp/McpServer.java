@@ -290,7 +290,7 @@ public final class McpServer {
         Tools tools = serverTools(config, runner.reportingTo(session), catalog, image, ownJar(),
                 new GitHubReleases(GitHubReleases.REPOSITORY));
         tools.reportingTo(session);
-        ProcessObservers.observeWith(session::command);
+        ProcessObservers.observeWith(session);
         JsonRpcServer server = new JsonRpcServer(tools::definitions, tools::call, tools::answersAtOnce,
                 config.serverName(), instructions());
         server.onClient(session::client);
@@ -302,7 +302,7 @@ public final class McpServer {
 
     /**
      * The report of this session: a file of its own in the reports folder,
-     * named after when it started and the project's folder, with this jar's
+     * named after when it started and the project, with this jar's
      * version, Sheriff's image and the project in it, written while
      * {@code SHERIFF_REPORT} is on, which it asks at every write.
      *
@@ -312,13 +312,31 @@ public final class McpServer {
      */
     static SessionReport sessionReport(McpConfig config, ImageProvisioning image) {
         Path project = config.repository().toAbsolutePath().normalize();
-        String folder = project.getFileName() == null ? project.toString() : project.getFileName().toString();
-        String name = String.format(SESSION_REPORT_NAME, LocalDateTime.now().format(SESSION_STAMP), folder)
+        String name = String.format(SESSION_REPORT_NAME, LocalDateTime.now().format(SESSION_STAMP),
+                projectName(config, project))
                 .replaceAll(NAME_UNSAFE, NAME_SAFE);
         return new SessionReport(name, config::reportsDirectory, Map.of(TOOLS_SECTION,
                 Map.of(VERSION_FIELD, ServerVersion.current(), COMMIT_FIELD, ServerVersion.commit()),
                 SHERIFF_SECTION, image.identity(),
                 PROJECT_SECTION, Map.of(REPOSITORY_FIELD, project.toString())));
+    }
+
+    /**
+     * What a session's report is named after: the project's own folder when
+     * the project is one module, as its mount is the folder that holds it
+     * and its neighbours, and otherwise the folder mounted.
+     *
+     * @param config where the project is
+     * @param project the folder mounted
+     * @return the name
+     */
+    private static String projectName(McpConfig config, Path project) {
+        String own = config.layout().ownComponent();
+        if (!own.isEmpty()) {
+            return own;
+        }
+        Path folder = project.getFileName();
+        return folder == null ? project.toString() : folder.toString();
     }
 
     /**

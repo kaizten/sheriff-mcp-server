@@ -39,7 +39,8 @@ final class SessionTranscript {
     private static final String PROJECT_LINE = "Project:  %s%n";
     private static final String TIMES_LINE = "Started:  %s, updated %s%n";
     private static final String SUMMARY = "%nSummary%n";
-    private static final String CALLS_LINE = "  Calls: %d (%s), %d failed, %s in calls%n";
+    private static final String CALLS_LINE = "  Calls: %d%s, %d failed, %s in calls%n";
+    private static final String BY_TOOL = " (%s)";
     private static final String RUNNING_LINE = "  Running now: %s, for %s%n";
     private static final String COMMANDS_LINE = "  Commands run: %d, %d not ended well%n";
     private static final String ROUNDS_LINE = "  Repair rounds with fixers run: %d%n";
@@ -55,6 +56,7 @@ final class SessionTranscript {
     private static final String HISTORY = "%nWhat was done, in order%n";
     private static final String STARTED_ENTRY = "%n[%s] #%d %s %s started%n";
     private static final String COMMAND_ENTRY = "[%s] #%d $ %s%n          in %s: %s after %s%n";
+    private static final String RUNNING_COMMAND_ENTRY = "[%s] #%d $ %s%n          in %s: running%n";
     private static final String OUTPUT_HEAD = "          its output ended with:%n";
     private static final String OUTPUT_LINE = "            %s%n";
     private static final String EXIT_CODE = "exit code %d";
@@ -152,6 +154,55 @@ final class SessionTranscript {
      * @param took how long it ran
      */
     void command(int call, Instant at, List<String> command, Path directory, ProcessOutcome outcome, Duration took) {
+        entries.add(commandEntry(call, at, command, directory, outcome, took));
+    }
+
+    /**
+     * Keeps one command a call is starting, in its place in the order, as
+     * running until {@link #commandEnded} says how it ended.
+     *
+     * @param call the call's number, 0 for none
+     * @param at when it started
+     * @param command the command
+     * @param directory where it runs, {@code null} for the server's own
+     * @return its place, for {@link #commandEnded}
+     */
+    int commandStarted(int call, Instant at, List<String> command, Path directory) {
+        entries.add(String.format(RUNNING_COMMAND_ENTRY, time(at), call, String.join(SPACE, command),
+                directory == null ? OUTSIDE_A_CALL : directory));
+        return entries.size() - ONE;
+    }
+
+    /**
+     * Says, in the place a command was kept when it started, how it ended.
+     *
+     * @param place what {@link #commandStarted} gave
+     * @param call the call's number, 0 for none
+     * @param at when it started
+     * @param command the command
+     * @param directory where it ran, {@code null} for the server's own
+     * @param outcome how it ended
+     * @param took how long it ran
+     */
+    void commandEnded(int place, int call, Instant at, List<String> command, Path directory, ProcessOutcome outcome,
+            Duration took) {
+        entries.set(place, commandEntry(call, at, command, directory, outcome, took));
+    }
+
+    /**
+     * One command as it ended, with the end of what it wrote when it did not
+     * end well.
+     *
+     * @param call the call's number, 0 for none
+     * @param at the time it is shown at
+     * @param command the command
+     * @param directory where it ran, {@code null} for the server's own
+     * @param outcome how it ended
+     * @param took how long it ran
+     * @return its lines
+     */
+    private static String commandEntry(int call, Instant at, List<String> command, Path directory,
+            ProcessOutcome outcome, Duration took) {
         StringBuilder entry = new StringBuilder(String.format(COMMAND_ENTRY, time(at), call,
                 String.join(SPACE, command), directory == null ? OUTSIDE_A_CALL : directory, ending(outcome),
                 duration(took.toMillis())));
@@ -159,7 +210,7 @@ final class SessionTranscript {
             entry.append(String.format(OUTPUT_HEAD));
             tail(outcome).forEach(line -> entry.append(String.format(OUTPUT_LINE, line)));
         }
-        entries.add(entry.toString());
+        return entry.toString();
     }
 
     /**
@@ -283,7 +334,8 @@ final class SessionTranscript {
         totals.path(BY_TOOL_FIELD).properties().forEach(field -> byTool.add(String.format(COUNT, field.getKey(),
                 field.getValue().asInt())));
         StringBuilder text = new StringBuilder(String.format(SUMMARY));
-        text.append(String.format(CALLS_LINE, totals.path(CALLS_FIELD).asInt(), String.join(SEPARATOR, byTool),
+        String tools = byTool.isEmpty() ? EMPTY : String.format(BY_TOOL, String.join(SEPARATOR, byTool));
+        text.append(String.format(CALLS_LINE, totals.path(CALLS_FIELD).asInt(), tools,
                 totals.path(FAILURES_FIELD).asInt(), duration(totals.path(CALLS_MS_FIELD).asLong())));
         report.path(RUNNING_FIELD).forEach(call -> text.append(String.format(RUNNING_LINE,
                 call.path(TOOL_FIELD).asText(), duration(call.path(ELAPSED_FIELD).asLong()))));

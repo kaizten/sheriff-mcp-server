@@ -5,8 +5,8 @@ import java.time.Duration;
 import java.util.List;
 
 /**
- * What is told of every command {@link SystemProcessRunner} has run, once it
- * has ended, on the thread that ran it.
+ * What is told of every command {@link SystemProcessRunner} runs, when it
+ * starts and once it has ended, on the thread that runs it.
  */
 @FunctionalInterface
 public interface ProcessObserver {
@@ -20,4 +20,13 @@ public interface ProcessObserver {
      * @param took how long it ran
      */
     void ran(List<String> command, Path workingDirectory, ProcessOutcome outcome, Duration took);
+
+    /**
+     * One command, about to run; by default, nothing is done with it.
+     *
+     * @param command the command, as it was given
+     * @param workingDirectory where it runs, {@code null} for this process's own
+     */
+    default void starting(List<String> command, Path workingDirectory) {
+    }
 }

@@ -72,6 +72,7 @@ public final class SystemProcessRunner implements ProcessRunner {
     @Override
     public ProcessOutcome run(List<String> command, Path workingDirectory, Map<String, String> environment,
             Duration timeout, String standardInput) {
+        ProcessObservers.starting(command, workingDirectory);
         long started = System.nanoTime();
         ProcessOutcome outcome = launched(command, workingDirectory, environment, timeout, standardInput);
         ProcessObservers.ran(command, workingDirectory, outcome, Duration.ofNanos(System.nanoTime() - started));

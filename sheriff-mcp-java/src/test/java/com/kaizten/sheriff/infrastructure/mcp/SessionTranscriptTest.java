@@ -43,7 +43,7 @@ final class SessionTranscriptTest {
         String text = new SessionTranscript().render(report("{}"));
 
         assertTrue(text.startsWith("Sheriff MCP session "), text);
-        assertTrue(text.contains("Calls: 0 (), 0 failed, 0 ms in calls"), text);
+        assertTrue(text.contains("Calls: 0, 0 failed, 0 ms in calls"), text);
         assertTrue(text.contains("Commands run: 0, 0 not ended well"), text);
         assertTrue(text.contains("Calls\n  none yet"), text);
         assertTrue(text.endsWith("What was done, in order\n\nNothing yet.\n"), text);
@@ -104,6 +104,34 @@ final class SessionTranscriptTest {
         assertTrue(text.contains("in this process: 'git' is not installed after 0 ms"), text);
         assertEquals(2, text.split("its output ended with", -1).length - 1,
                 "the two that did not end well show their output, the one that did shows none");
+    }
+
+    @Test
+    @DisplayName("a command started is kept as running, in order, and then said how it ended in that same place")
+    void aStartedCommandEndsInItsPlace() throws Exception {
+        SessionTranscript transcript = new SessionTranscript();
+        int first = transcript.commandStarted(4, AT, List.of("docker", "run"), Path.of("/state"));
+        int second = transcript.commandStarted(4, AT, List.of("git", "status"), null);
+        transcript.round(4, AT, "app", "JAVA", 1, errors(), false);
+
+        String running = transcript.render(report("{}"));
+
+        assertEquals(List.of(0, 1), List.of(first, second));
+        assertTrue(running.contains("#4 $ docker run\n          in /state: running\n"), running);
+        assertTrue(running.contains("#4 $ git status\n          in this process: running\n"), running);
+
+        transcript.commandEnded(first, 4, AT, List.of("docker", "run"), Path.of("/state"),
+                ProcessOutcome.completed(0, "[]", ""), Duration.ofSeconds(12));
+        transcript.commandEnded(second, 4, AT, List.of("git", "status"), null,
+                ProcessOutcome.completed(128, "", "not a repository"), Duration.ZERO);
+        String ended = transcript.render(report("{}"));
+
+        assertFalse(ended.contains(": running\n"), ended);
+        int docker = ended.indexOf("#4 $ docker run\n          in /state: exit code 0 after 12.0 s\n");
+        int git = ended.indexOf("#4 $ git status\n          in this process: exit code 128 after 0 ms\n");
+        int round = ended.indexOf("#4 round 1 of the repair");
+        assertTrue(docker > 0 && git > docker && round > git, "each where it started: " + ended);
+        assertTrue(ended.contains("not a repository"), "one that did not end well shows its output: " + ended);
     }
 
     @Test

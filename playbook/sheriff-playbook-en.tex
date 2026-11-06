@@ -637,7 +637,8 @@ not visible to Sheriff. The report is written as the session goes, a call
 included while it runs, and the setting counts at once: turned on in a
 session already open, its report holds every call since the session began.
 Beside it, \path{session-<when>-<project>.txt} is the same session to read
-in order: a summary first, then every call, every command it ran, every round
+in order: a summary first, then every call, every command it ran (named as
+running from the moment it starts), every round
 of a repair with every error its analysis found, and every answer the
 assistant was given. It can quote your code, so keep it to yourself. Asked
 for its report, the assistant calls \tool{sheriff_task}, which names both

@@ -96,12 +96,37 @@ final class SessionReportTest {
     }
 
     @Test
+    @DisplayName("a command is named while it runs, and its place in the text is the one it started in")
+    void aCommandIsNamedWhileItRuns() throws Exception {
+        Path file = folder.resolve("session-2-shop.json");
+        SessionReport report = new SessionReport(file, Map.of());
+        report.started("sheriff_fix", Map.of("component", "app"));
+        report.starting(List.of("docker", "run", "fix"), folder);
+        assertEquals("docker run fix", read(file).get("running").get(0).get("command_running").asText());
+        String text = Files.readString(folder.resolve("session-2-shop.txt"));
+        assertTrue(text.contains("$ docker run fix\n          in " + folder + ": running\n"), text);
+
+        report.round("app", "JAVA", 1, errors(error("A", "R1")), true);
+        report.ran(List.of("docker", "run", "fix"), folder, ProcessOutcome.completed(0, "", ""), Duration.ofSeconds(3));
+        report.starting(List.of("git", "status"), null);
+        report.ran(List.of("git", "status"), null, ProcessOutcome.completed(0, "", ""), Duration.ZERO);
+
+        assertFalse(read(file).get("running").get(0).has("command_running"), "it ended");
+        String ended = Files.readString(folder.resolve("session-2-shop.txt"));
+        assertFalse(ended.contains(": running\n"), ended);
+        int command = ended.indexOf("$ docker run fix\n          in " + folder + ": exit code 0 after 3.0 s");
+        int round = ended.indexOf("round 1 of the repair");
+        assertTrue(command > 0 && round > command, "the command where it started, before the round: " + ended);
+        assertEquals(2, read(file).get("running").get(0).get("commands").size());
+    }
+
+    @Test
     @DisplayName("a repair's rounds and a call's commands are kept as they happen, and no command outside a call")
     void roundsAndCommandsAreKeptAsTheyHappen() throws Exception {
         Path file = folder.resolve("session.json");
         SessionReport report = new SessionReport(file, Map.of());
         report.started("sheriff_fix", Map.of("component", "app"));
-        report.command(List.of("docker", "run", "test"), folder, ProcessOutcome.completed(0, "[]", ""),
+        report.ran(List.of("docker", "run", "test"), folder, ProcessOutcome.completed(0, "[]", ""),
                 Duration.ofSeconds(2));
         report.round("app", "JAVA", 1, errors(error("A", "R1"), error("B", "R2")), true);
         JsonNode running = read(file).get("running").get(0);
@@ -110,7 +135,7 @@ final class SessionReportTest {
         assertEquals(2000, running.get("commands").get(0).get("elapsed_ms").asLong());
         assertEquals(2, running.get("repair_rounds").get(0).get("total").asInt());
         assertTrue(running.get("repair_rounds").get(0).get("fixers_ran").asBoolean());
-        Thread outside = new Thread(() -> report.command(List.of("docker", "pull"), null,
+        Thread outside = new Thread(() -> report.ran(List.of("docker", "pull"), null,
                 ProcessOutcome.completed(0, "", ""), Duration.ZERO));
         outside.start();
         outside.join();
@@ -136,7 +161,7 @@ final class SessionReportTest {
         report.called("sheriff_test", Map.of("component", "app"), Duration.ofMillis(1500), false,
                 "app has 1 error(s) under JAVA.\nNext step: call the sheriff_fix tool");
         report.started("sheriff_fix", Map.of("component", "app"));
-        report.command(List.of("docker", "run", "fix"), folder, ProcessOutcome.completed(3, "", "it broke"),
+        report.ran(List.of("docker", "run", "fix"), folder, ProcessOutcome.completed(3, "", "it broke"),
                 Duration.ofSeconds(3));
         report.round("app", "JAVA", 1, errors(error("/data/app/A.java", "R1")), true);
         report.round("app", "JAVA", 2, errors(), false);
