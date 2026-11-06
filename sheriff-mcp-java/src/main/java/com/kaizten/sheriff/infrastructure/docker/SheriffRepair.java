@@ -12,7 +12,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Predicate;
-import java.util.stream.Collectors;
 
 /**
  * The one way Sheriff's own fixers are run: by {@code sheriff_fix}, by the
@@ -49,6 +48,11 @@ import java.util.stream.Collectors;
  * before, so the last analysis, the one that repaired nothing, is the state
  * the repair left; a fixer that exits 0 having done nothing is caught there.
  * With rules named, only their fixers run, once.
+ *
+ * <p>A fixer that ran and left its rule's count where it was is not given
+ * again in that repair, nor is the default set run again, which would run it
+ * first; when Sheriff skipped other fixers for it, a round runs again for
+ * them though the count did not drop ({@link FixerAttempts}).
  *
  * <p>Findings it is told to withhold are taken out of the state before every
  * {@code fix}, so no fixer makes their repair again: one whose repair was
@@ -171,6 +175,7 @@ public final class SheriffRepair {
     private RepairOutcome repair(List<SheriffRule> rules, Optional<String> named, int rounds) {
         List<SheriffDockerAnalyzer> profiles = analyzer.perProfile();
         List<Integer> previous = new ArrayList<>(Collections.nCopies(profiles.size(), Integer.MAX_VALUE));
+        List<FixerAttempts> attempts = profiles.stream().map(profile -> new FixerAttempts()).toList();
         Set<String> codes = new LinkedHashSet<>();
         List<String> failures = new ArrayList<>();
         AnalysisResult before = null;
@@ -189,16 +194,18 @@ public final class SheriffRepair {
                         return RepairOutcome.failed(analysis.message());
                     }
                     analyses.add(analysis);
-                    boolean helping = analysis.total() < previous.get(index);
+                    boolean retrying = attempts.get(index).skippedWorthRetrying(analysis, rules);
+                    boolean helping = analysis.total() < previous.get(index) || retrying;
                     previous.set(index, analysis.total());
                     List<SheriffFinding> repairable = analysis.errors().stream().filter(withheld.negate()).toList();
-                    boolean fixing = round <= rounds && helping && repairable(repairable, rules);
+                    boolean fixing = round <= rounds && helping && repairable(repairable, rules)
+                            && (named.isPresent() || attempts.get(index).worthRunning(codesOf(repairable)));
                     observer.analyzed(round, single.profile(), analysis, fixing);
                     if (fixing) {
                         single.withholdFromState(withheld);
                         codes.addAll(DeterministicPolicy.fixableCodes(repairable, rules));
-                        failures.addAll(named.isPresent() ? runFix(List.of(FIXERS_FLAG, named.get()))
-                                : everyFixerFor(repairable));
+                        failures.addAll(named.isPresent() ? FixerFailures.in(runFix(List.of(FIXERS_FLAG, named.get())))
+                                : everyFixerFor(repairable, analysis, attempts.get(index)));
                         repaired = true;
                     }
                 } catch (FixNotRun exception) {
@@ -218,19 +225,40 @@ public final class SheriffRepair {
 
     /**
      * Sheriff's default set, then the fixer of every rule one analysis
-     * found, while the state that analysis left is still there to read.
+     * found, while the state that analysis left is still there to read; not
+     * a fixer that ran in an earlier round and changed nothing.
      *
      * @param errors the errors under one profile that a fixer may repair
+     * @param analysis the analysis they come from
+     * @param attempts what this profile's fixers did in earlier rounds
      * @return the fixers that could not be applied
      */
-    private List<String> everyFixerFor(List<SheriffFinding> errors) {
-        List<String> failures = new ArrayList<>(runFix(List.of()));
-        String found = errors.stream().map(SheriffFinding::referenceCode).filter(code -> !code.isEmpty())
-                .distinct().collect(Collectors.joining(CODE_SEPARATOR));
-        if (!found.isEmpty()) {
-            failures.addAll(runFix(List.of(FIXERS_FLAG, found)));
+    private List<String> everyFixerFor(List<SheriffFinding> errors, AnalysisResult analysis,
+            FixerAttempts attempts) {
+        List<String> outputs = new ArrayList<>();
+        if (attempts.defaultSetRuns()) {
+            outputs.add(runFix(List.of()));
         }
-        return failures;
+        List<String> found = attempts.worthGiving(codesOf(errors));
+        if (!found.isEmpty()) {
+            outputs.add(runFix(List.of(FIXERS_FLAG, String.join(CODE_SEPARATOR, found))));
+        }
+        Set<String> ran = new LinkedHashSet<>();
+        outputs.forEach(output -> ran.addAll(FixersRun.in(output)));
+        attempts.ran(codesOf(errors), ran, analysis);
+        return outputs.stream().flatMap(output -> FixerFailures.in(output).stream()).toList();
+    }
+
+    /**
+     * The rules of some errors, each once, in order, leaving out a finding
+     * with none.
+     *
+     * @param errors the errors
+     * @return their rules
+     */
+    private static List<String> codesOf(List<SheriffFinding> errors) {
+        return errors.stream().map(SheriffFinding::referenceCode).filter(code -> !code.isEmpty()).distinct()
+                .toList();
     }
 
     /**
@@ -264,10 +292,11 @@ public final class SheriffRepair {
      * rounds here do that, each measured.
      *
      * @param extraArguments what goes after the standard arguments
-     * @return the fixers Sheriff said it could not apply, and why
+     * @return what it printed, which says the fixers it ran and the ones it
+     *     could not apply
      * @throws FixNotRun when the {@code fix} did not run
      */
-    private List<String> runFix(List<String> extraArguments) {
+    private String runFix(List<String> extraArguments) {
         List<String> arguments = new ArrayList<>(List.of(FIX_COMMAND,
                 APPLY_FLAG,
                 TYPE_FLAG, DETERMINISTIC_TYPE,
@@ -286,6 +315,6 @@ public final class SheriffRepair {
             String reason = SheriffDockerAnalyzer.reasonOf(outcome.standardError());
             throw new FixNotRun(reason.isEmpty() ? REFUSED_ARGUMENTS : reason);
         }
-        return FixerFailures.in(outcome.standardOutput());
+        return outcome.standardOutput();
     }
 }
