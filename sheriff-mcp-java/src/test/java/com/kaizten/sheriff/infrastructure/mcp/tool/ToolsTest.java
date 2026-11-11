@@ -310,8 +310,7 @@ final class ToolsTest {
         String before = "[{\"file\":\"/data/app/A.java\",\"description\":\"d\",\"howToSolve\":\"h\","
                 + "\"referenceCode\":\"R\",\"type\":\"ERROR\"}]";
         Tools tools = toolsWithTests(VerificationResult.failed("COMPILATION ERROR: cannot find symbol"),
-                ProcessOutcome.completed(0, before, ""), ProcessOutcome.completed(1, "fixed", ""),
-                ProcessOutcome.completed(1, "fixed", ""), ProcessOutcome.completed(0, "", ""));
+                ProcessOutcome.completed(0, before, ""), ProcessOutcome.completed(1, "fixed", ""), ProcessOutcome.completed(0, "", ""));
         ToolOutcome outcome = tools.call("sheriff_fix", Map.of("component", "app", "verify", "true"));
         assertTrue(outcome.text().contains("FAIL after the repair"), outcome.text());
         assertTrue(outcome.text().contains("cannot find symbol"));
@@ -326,8 +325,7 @@ final class ToolsTest {
         String sameHashes = "{\"/data/app/A.java\": {\"hash\": \"aaa\"}}";
         McpConfig config = new McpConfig(Map.of("SHERIFF_REPO", repository.toString(), "XDG_STATE_HOME", state.toString()));
         SheriffRunner runner = new SheriffRunner(new QueuedProcessRunner(sameHashes,
-                ProcessOutcome.completed(0, before, ""), ProcessOutcome.completed(1, "", ""),
-                ProcessOutcome.completed(1, "", ""), ProcessOutcome.completed(0, before, "")), config.image(),
+                ProcessOutcome.completed(0, before, ""), ProcessOutcome.completed(1, "", ""), ProcessOutcome.completed(0, before, "")), config.image(),
                 repository, Duration.ofSeconds(30));
         Tools tools = new Tools(config, runner, List::of, config::rulesCatalog,
                 component -> VerificationResult.failed("expected: <25.0> but was: <0.0>"));
@@ -376,7 +374,7 @@ final class ToolsTest {
         McpConfig config = new McpConfig(Map.of("SHERIFF_REPO", repository.toString(), "XDG_STATE_HOME", state.toString()));
         SheriffRunner runner = new SheriffRunner(new QueuedProcessRunner(
                 ProcessOutcome.completed(0, outdated, ""), ProcessOutcome.completed(0, "", ""),
-                ProcessOutcome.completed(0, "", ""), ProcessOutcome.completed(0, "[]", ""),
+                ProcessOutcome.completed(0, "[]", ""),
                 ProcessOutcome.completed(0, outdated, ""), ProcessOutcome.completed(0, outdated, "")),
                 config.image(), repository, Duration.ofSeconds(30));
         Tools tools = new Tools(config, runner, List::of, config::rulesCatalog, component -> VerificationResult.passed("ok"));
@@ -401,7 +399,7 @@ final class ToolsTest {
             + "12.3.1 -> 14.3.0.\",\"howToSolve\":\"h\",\"referenceCode\":\"JavaPomOutdatedDependency\","
             + "\"type\":\"ERROR\"}";
     private static final String UNSORTED = "{\"file\":\"/data/app/A.java\",\"description\":\"unsorted\","
-            + "\"howToSolve\":\"h\",\"referenceCode\":\"SortedImport\",\"type\":\"ERROR\"}";
+            + "\"howToSolve\":\"h\",\"referenceCode\":\"SortedImport\",\"type\":\"ERROR\",\"script\":\"s\"}";
     private static final String OLD_POM = "{\"/data/app/pom.xml\": {\"hash\": \"aaa\"}}";
     private static final String RAISED_POM = "{\"/data/app/pom.xml\": {\"hash\": \"bbb\"}}";
 
@@ -424,9 +422,8 @@ final class ToolsTest {
     @Test
     @DisplayName("only the errors whose repair was undone are named as undone, each on one line")
     void onlyUndoneErrorsAreNamed() throws IOException {
-        Tools tools = fixTools(List.of(), List.of(), found(POM_OUTDATED, UNSORTED), FIXER_RAN, FIXER_RAN,
-                found(UNSORTED), FIXER_RAN, FIXER_RAN, found(UNSORTED), found(POM_OUTDATED, UNSORTED), FIXER_RAN,
-                FIXER_RAN, found(POM_OUTDATED, UNSORTED));
+        Tools tools = fixTools(List.of(), List.of(), found(POM_OUTDATED, UNSORTED), FIXER_RAN,
+                found(UNSORTED), FIXER_RAN, found(UNSORTED), found(POM_OUTDATED, UNSORTED), FIXER_RAN, found(POM_OUTDATED, UNSORTED));
 
         tools.call("sheriff_fix", Map.of("component", "app"));
         String undone = tools.call("sheriff_fix", Map.of("component", "app")).text();
@@ -441,7 +438,7 @@ final class ToolsTest {
     void anEarlierRepairIsRememberedUntilTheTestsPass() throws IOException {
         VerificationResult failing = VerificationResult.failed("BUILD FAILURE");
         Tools tools = fixTools(List.of(OLD_POM, RAISED_POM), List.of(failing, failing,
-                VerificationResult.passed("ok"), failing), found(POM_OUTDATED), FIXER_RAN, FIXER_RAN, found(),
+                VerificationResult.passed("ok"), failing), found(POM_OUTDATED), FIXER_RAN, found(),
                 found(), found(), found(), found(), found());
         String earlier = "This repair changed no file, but an earlier one changed app/pom.xml";
 
@@ -463,7 +460,7 @@ final class ToolsTest {
     @DisplayName("tests failing after a repair that changed a file are put on that repair")
     void failingTestsAfterAChangeArePutOnIt() throws IOException {
         Tools tools = fixTools(List.of(OLD_POM, RAISED_POM), List.of(VerificationResult.failed("BUILD FAILURE")),
-                found(POM_OUTDATED), FIXER_RAN, FIXER_RAN, found());
+                found(POM_OUTDATED), FIXER_RAN, found());
 
         String text = tools.call("sheriff_fix", Map.of("component", "app", "verify", "true")).text();
 
@@ -607,7 +604,7 @@ final class ToolsTest {
                 "java/empty-lines.py", List.of("JAVA"));
 
         String text = tools(List.of(emptyLines), ProcessOutcome.completed(0, remaining, ""),
-                ProcessOutcome.completed(1, "", ""), ProcessOutcome.completed(1, "", ""),
+                ProcessOutcome.completed(1, "", ""),
                 ProcessOutcome.completed(0, remaining, "")).call("sheriff_fix", Map.of("component", "app")).text();
 
         assertFalse(text.contains("can repair this one"), text);
@@ -621,7 +618,7 @@ final class ToolsTest {
                 + "\"referenceCode\":\"JavaJavaDocCommentInMethodMessage6\",\"type\":\"ERROR\"}]";
 
         String text = tools(List.of(), ProcessOutcome.completed(0, remaining, ""),
-                ProcessOutcome.completed(1, "", ""), ProcessOutcome.completed(1, "", ""),
+                ProcessOutcome.completed(1, "", ""),
                 ProcessOutcome.completed(0, remaining, "")).call("sheriff_fix", Map.of("component", "app")).text();
 
         assertTrue(text.contains("What Sheriff accepts") && text.contains("@param page"), text);
@@ -976,10 +973,8 @@ final class ToolsTest {
         }
         errors.add(String.format(error, "B", 0, "B"));
         String found = "[" + String.join(",", errors) + "]";
-        Tools tools = tools(List.of(), ProcessOutcome.completed(0, found, ""), ProcessOutcome.completed(1, "", ""),
-                ProcessOutcome.completed(1, "", ""), ProcessOutcome.completed(0, found, ""),
-                ProcessOutcome.completed(0, found, ""), ProcessOutcome.completed(1, "", ""),
-                ProcessOutcome.completed(1, "", ""), ProcessOutcome.completed(0, found, ""));
+        Tools tools = tools(List.of(), ProcessOutcome.completed(0, found, ""), ProcessOutcome.completed(1, "", ""), ProcessOutcome.completed(0, found, ""),
+                ProcessOutcome.completed(0, found, ""), ProcessOutcome.completed(1, "", ""), ProcessOutcome.completed(0, found, ""));
 
         String first = tools.call("sheriff_fix", Map.of("component", "app")).text();
         String second = tools.call("sheriff_fix", Map.of("component", "app")).text();
@@ -1005,8 +1000,7 @@ final class ToolsTest {
                 + "\"referenceCode\":\"JavaLineCommentsChecker\",\"type\":\"ERROR\"},"
                 + "{\"file\":\"/data/app/B.java\",\"description\":\"second fault\",\"howToSolve\":\"h\","
                 + "\"referenceCode\":\"JavaLineCommentsChecker\",\"type\":\"ERROR\"}]";
-        Tools tools = tools(List.of(), ProcessOutcome.completed(0, two, ""), ProcessOutcome.completed(1, "", ""),
-                ProcessOutcome.completed(1, "", ""), ProcessOutcome.completed(0, two, ""));
+        Tools tools = tools(List.of(), ProcessOutcome.completed(0, two, ""), ProcessOutcome.completed(1, "", ""), ProcessOutcome.completed(0, two, ""));
 
         String answer = tools.call("sheriff_fix", Map.of("component", "app")).text();
 
@@ -1063,8 +1057,7 @@ final class ToolsTest {
         String before = "[{\"file\":\"/data/app/A.java\",\"description\":\"d\",\"howToSolve\":\"h\","
                 + "\"referenceCode\":\"R\",\"type\":\"ERROR\"}]";
         Tools tools = toolsWithTests(VerificationResult.failed("COMPILATION ERROR: cannot find symbol"),
-                ProcessOutcome.completed(0, before, ""), ProcessOutcome.completed(1, "fixed", ""),
-                ProcessOutcome.completed(1, "fixed", ""), ProcessOutcome.completed(0, "", ""));
+                ProcessOutcome.completed(0, before, ""), ProcessOutcome.completed(1, "fixed", ""), ProcessOutcome.completed(0, "", ""));
 
         ToolOutcome outcome = tools.call("sheriff_fix", Map.of("component", "app", "verify", true));
 
@@ -1091,8 +1084,7 @@ final class ToolsTest {
         String before = "[{\"file\":\"/data/app/A.java\",\"description\":\"d\",\"howToSolve\":\"h\","
                 + "\"referenceCode\":\"R\",\"type\":\"ERROR\"}]";
         Tools tools = toolsWithTests(VerificationResult.passed("Tests run: 1, Failures: 0"),
-                ProcessOutcome.completed(0, before, ""), ProcessOutcome.completed(1, "fixed", ""),
-                ProcessOutcome.completed(1, "fixed", ""), ProcessOutcome.completed(0, "", ""));
+                ProcessOutcome.completed(0, before, ""), ProcessOutcome.completed(1, "fixed", ""), ProcessOutcome.completed(0, "", ""));
 
         String text = tools.call("sheriff_fix", Map.of("component", "app", "verify", true)).text();
 
@@ -1178,8 +1170,7 @@ final class ToolsTest {
             + "\"howToSolve\":\"h\",\"referenceCode\":\"R\",\"type\":\"ERROR\"}]";
 
     private ProcessOutcome[] repairedToClean() {
-        return new ProcessOutcome[] {ProcessOutcome.completed(0, ONE_ERROR, ""), ProcessOutcome.completed(1, "fixed", ""),
-            ProcessOutcome.completed(1, "fixed", ""), ProcessOutcome.completed(0, "", "")};
+        return new ProcessOutcome[] {ProcessOutcome.completed(0, ONE_ERROR, ""), ProcessOutcome.completed(1, "fixed", ""), ProcessOutcome.completed(0, "", "")};
     }
 
     @Test
@@ -1507,8 +1498,7 @@ final class ToolsTest {
     }
 
     private static ProcessOutcome[] repairLeaving(String errors) {
-        return new ProcessOutcome[] {ProcessOutcome.completed(0, errors, ""), ProcessOutcome.completed(1, "fixed", ""),
-            ProcessOutcome.completed(1, "fixed", ""), ProcessOutcome.completed(0, errors, "")};
+        return new ProcessOutcome[] {ProcessOutcome.completed(0, errors, ""), ProcessOutcome.completed(1, "fixed", ""), ProcessOutcome.completed(0, errors, "")};
     }
 
     @Test
@@ -1518,9 +1508,8 @@ final class ToolsTest {
         String two = errors("A.java:one", "A.java:two");
         String one = errors("A.java:two");
         Tools tools = toolsWithTests(VerificationResult.passed(""), ProcessOutcome.completed(0, two, ""),
-                ProcessOutcome.completed(1, "fixed", ""), ProcessOutcome.completed(1, "fixed", ""),
-                ProcessOutcome.completed(0, one, ""), ProcessOutcome.completed(1, "fixed", ""),
-                ProcessOutcome.completed(1, "fixed", ""), ProcessOutcome.completed(0, one, ""));
+                ProcessOutcome.completed(1, "fixed", ""),
+                ProcessOutcome.completed(0, one, ""), ProcessOutcome.completed(1, "fixed", ""), ProcessOutcome.completed(0, one, ""));
 
         String text = tools.call("sheriff_fix", Map.of("component", "app")).text();
 
@@ -1535,7 +1524,7 @@ final class ToolsTest {
     void aRepairThatAddedErrorsSaysHowManyMore() throws IOException {
         mavenComponent("app");
         String text = tools(List.of(), new ProcessOutcome[] {ProcessOutcome.completed(0, errors("A.java:one"), ""),
-            ProcessOutcome.completed(1, "fixed", ""), ProcessOutcome.completed(1, "fixed", ""),
+            ProcessOutcome.completed(1, "fixed", ""),
             ProcessOutcome.completed(0, errors("A.java:one", "A.java:two", "A.java:three"), "")})
                 .call("sheriff_fix", Map.of("component", "app")).text();
 

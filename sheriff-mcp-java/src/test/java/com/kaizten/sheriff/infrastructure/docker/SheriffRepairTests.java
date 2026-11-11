@@ -26,18 +26,18 @@ class SheriffRepairTests {
 
     private static final String TWO = """
             [ {"file":"/data/app/A.java","description":"unsorted","howToSolve":"sort",
-               "referenceCode":"SortedImport","type":"ERROR"},
+               "referenceCode":"SortedImport","type":"ERROR","script":"s"},
               {"file":"/data/app/A.java","description":"no javadoc","howToSolve":"add",
-               "referenceCode":"JavaDocCommentsInMethod","type":"ERROR"} ]
+               "referenceCode":"JavaDocCommentsInMethod","type":"ERROR","script":"s"} ]
             """;
     private static final String ONE = """
             [ {"file":"/data/app/A.java","description":"no javadoc","howToSolve":"add",
-               "referenceCode":"JavaDocCommentsInMethod","type":"ERROR"} ]
+               "referenceCode":"JavaDocCommentsInMethod","type":"ERROR","script":"s"} ]
             """;
     private static final ProcessOutcome FIXED = ProcessOutcome.completed(1, "fix report", "");
     private static final String SORTED_ONLY = """
             [ {"file":"/data/app/A.java","description":"unsorted","howToSolve":"sort",
-               "referenceCode":"SortedImport","type":"ERROR"} ]
+               "referenceCode":"SortedImport","type":"ERROR","script":"s"} ]
             """;
     private static final ProcessOutcome RAN_SORTED_ONLY = ProcessOutcome.completed(0,
             "Selected error: SortedImport | hasScript=true\nErrors fixed:   2\n", "");
@@ -64,15 +64,14 @@ class SheriffRepairTests {
     }
 
     @Test
-    @DisplayName("every fixer: the default set and every rule found, again while the count drops, measured last")
+    @DisplayName("every fixer: Sheriff's own set, one fix an analysis, again while the count drops, measured last")
     void everyFixerRepairsInRoundsWhileTheyHelp() {
-        FakeProcessRunner runner = new FakeProcessRunner(List.of(ProcessOutcome.completed(0, TWO, ""), FIXED, FIXED,
-                ProcessOutcome.completed(0, ONE, ""), FIXED, FIXED, ProcessOutcome.completed(0, ONE, "")));
+        FakeProcessRunner runner = new FakeProcessRunner(List.of(ProcessOutcome.completed(0, TWO, ""), FIXED,
+                ProcessOutcome.completed(0, ONE, ""), FIXED, ProcessOutcome.completed(0, ONE, "")));
 
         RepairOutcome outcome = repair(runner).everyFixer(List.of());
 
-        assertEquals(List.of("test", "fix", "fix SortedImport,JavaDocCommentsInMethod", "test", "fix",
-                "fix JavaDocCommentsInMethod", "test"), steps(runner));
+        assertEquals(List.of("test", "fix", "test", "fix", "test"), steps(runner));
         assertEquals(2, outcome.before().total());
         assertEquals(1, outcome.after().total());
         assertEquals(2, outcome.rounds(), "two rounds of fixers, the second measured by the last analysis");
@@ -83,8 +82,8 @@ class SheriffRepairTests {
     @Test
     @DisplayName("every round is told as it happens: what its analysis found, and whether fixers ran on it")
     void everyRoundIsToldAsItHappens() {
-        FakeProcessRunner runner = new FakeProcessRunner(List.of(ProcessOutcome.completed(0, TWO, ""), FIXED, FIXED,
-                ProcessOutcome.completed(0, ONE, ""), FIXED, FIXED, ProcessOutcome.completed(0, ONE, "")));
+        FakeProcessRunner runner = new FakeProcessRunner(List.of(ProcessOutcome.completed(0, TWO, ""), FIXED,
+                ProcessOutcome.completed(0, ONE, ""), FIXED, ProcessOutcome.completed(0, ONE, "")));
         List<String> told = new ArrayList<>();
 
         repair(runner).observedBy((round, profile, analysis, fixersRan) -> told.add(round + " " + profile + " "
@@ -96,7 +95,7 @@ class SheriffRepairTests {
     @Test
     @DisplayName("with a catalog, only the rules it knows a fixer for are reported as handed over")
     void everyFixerReportsTheCodesTheCatalogKnows() {
-        FakeProcessRunner runner = new FakeProcessRunner(List.of(ProcessOutcome.completed(0, TWO, ""), FIXED, FIXED,
+        FakeProcessRunner runner = new FakeProcessRunner(List.of(ProcessOutcome.completed(0, TWO, ""), FIXED,
                 ProcessOutcome.completed(0, TWO, "")));
         List<SheriffRule> catalog = List.of(
                 new SheriffRule("SortedImport", "unsorted", "", "java", "", "java/sort-imports.py", List.of("JAVA")));
@@ -104,30 +103,84 @@ class SheriffRepairTests {
         RepairOutcome outcome = repair(runner).everyFixer(catalog);
 
         assertEquals(List.of("SortedImport"), outcome.codes());
-        assertEquals(4, runner.commands().size(), "a round that lowered nothing is not repaired again");
+        assertEquals(3, runner.commands().size(), "a round that lowered nothing is not repaired again");
     }
 
     @Test
-    @DisplayName("a finding withheld is out of the state every fix reads, its rule is not named, and alone it is no work")
+    @DisplayName("a finding withheld keeps its rule's fixer out of its file, and alone it is no work")
     void aWithheldFindingIsLeftToNoFixer() {
-        FakeProcessRunner runner = new FakeProcessRunner(List.of(ProcessOutcome.completed(0, TWO, ""), FIXED, FIXED,
+        FakeProcessRunner runner = new FakeProcessRunner(List.of(ProcessOutcome.completed(0, TWO, ""), FIXED,
                 ProcessOutcome.completed(0, ONE, "")));
 
         RepairOutcome outcome = repair(runner).withholding(finding -> finding.description().equals("no javadoc"))
                 .everyFixer(List.of());
 
-        assertEquals(List.of("test", "fix", "fix SortedImport", "test"), steps(runner),
-                "the count dropped, but what is left is withheld, so no second round");
-        for (int fix : List.of(1, 2)) {
-            assertTrue(runner.errorRecords().get(fix).contains("unsorted"), runner.errorRecords().get(fix));
-            assertFalse(runner.errorRecords().get(fix).contains("no javadoc"), runner.errorRecords().get(fix));
-        }
+        assertEquals(List.of("test", "fix SortedImport", "test"), steps(runner),
+                "not the default set, which would repair it; the count dropped, but what is left is withheld");
+        assertEquals("--file\n/data/app/A.java\n", runner.argumentFiles().get(1));
+        assertTrue(runner.errorRecords().get(1).contains("no javadoc"),
+                "fix analyzes again by itself, so nothing is taken out of its record any more");
         assertEquals(2, outcome.before().total(), "what is withheld is still counted, before and after");
         assertEquals(1, outcome.after().total());
     }
 
     @Test
-    @DisplayName("a finding with no rule is repaired by the default set, and no empty rule is named to --fixers")
+    @DisplayName("the files with nothing withheld get every fixer, the others the rest, each fix after an analysis")
+    void theOtherFilesGetEveryFixer() {
+        String found = """
+                [ {"file":"/data/app/A.java","description":"unsorted","referenceCode":"SortedImport","script":"s"},
+                  {"file":"/data/app/A.java","description":"no javadoc","referenceCode":"JavaDocCommentsInMethod",
+                   "script":"s"},
+                  {"file":"/data/app/B.java","description":"no javadoc in B",
+                   "referenceCode":"JavaDocCommentsInMethod","script":"s"},
+                  {"file":"/data/app/C.java","description":"magic","referenceCode":"JavaMagicNumber"} ]
+                """;
+        FakeProcessRunner runner = new FakeProcessRunner(List.of(ProcessOutcome.completed(0, found, ""), FIXED,
+                ProcessOutcome.completed(0, found, ""), FIXED, ProcessOutcome.completed(0, found, "")));
+
+        repair(runner).withholding(finding -> finding.description().equals("no javadoc")).everyFixer(List.of());
+
+        assertEquals(List.of("test", "fix SortedImport,JavaDocCommentsInMethod", "test", "fix SortedImport", "test"),
+                steps(runner), "a rule with no script is never named: it would fail the whole run");
+        assertEquals("--file\n/data/app/B.java\n", runner.argumentFiles().get(1));
+        assertEquals("--file\n/data/app/A.java\n", runner.argumentFiles().get(3));
+        assertEquals("", runner.errorRecords().get(2), "the analysis between the two starts from no state");
+    }
+
+    @Test
+    @DisplayName("when the analysis between two fixes cannot run, the repair failed, with its reason")
+    void anAnalysisBetweenFixesThatFailsIsAFailure() {
+        String found = """
+                [ {"file":"/data/app/A.java","description":"unsorted","referenceCode":"SortedImport","script":"s"},
+                  {"file":"/data/app/A.java","description":"no javadoc","referenceCode":"JavaDocCommentsInMethod",
+                   "script":"s"},
+                  {"file":"/data/app/B.java","description":"no javadoc in B",
+                   "referenceCode":"JavaDocCommentsInMethod","script":"s"} ]
+                """;
+        FakeProcessRunner runner = new FakeProcessRunner(List.of(ProcessOutcome.completed(0, found, ""), FIXED,
+                ProcessOutcome.unavailable("no docker"), FIXED));
+
+        RepairOutcome outcome = repair(runner).withholding(finding -> finding.description().equals("no javadoc"))
+                .everyFixer(List.of());
+
+        assertTrue(outcome.failure().orElseThrow().contains("no docker"), outcome.failure().toString());
+        assertEquals(List.of("test", "fix SortedImport,JavaDocCommentsInMethod", "test"), steps(runner));
+    }
+
+    @Test
+    @DisplayName("rules named are kept out of the files where one of theirs is withheld")
+    void namedRulesLeaveWithheldFindingsToo() {
+        FakeProcessRunner runner = new FakeProcessRunner(List.of(ProcessOutcome.completed(0, TWO, "")));
+
+        RepairOutcome outcome = repair(runner).withholding(finding -> finding.description().equals("no javadoc"))
+                .onlyRules("JavaDocCommentsInMethod");
+
+        assertEquals(List.of("test"), steps(runner), "nothing ran, so the one analysis is the state left");
+        assertEquals(0, outcome.rounds());
+    }
+
+    @Test
+    @DisplayName("a finding with no rule is repaired by Sheriff's own set, and no rule is named")
     void aFindingWithNoRuleNamesNone() {
         String mixed = """
                 [ {"file":"/data/app/pom.xml","description":"no description","howToSolve":"",
@@ -135,12 +188,12 @@ class SheriffRepairTests {
                   {"file":"/data/app/A.java","description":"unsorted","howToSolve":"sort",
                    "referenceCode":"SortedImport","type":"ERROR"} ]
                 """;
-        FakeProcessRunner runner = new FakeProcessRunner(List.of(ProcessOutcome.completed(0, mixed, ""), FIXED, FIXED,
+        FakeProcessRunner runner = new FakeProcessRunner(List.of(ProcessOutcome.completed(0, mixed, ""), FIXED,
                 ProcessOutcome.completed(0, mixed, "")));
 
         repair(runner).everyFixer(List.of());
 
-        assertEquals(List.of("test", "fix", "fix SortedImport", "test"), steps(runner));
+        assertEquals(List.of("test", "fix", "test"), steps(runner));
     }
 
     @Test
@@ -157,14 +210,13 @@ class SheriffRepairTests {
     @Test
     @DisplayName("a fixer that ran and changed nothing while Sheriff skipped the others: a round for them, without it")
     void aSkippedFixerGetsARoundOfItsOwn() {
-        FakeProcessRunner runner = new FakeProcessRunner(List.of(ProcessOutcome.completed(0, TWO, ""), FIXED,
+        FakeProcessRunner runner = new FakeProcessRunner(List.of(ProcessOutcome.completed(0, TWO, ""),
                 RAN_SORTED_ONLY, ProcessOutcome.completed(0, TWO, ""), RAN_JAVADOC,
                 ProcessOutcome.completed(0, SORTED_ONLY, "")));
 
         RepairOutcome outcome = repair(runner).everyFixer(List.of());
 
-        assertEquals(List.of("test", "fix", "fix SortedImport,JavaDocCommentsInMethod", "test",
-                "fix JavaDocCommentsInMethod", "test"), steps(runner),
+        assertEquals(List.of("test", "fix", "test", "fix JavaDocCommentsInMethod", "test"), steps(runner),
                 "the count did not drop, but the skipped fixer ran next, without the idle one or the default set; "
                         + "then only the idle one's rule was left, so nothing more ran");
         assertEquals(2, outcome.before().total());
@@ -173,24 +225,25 @@ class SheriffRepairTests {
     }
 
     @Test
-    @DisplayName("the default set ran a fixer that changed nothing and took the file: the next round skips both")
-    void theDefaultSetsIdleFixerIsLeftOut() {
-        ProcessOutcome nothingLeft = ProcessOutcome.completed(0, "Fix summary: errors=0, files=0\n", "");
-        FakeProcessRunner runner = new FakeProcessRunner(List.of(ProcessOutcome.completed(0, TWO, ""),
-                RAN_SORTED_ONLY, nothingLeft, ProcessOutcome.completed(0, TWO, ""), RAN_JAVADOC,
-                ProcessOutcome.completed(0, SORTED_ONLY, "")));
+    @DisplayName("a skipped rule whose finding carries no script is never named: it would fail the whole run")
+    void aRuleWithNoScriptIsNeverNamed() {
+        String noScript = TWO.replace("\"referenceCode\":\"JavaDocCommentsInMethod\",\"type\":\"ERROR\",\"script\":\"s\"",
+                "\"referenceCode\":\"JavaDocCommentsInMethod\",\"type\":\"ERROR\"");
+        FakeProcessRunner runner = new FakeProcessRunner(List.of(ProcessOutcome.completed(0, noScript, ""),
+                RAN_SORTED_ONLY, ProcessOutcome.completed(0, noScript, "")));
+        List<String> told = new ArrayList<>();
 
-        RepairOutcome outcome = repair(runner).everyFixer(List.of());
+        repair(runner).observedBy((round, profile, analysis, fixersRan) -> told.add(round + " " + fixersRan))
+                .everyFixer(List.of());
 
-        assertEquals(List.of("test", "fix", "fix SortedImport,JavaDocCommentsInMethod", "test",
-                "fix JavaDocCommentsInMethod", "test"), steps(runner));
-        assertEquals(1, outcome.after().total());
+        assertEquals(List.of("test", "fix", "test"), steps(runner));
+        assertEquals(List.of("1 true", "2 false"), told, "a round with nothing to run is not told as a repair");
     }
 
     @Test
     @DisplayName("a fixer that changed nothing is no reason for a round when what Sheriff skipped has no fixer")
     void aSkippedRuleWithNoFixerIsNoRound() {
-        FakeProcessRunner runner = new FakeProcessRunner(List.of(ProcessOutcome.completed(0, TWO, ""), FIXED,
+        FakeProcessRunner runner = new FakeProcessRunner(List.of(ProcessOutcome.completed(0, TWO, ""),
                 RAN_SORTED_ONLY, ProcessOutcome.completed(0, TWO, "")));
         List<SheriffRule> catalog = List.of(
                 new SheriffRule("SortedImport", "unsorted", "", "java", "", "java/sort-imports.py", List.of("JAVA")),
@@ -198,7 +251,7 @@ class SheriffRepairTests {
 
         repair(runner).everyFixer(catalog);
 
-        assertEquals(List.of("test", "fix", "fix SortedImport,JavaDocCommentsInMethod", "test"), steps(runner));
+        assertEquals(List.of("test", "fix", "test"), steps(runner));
     }
 
     @Test
@@ -228,31 +281,43 @@ class SheriffRepairTests {
     @Test
     @DisplayName("every fix runs only Sheriff's deterministic fixers, never its AI fixer")
     void everyFixIsDeterministic() {
-        FakeProcessRunner runner = new FakeProcessRunner(List.of(ProcessOutcome.completed(0, TWO, ""), FIXED, FIXED,
+        FakeProcessRunner runner = new FakeProcessRunner(List.of(ProcessOutcome.completed(0, TWO, ""), FIXED,
                 ProcessOutcome.completed(0, TWO, "")));
 
         repair(runner).everyFixer(List.of());
 
         List<List<String>> fixes = runner.commands().stream().filter(command -> command.contains("fix")).toList();
-        assertEquals(2, fixes.size());
+        assertEquals(1, fixes.size());
         for (List<String> fix : fixes) {
             assertEquals("deterministic", fix.get(fix.indexOf("--type") + 1), fix.toString());
         }
     }
 
     @Test
-    @DisplayName("no fix is recursive, so a finding taken out of its record is not found and repaired again")
-    void noFixIsRecursive() {
-        FakeProcessRunner runner = new FakeProcessRunner(List.of(ProcessOutcome.completed(0, TWO, ""), FIXED, FIXED,
-                ProcessOutcome.completed(0, TWO, "")));
+    @DisplayName("a fix Sheriff skipped, its record older than the files, is a failure, with Sheriff's first line")
+    void aSkippedFixIsAFailure() {
+        String skipped = "Fix skipped because the selected components are dirty or have no recorded analysis.";
+        FakeProcessRunner runner = new FakeProcessRunner(List.of(ProcessOutcome.completed(0, TWO, ""),
+                ProcessOutcome.completed(0, skipped + "\nDirty means files changed since analysis.\n", ""),
+                ProcessOutcome.completed(0, ONE, "")));
 
-        repair(runner).everyFixer(List.of());
+        RepairOutcome outcome = repair(runner).everyFixer(List.of());
 
-        List<List<String>> fixes = runner.commands().stream().filter(command -> command.contains("fix")).toList();
-        assertEquals(2, fixes.size());
-        for (List<String> fix : fixes) {
-            assertTrue(fix.contains("--disable-recursive"), fix.toString());
-        }
+        assertEquals(Optional.of(skipped), outcome.failure());
+        assertEquals(List.of("test", "fix"), steps(runner));
+    }
+
+    @Test
+    @DisplayName("a rule Sheriff has no fixer for fails the fix, said in one line, not with every fixer's name")
+    void aRefusedRuleIsSaidInOneLine() {
+        String refused = "Exception in thread \"main\" java.lang.IllegalArgumentException: Invalid fixer reference "
+                + "code: 'Nonsense'. Available fixers: [" + "AnnotationOnSameLineAsDeclaration, ".repeat(100) + "]";
+        FakeProcessRunner runner = new FakeProcessRunner(List.of(ProcessOutcome.completed(0, TWO, ""),
+                ProcessOutcome.completed(1, "", refused + "\n\tat com.kaizten.analysis.Main.fix(Main.java:637)\n")));
+
+        String failure = repair(runner).onlyRules("Nonsense").failure().orElseThrow();
+
+        assertEquals(refused.substring(0, 300), failure);
     }
 
     @Test
@@ -309,7 +374,7 @@ class SheriffRepairTests {
     void roundsGoOnWhileTheCountDrops() {
         List<ProcessOutcome> outcomes = new ArrayList<>();
         for (int count = 5; count >= 1; count--) {
-            outcomes.addAll(List.of(ProcessOutcome.completed(0, errors(count), ""), FIXED, FIXED));
+            outcomes.addAll(List.of(ProcessOutcome.completed(0, errors(count), ""), FIXED));
         }
         outcomes.add(ProcessOutcome.completed(0, errors(1), ""));
         FakeProcessRunner runner = new FakeProcessRunner(outcomes);
@@ -324,12 +389,12 @@ class SheriffRepairTests {
     @Test
     @DisplayName("a limit stops the rounds there, the last analysis still measuring the last repair")
     void aLimitStopsTheRounds() {
-        FakeProcessRunner runner = new FakeProcessRunner(List.of(ProcessOutcome.completed(0, TWO, ""), FIXED, FIXED,
+        FakeProcessRunner runner = new FakeProcessRunner(List.of(ProcessOutcome.completed(0, TWO, ""), FIXED,
                 ProcessOutcome.completed(0, ONE, "")));
 
         RepairOutcome outcome = repair(runner).withRounds(1).everyFixer(List.of());
 
-        assertEquals(List.of("test", "fix", "fix SortedImport,JavaDocCommentsInMethod", "test"), steps(runner));
+        assertEquals(List.of("test", "fix", "test"), steps(runner));
         assertEquals(1, outcome.rounds());
         assertEquals(0, new RepairOutcome(outcome.before(), outcome.after(), null, null, null).rounds());
     }

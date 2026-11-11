@@ -2,7 +2,6 @@ package com.kaizten.sheriff.infrastructure.docker;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.kaizten.sheriff.domain.Rules;
 import com.kaizten.sheriff.domain.port.CodeAnalyzer;
 import com.kaizten.sheriff.domain.valueobject.AnalysisResult;
@@ -111,9 +110,6 @@ public final class SheriffDockerAnalyzer implements CodeAnalyzer {
             + "state file, so nothing was analyzed. That is not the same as a clean component, and "
             + "Sheriff gives no other way to tell the two apart: it exits 0 either way and says "
             + "nothing on an empty result.";
-    private static final int NONE_WITHHELD = 0;
-    private static final int LAST_TO_FIRST = -1;
-    private static final int FIRST_INDEX = 0;
     /**
      * The state Sheriff writes at the root of the mounted volume.
      */
@@ -482,50 +478,37 @@ public final class SheriffDockerAnalyzer implements CodeAnalyzer {
     }
 
     /**
-     * Takes findings out of the record Sheriff's {@code fix} reads, so that
-     * its fixers leave them alone. Measured on PetClinic: with a finding
-     * taken out, neither the default set nor {@code --fixers} naming its
-     * rule touched the file it was about.
+     * Every finding in the record the last analysis left, the known false
+     * positives among them, which {@link #analyze()} drops: what a
+     * {@code fix} run now would start from. Each holds Sheriff's own fields
+     * ({@link SheriffFinding#raw()}), {@code script} among them when its
+     * rule has a fixer.
      *
-     * <p>The record is the container's, root's on Linux, in a folder of the
-     * user's, so it is replaced rather than written over. Best effort: one
-     * that cannot be replaced stays as it was, and the fixers see every
-     * finding. The known false positives are taken out with them, as the
-     * analysis drops them but {@code fix} reads the record, and a fixer
+     * @return those findings, none when there is no record
+     */
+    public List<SheriffFinding> recorded() {
+        return recordedEntries().map(this::toFindings).orElse(List.of());
+    }
+
+    /**
+     * Which findings of this component are known false positives: a fixer
      * given one changes code that was right.
      *
-     * @param withheld the findings to take out
-     * @return how many were taken out
+     * @return what tells them
      */
-    public int withholdFromState(Predicate<SheriffFinding> withheld) {
-        Predicate<SheriffFinding> out = withheld.or(KnownFalsePositives.in(repositoryRoot));
-        Optional<JsonNode> root = stateFile(ERRORS_STATE_FILE);
-        if (root.isEmpty()) {
-            return NONE_WITHHELD;
-        }
-        int removed = NONE_WITHHELD;
-        Iterator<JsonNode> contexts = root.get().elements();
-        while (contexts.hasNext()) {
-            JsonNode entries = contexts.next().path(component).path(testType);
-            if (entries instanceof ArrayNode array) {
-                for (int index = array.size() + LAST_TO_FIRST; index >= FIRST_INDEX; index--) {
-                    if (out.test(toFinding(array.get(index)))) {
-                        array.remove(index);
-                        removed++;
-                    }
-                }
-            }
-        }
-        if (removed > NONE_WITHHELD) {
-            Path record = stateFolder().resolve(ERRORS_STATE_FILE);
-            try {
-                Files.deleteIfExists(record);
-                Files.writeString(record, root.get().toString());
-            } catch (IOException exception) {
-                return NONE_WITHHELD;
-            }
-        }
-        return removed;
+    public Predicate<SheriffFinding> falsePositives() {
+        return KnownFalsePositives.in(repositoryRoot);
+    }
+
+    /**
+     * A file of a finding as Sheriff names it inside the container, which is
+     * how {@code fix --file} takes it.
+     *
+     * @param file the file, as a finding of this analyzer's names it
+     * @return its path in the container
+     */
+    public static String inContainer(String file) {
+        return file.startsWith(CONTAINER_PATH_PREFIX) ? file : CONTAINER_PATH_PREFIX + file;
     }
 
     /**

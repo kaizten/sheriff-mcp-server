@@ -18,12 +18,11 @@ import java.util.stream.Collectors;
  * rules they were given, the fixers Sheriff ran, and which of those changed
  * nothing.
  *
- * <p>A defence against the image of 5 November 2026 ({@code sha256:23231466}),
- * whose {@code fix} runs a file's first fixer and counts every finding of the
- * file as fixed, even when that fixer changed nothing, so it runs none of the
- * others, and a second {@code fix} on the same state finds no error left: a
- * file with an {@code if} on two lines lost every other repair to the braces
- * fixer, which does not handle that form, run first by the default set.
+ * <p>Written against the image of 5 November 2026 ({@code sha256:23231466}),
+ * whose {@code fix} ran a file's first fixer and counted every finding of the
+ * file as fixed, even when that fixer changed nothing. The image of 11
+ * November runs each, and what is left here is for a fixer that runs and
+ * changes nothing, or fails, every time it is given.
  *
  * <p>A fixer that ran and left its rule's count where it was is no longer
  * given for the rest of the repair, and from then on the default set, which

@@ -40,6 +40,8 @@ public final class ConstantsParser {
     private static final Pattern CONSTANT_LINE = Pattern.compile(CONSTANT_LINE_PATTERN);
     private static final String MESSAGE_SUFFIX = "KaiztenSheriffErrorMessage";
     private static final String CHECKER_SUFFIX = "Checker";
+    private static final int HOW_TO_SOLVE = 2;
+    private static final int VALUE_GROUP = 2;
     /**
      * The checker packages as they appear inside a class name. Two, because
      * the checkers moved from {@code analysis.checker} to {@code analysis.test}
@@ -170,7 +172,7 @@ public final class ConstantsParser {
         for (String[] constant : parsed.constants()) {
             if (isHowToSolve(constant[0])) {
                 if (!pending.isEmpty()) {
-                    pending.get(pending.size() - 1)[2] = constant[1];
+                    pending.get(pending.size() - 1)[HOW_TO_SOLVE] = constant[1];
                 }
                 continue;
             }
@@ -184,7 +186,7 @@ public final class ConstantsParser {
             String suffix = entry[0].contains(NAME_SEPARATOR)
                     ? entry[0].substring(entry[0].indexOf(NAME_SEPARATOR) + 1)
                     : entry[0];
-            rules.add(new CatalogEntry(new SheriffRule(base + PACKAGE_SEPARATOR + suffix, entry[1], entry[2],
+            rules.add(new CatalogEntry(new SheriffRule(base + PACKAGE_SEPARATOR + suffix, entry[1], entry[HOW_TO_SOLVE],
                             classified[0], classified[1], EMPTY_TEXT, List.of()),
                     EMPTY_TEXT, CatalogEntry.CHECKER_SOURCE, slashed(parsed.name())));
         }
@@ -282,7 +284,7 @@ public final class ConstantsParser {
             Matcher constant = CONSTANT_LINE.matcher(line);
             if (current != null && constant.find()) {
                 String name = constant.group(1);
-                String value = constant.group(2);
+                String value = constant.group(VALUE_GROUP);
                 if (!value.isBlank() && isTextConstant(name)) {
                     current.add(name, value);
                 }

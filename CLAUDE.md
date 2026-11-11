@@ -310,9 +310,10 @@ installers and both workflows compare it with a release's. Do not move to a
   or by analyzing again.
 - **A fixer that cannot run looks like one that changed nothing**, and one
   that lies looks like one that worked. Two defences, both needed:
-  - A fixer that *fails* says so on stdout: `Could not apply fixer for error
-    'CODE'`, then `Error: <reason>`. `FixerFailures` reads those lines and
-    every report of a repair names them.
+  - A fixer that *fails* says so on stdout: `Could not apply fixer for
+    finding 'CODE'` (`for error` in older images), then `Error: <reason>`.
+    `FixerFailures` reads those lines and every report of a repair names
+    them.
   - A fixer that *exits 0 having done nothing* says nothing. Only analyzing
     again catches it, so a repair is always followed by another analysis.
     Never report a repair from the list of fixers that were run, nor from
@@ -326,29 +327,33 @@ installers and both workflows compare it with a release's. Do not move to a
   `package` line but no other file's `import` of it, and the analysis after
   finds nothing. Only the project's tests catch that, which is why a repair
   is verified by them.
-- **`fix` gives a file's every finding up after its first fixer** (image of
-  5 November 2026): it runs that fixer, counts all of the file's findings
-  fixed even when the fixer changed nothing, runs no other fixer on it, and a
-  second `fix` on the same state finds no error. The braces fixer, which
-  does not handle an `if` on two lines and runs first in the default set,
-  so cost a file every other repair. Each `fix` names the fixers it ran
-  (`Selected error: CODE`, read by `FixersRun`), so `SheriffRepair` keeps,
-  per profile (`FixerAttempts`), the fixers that ran and left their rule's
-  count where it was: they are not given again in that repair, the default
-  set is not run again (it would run them first), and a round runs for the
-  fixers they kept from running though the count did not drop. Until a fixer
-  changes nothing, no round differs. `docs/sheriff/` has the request.
-- **`fix -f` with no `--fixers` is not every fixer, nor only the state's.**
-  Its default set leaves fixers out and runs some regardless of the state.
-  With `--fixers A,B` it runs only those. So `sheriff_fix` with no arguments
-  runs the default set and then `--fixers` with every rule found, in rounds
-  while the count drops: one call, the same end state every time.
-- **`fix` is recursive unless told not to**: after its fixers it analyzes
-  again and repairs what it finds, so a finding taken out of the record it
-  reads comes back and is repaired anyway (given only a tab's finding, it
-  repaired the comment's lines taken out too; measured). So
-  `SheriffRepair` passes `--disable-recursive` to every `fix`: its own
-  rounds repair again, each measured by an analysis.
+- **`fix` is always recursive** (image of 11 November 2026, which took
+  `--disable-recursive` away): after each fixer it analyzes again and repairs
+  what it finds, so a finding taken out of the record it reads is repaired
+  all the same (measured). What keeps a fixer from a finding is what the run
+  is kept to: `--fixers A,B` to those rules and `--file` to those files, by
+  their path in the container, later analyses included. So a finding
+  withheld keeps its rule's fixer out of its file (`FixPlan`): one `fix` for
+  the files with nothing withheld, and one for the files with something
+  withheld, without the rules withheld in any of them. The `--file` lines go
+  in the file of arguments, as there can be thousands.
+- **`fix -f` with no `--fixers` runs the fixer of every finding that has
+  one**, those its own repairs bring included, and that is what `sheriff_fix`
+  with no arguments runs when nothing is withheld. **A rule named to
+  `--fixers` that has no fixer fails the whole run** ("Invalid fixer
+  reference code", on stderr, nothing repaired), so `FixPlan` names only
+  rules whose finding carries a `script` in `sheriff_errors.json`, which is
+  how the record marks a fixer.
+- **A `fix` runs only on a record no older than the files**: a second one
+  after the first answers "Fix skipped because the selected components are
+  dirty", exits 0 and repairs nothing. So every `fix` has an analysis of its
+  own just before it, and `SheriffRepair` reads that answer as a `fix` that
+  did not run.
+- **A fixer that ran and left its rule's count where it was is not given
+  again in that repair** (`FixerAttempts`, per profile, from the
+  `Selected error: CODE` lines `FixersRun` reads): nor is the default set run
+  again, which would run it first, and a round runs for the fixers it kept
+  from running though the count did not drop.
 - **A bad `--test` profile exits 0 too**, printing a usage banner to stdout
   and the reason to stderr. Locating the findings array by the first `[`
   parses the banner instead. So does a `fix` argument it refuses, among
@@ -575,11 +580,11 @@ rule; a line it cannot read keeps its finding. It drops:
   below).
 
 When an image brought the middle three, they were 13,981 of this repository's
-14,879 errors. They are also taken out of the record `fix` reads
-(`SheriffRepair`, through `withholdFromState`), as a fixer given one changes
-code that was right: `FourSpaceIndentation`'s takes the space before the `*`
-of a `/* */` comment away. As it repairs only the line it is given, and `fix`
-runs not recursive, no comment is touched (measured on PetClinic).
+14,879 errors. They are withheld from `fix` too (`SheriffRepair`, which reads
+them in the record through `SheriffDockerAnalyzer.recorded`), as a fixer given
+one changes code that was right: `FourSpaceIndentation`'s takes the space
+before the `*` of a `/* */` comment away, and `JavaPomOutdatedDependency`'s
+writes the plugin a Maven it does not run on.
 
 ## The MCP's answers
 
@@ -651,10 +656,10 @@ deferred.
 keeps the errors Sheriff's fixers removed; one of them back later had its
 repair undone, which a model does when the repair broke the build. Such an
 error is left for the end at once, so it blocks neither the gate nor the
-Stop hook, and `SheriffRepair` takes it out of `sheriff_errors.json` before
-every `fix`, which repairs only what that record holds (measured). The
-answer names it. Tests that fail after a repair that changed nothing name
-the files an earlier repair of the session changed (`AnswerMemory`), and a
+Stop hook, and `SheriffRepair` withholds it from every `fix`, which so runs
+without its rule in its file. The answer names it. Tests that fail after a
+repair that changed nothing name the files an earlier repair of the session
+changed (`AnswerMemory`), and a
 failed build is shown by `BuildOutput.excerpt`: the lines that say why, then
 its end, as Maven puts the cause first.
 
@@ -700,8 +705,8 @@ loop's test gate does not run (`Composition.testRunner`). Standards stay.
 
 `sheriff_fix`, the loop's first pass and `sheriff:fix` repair with one class,
 `SheriffRepair` (`SheriffRunner.fix` and `DeterministicFixer` only call it
-and word its outcome): Sheriff's default set, then `--fixers` with every rule
-found, again for each profile whose count the round before lowered, until a
+and word its outcome): Sheriff's default set, one `fix` after each analysis,
+again for each profile whose count the round before lowered, until a
 round repairs nothing (`SHERIFF_REPAIR_ROUNDS` sets a limit), each round's
 analysis measuring the one before. It always ends, as a round runs only when
 the count dropped, and has no limit by default, as fixers that make room for

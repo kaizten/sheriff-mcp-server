@@ -21,7 +21,7 @@ import java.util.regex.Pattern;
  */
 public final class FixerFailures {
 
-    private static final String NOT_APPLIED_PATTERN = "Could not apply fixer for error '([^']*)'";
+    private static final String NOT_APPLIED_PATTERN = "Could not apply fixer for (?:error|finding) '([^']*)'";
     private static final Pattern NOT_APPLIED = Pattern.compile(NOT_APPLIED_PATTERN);
     private static final String NOT_INSTANTIABLE = "This is a utility class and cannot be instantiated.";
     private static final String ERROR_PREFIX = "Error: ";

@@ -44,6 +44,7 @@ public final class MarkdownRuleCatalog implements RuleCatalog {
     private static final String PLACEHOLDER_PREFIX = "_";
     private static final String FENCE = "```";
     private static final String EMPTY = "";
+    private static final int VALUE_GROUP = 2;
     private final Path path;
 
     /**
@@ -133,7 +134,7 @@ public final class MarkdownRuleCatalog implements RuleCatalog {
     private static void absorb(DraftRule draft, String line) {
         Matcher field = FIELD.matcher(line);
         if (field.matches()) {
-            draft.field(field.group(1).strip().toLowerCase(Locale.ROOT), field.group(2).strip());
+            draft.field(field.group(1).strip().toLowerCase(Locale.ROOT), field.group(VALUE_GROUP).strip());
             return;
         }
         Matcher category = CATEGORY.matcher(line);
