@@ -43,6 +43,7 @@ public final class ServerUpdates {
     private static final String UNKNOWN = "unknown";
     private static final String JAR = "sheriff-mcp.jar";
     private static final String CHECKSUM = "sheriff-mcp.jar.sha256";
+    private static final String SIGNATURE = "sheriff-mcp.jar.sig";
     private static final String JAR_SUFFIX = ".jar";
     private static final String BUILD_FOLDER = "target";
     private static final String PARTIAL = ".sheriff-mcp.jar.download";
@@ -67,6 +68,8 @@ public final class ServerUpdates {
             + "itself failed (%s). Tell the user." + HOW_TO_UPDATE;
     private static final String CHECKSUM_DIFFERS = "the jar downloaded does not match its release's checksum";
     private static final String NO_CHECKSUM = "the release's checksum names no hash";
+    private static final String NOT_SIGNED = "the jar downloaded is not signed with the key of this project's "
+            + "releases";
     /**
      * The setting that chooses what is done.
      */
@@ -81,6 +84,7 @@ public final class ServerUpdates {
     private final Path cache;
     private final Optional<Path> jar;
     private final Supplier<Instant> clock;
+    private final ReleaseSignature signature;
     private volatile String notice;
 
     /**
@@ -97,6 +101,24 @@ public final class ServerUpdates {
      */
     public ServerUpdates(String mode, String current, ReleaseSource releases, Path cache, Optional<Path> jar,
             Supplier<Instant> clock) {
+        this(mode, current, releases, cache, jar, clock, ReleaseSignature.ofThisProject());
+    }
+
+    /**
+     * The same, with the key a release must be signed with given.
+     *
+     * @param mode {@code auto}, {@code notify} or {@code never}; anything else
+     *     is {@code notify}
+     * @param current the version running
+     * @param releases where the releases are
+     * @param cache the folder that remembers what was found
+     * @param jar the jar running, when the code is one
+     * @param clock what tells the time
+     * @param signature what tells a jar the releases' key signed
+     */
+    public ServerUpdates(String mode, String current, ReleaseSource releases, Path cache, Optional<Path> jar,
+            Supplier<Instant> clock, ReleaseSignature signature) {
+        this.signature = signature;
         this.mode = List.of(AUTO, NEVER).contains(mode) ? mode : NOTIFY;
         this.current = current;
         this.releases = releases;
@@ -236,14 +258,17 @@ public final class ServerUpdates {
     }
 
     /**
-     * Downloads a release's jar, checks it against the release's checksum, and
-     * puts it in place of the running one in one move: a session already
-     * running keeps the jar it opened, and the next one starts the new.
+     * Downloads a release's jar, checks it against the release's checksum and
+     * its signature, and puts it in place of the running one in one move: a
+     * session already running keeps the jar it opened, and the next one
+     * starts the new. The checksum tells a download cut short; only the
+     * signature tells a jar that whoever publishes the releases built.
      *
      * @param target the jar to replace
      * @param version the release
      * @throws IOException when it cannot be downloaded, does not match its
-     *     checksum, or cannot be put in place
+     *     checksum, is not signed with the releases' key, or cannot be put
+     *     in place
      */
     void replace(Path target, String version) throws IOException {
         byte[] downloaded = releases.download(version, JAR);
@@ -254,6 +279,9 @@ public final class ServerUpdates {
         }
         if (!fields[FIRST].equalsIgnoreCase(hash(downloaded, DIGEST))) {
             throw new IOException(CHECKSUM_DIFFERS);
+        }
+        if (!signature.signed(downloaded, releases.download(version, SIGNATURE))) {
+            throw new IOException(NOT_SIGNED);
         }
         Path partial = target.resolveSibling(PARTIAL);
         Files.write(partial, downloaded);

@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.KeyPair;
 import java.security.MessageDigest;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -29,6 +30,7 @@ import org.junit.jupiter.api.io.TempDir;
 class ServerUpdatesTest {
 
     private static final byte[] NEW_JAR = "the jar of 0.1.9".getBytes(StandardCharsets.UTF_8);
+    private static final KeyPair KEYS = newKeys();
 
     @TempDir
     Path folder;
@@ -86,12 +88,33 @@ class ServerUpdatesTest {
     }
 
     private Releases publishing(String version, String checksum) {
+        return signedWith(version, checksum, signatureOf(KEYS, NEW_JAR));
+    }
+
+    private Releases signedWith(String version, String checksum, byte[] signature) {
         return new Releases(Optional.of(version), Map.of("sheriff-mcp.jar", NEW_JAR, "sheriff-mcp.jar.sha256",
-                checksum.getBytes(StandardCharsets.UTF_8)), false);
+                checksum.getBytes(StandardCharsets.UTF_8), "sheriff-mcp.jar.sig", signature), false);
+    }
+
+    private static KeyPair newKeys() {
+        try {
+            return ReleaseSignatureTest.keys();
+        } catch (Exception exception) {
+            throw new IllegalStateException(exception);
+        }
+    }
+
+    private static byte[] signatureOf(KeyPair keys, byte[] content) {
+        try {
+            return ReleaseSignatureTest.sign(keys, content);
+        } catch (Exception exception) {
+            throw new IllegalStateException(exception);
+        }
     }
 
     private ServerUpdates updates(String mode, Releases releases) {
-        return new ServerUpdates(mode, "0.1.8", releases, cache, Optional.of(jar), now::get);
+        return new ServerUpdates(mode, "0.1.8", releases, cache, Optional.of(jar), now::get,
+                new ReleaseSignature(KEYS.getPublic()));
     }
 
     @Test
@@ -129,7 +152,8 @@ class ServerUpdatesTest {
         assertFalse(Files.exists(jar.resolveSibling(".sheriff-mcp.jar.download")), "nothing is left beside it");
         assertTrue(updates.notice().orElseThrow().startsWith("Sheriff tools updated themselves from 0.1.8 to 0.1.9"
                 + " (SHERIFF_UPDATES=auto)"), updates.notice().orElseThrow());
-        assertEquals(List.of("latest", "0.1.9/sheriff-mcp.jar", "0.1.9/sheriff-mcp.jar.sha256"), releases.asked);
+        assertEquals(List.of("latest", "0.1.9/sheriff-mcp.jar", "0.1.9/sheriff-mcp.jar.sha256",
+                "0.1.9/sheriff-mcp.jar.sig"), releases.asked);
     }
 
     @Test
@@ -149,6 +173,29 @@ class ServerUpdatesTest {
         ServerUpdates missing = updates("auto", new Releases(Optional.of("0.1.9"), Map.of(), false));
         missing.check();
         assertTrue(missing.notice().orElseThrow().contains("(404 for sheriff-mcp.jar)"));
+        assertEquals("the jar of 0.1.8", Files.readString(jar));
+    }
+
+    @Test
+    @DisplayName("auto refuses a jar the releases' key did not sign, though its checksum matches")
+    void autoRefusesAJarNobodySigned() throws Exception {
+        String refused = "updating to it by itself failed (the jar downloaded is not signed with the key of this "
+                + "project's releases)";
+        ServerUpdates another = updates("auto", signedWith("0.1.9", sha256(NEW_JAR), signatureOf(newKeys(), NEW_JAR)));
+        another.check();
+        assertTrue(another.notice().orElseThrow().contains(refused), another.notice().orElseThrow());
+        ServerUpdates other = updates("auto", signedWith("0.1.9", sha256(NEW_JAR),
+                signatureOf(KEYS, "another jar".getBytes(StandardCharsets.UTF_8))));
+        other.check();
+        assertTrue(other.notice().orElseThrow().contains(refused), other.notice().orElseThrow());
+        ServerUpdates unsigned = updates("auto", new Releases(Optional.of("0.1.9"), Map.of("sheriff-mcp.jar", NEW_JAR,
+                "sheriff-mcp.jar.sha256", sha256(NEW_JAR).getBytes(StandardCharsets.UTF_8)), false));
+        unsigned.check();
+        assertTrue(unsigned.notice().orElseThrow().contains("(404 for sheriff-mcp.jar.sig)"));
+        ServerUpdates projects = new ServerUpdates("auto", "0.1.8", publishing("0.1.9", sha256(NEW_JAR)), cache,
+                Optional.of(jar), now::get);
+        projects.check();
+        assertTrue(projects.notice().orElseThrow().contains(refused), "the jar's own key is the one checked");
         assertEquals("the jar of 0.1.8", Files.readString(jar));
     }
 

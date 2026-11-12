@@ -754,9 +754,15 @@ server's start, through the public `releases/latest` redirect
 (`GitHubReleases`: no API, so no rate limit and no token, and never a
 prerelease). `notify`, the default, has the first answer of a session say so
 with the install line and `git pull && scripts/install.sh`; `auto` downloads
-the release's jar, checks it against its `.sha256`, and moves it over the
-installed one in one move, for the sessions that start after; `never` does not
-look. Only a jar outside a build's `target/` is replaced. On Linux a running
+the release's jar, checks it against its `.sha256` and its `.sig`, and moves
+it over the installed one in one move, for the sessions that start after;
+`never` does not look. The checksum comes from the release, so it tells only a
+download cut short; the signature (`ReleaseSignature`, Ed25519) is made by
+`release.yml` with the `RELEASE_SIGNING_KEY` secret and checked with the
+public half the jar carries (`release-key.pem`), so a release someone else
+filled is refused. A new key pair needs a release with the new public half
+installed by hand, as jars carrying the old one refuse what the new one
+signs. The install line checks the checksum alone. Only a jar outside a build's `target/` is replaced. On Linux a running
 server keeps answering after its jar is replaced that way, new classes
 included, and a new process starts the new jar (measured); on Windows, where a
 running server holds its jar, the move is refused and the answer says the
