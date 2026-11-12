@@ -371,10 +371,10 @@ installers and both workflows compare it with a release's. Do not move to a
   `@/data/sheriff-arguments`, a file of arguments Sheriff reads as its own
   (JCommander's `@`), created owner-only in the state folder (on POSIX in
   one call, never at the umask's permissions) and deleted after the run: on
-  the command line every user of the machine would see it. A fake
-  token in the right form makes `JavaPomValidation` "Cannot complete Maven
-  dependency/version checks", which is how `scripts/e2e.sh` scenario 25 tells
-  it arrived. The tests set `sheriff.github.token` to `none`, which wins over
+  the command line every user of the machine would see it. Nothing
+  `test JAVA` answers tells a token arrived since it stopped reading
+  `pom.xml` (below), so `scripts/e2e.sh` scenario 25 puts a `docker` in front
+  of the real one, which keeps the file of arguments and the command line. The tests set `sheriff.github.token` to `none`, which wins over
   the variable. Codex forwards it to the server through `env_vars` in its
   entry (`CodexInstaller`, measured on 0.164); its hooks do not get it.
 - **The TypeScript profile traces every checker on stdout**, one
@@ -868,9 +868,13 @@ Kaizten's rules are not a convention to interpret — they are compiled into
 the image as profiles. When writing code here:
 
 - **Both modules must stay green under `JAVA`.** Check before finishing, and
-  prefer the plugin's own goal for the plugin. `JAVA` checks `pom.xml` too,
-  and its outdated-dependency rule asks the network, so a new release
-  anywhere can turn a module red with no change here. On the plugin it flags
+  prefer the plugin's own goal for the plugin. **`test JAVA` does not read
+  `pom.xml` in the image of 12 November 2026** (measured: it is not among the
+  files tracked, and the pom rules are in no profile; `JAVA_POM` is listed
+  and answers "Test not defined"). In the images before, `JAVA` checked it
+  too, and its outdated-dependency rule asks the network, so a new release
+  anywhere can turn a module red with no change here; what follows is kept
+  for when it comes back. On the plugin it flags
   `maven-core` and `maven-plugin-api`, whose version is the oldest Maven the
   plugin runs on, as maven-plugin-plugin writes it into the descriptor
   (3.10.0 refused Maven 3.9), and its fixer would write `maven.version`
