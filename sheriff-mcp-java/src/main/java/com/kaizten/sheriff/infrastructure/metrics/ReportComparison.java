@@ -62,6 +62,7 @@ public final class ReportComparison {
     private static final String OK_FIELD = "ok";
     private static final String STOPPED_FIELD = "stopped_reason";
     private static final String TESTS_FIELD = "tests_passed";
+    private static final String TESTS_BEFORE_FIELD = "tests_passed_before";
     private static final String ELAPSED_FIELD = "elapsed_ms";
     private static final String TOTAL_FIELD = "total";
     private static final String BY_RULE_FIELD = "by_rule";
@@ -166,7 +167,7 @@ public final class ReportComparison {
     private static final String CALLS_S_COLUMN = "calls_s";
     private static final List<String> KEY = List.of(PROJECT_FIELD, BACKEND_FIELD, MODEL_FIELD, STRATEGY_COLUMN);
     private static final List<String> RUN_COLUMNS = Stream.concat(KEY.stream(), Stream.of(REPORT_COLUMN, OK_FIELD,
-            STOPPED_FIELD, TESTS_FIELD, ELAPSED_S_COLUMN, BEFORE_COLUMN, LEFT_COLUMN, SHERIFF_REPAIRED,
+            STOPPED_FIELD, TESTS_FIELD, TESTS_BEFORE_FIELD, ELAPSED_S_COLUMN, BEFORE_COLUMN, LEFT_COLUMN, SHERIFF_REPAIRED,
             MODEL_REPAIRED, MODEL_INTRODUCED, MODEL_PASSES, MODEL_S_COLUMN, TOKENS_COLUMN, OUTPUT_TOKENS, COST,
             TOKENS_PER_REPAIR_COLUMN, SECONDS_PER_REPAIR_COLUMN)).toList();
     private static final List<String> CONFIGURATION_COLUMNS = Stream.concat(KEY.stream(), Stream.of(RUNS_COLUMN,
@@ -447,6 +448,7 @@ public final class ReportComparison {
             row.add(report.path(OK_FIELD).asText());
             row.add(report.path(STOPPED_FIELD).asText());
             row.add(report.path(TESTS_FIELD).isBoolean() ? report.path(TESTS_FIELD).asText() : NOTHING);
+            row.add(report.path(TESTS_BEFORE_FIELD).isBoolean() ? report.path(TESTS_BEFORE_FIELD).asText() : NOTHING);
             row.add(decimal(report.path(ELAPSED_FIELD).asDouble() / MILLIS));
             row.add(count(report.path(INITIAL_FIELD)));
             row.add(count(report.path(FINAL_FIELD)));

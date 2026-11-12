@@ -631,6 +631,7 @@ and paths, never a finding's text, which can quote code:
 |---|---|
 | `schema`, `kind` | `1` and `loop`: a field added keeps the schema, one changed raises it |
 | `ok`, `stopped_reason`, `iterations_used`, `max_iterations`, `repair_pass_used`, `parked_files`, `working_branch`, `tests_passed` | How the run ended, as `--json-report` has always said |
+| `tests_passed_before` | Whether the project's tests passed before the run changed anything (`null` with none to run). Tests that fail after a run say it broke something only when this is `true`; when they already failed, a run that leaves no errors ends as `tests_already_failing`, with no repair pass spent on them |
 | `started`, `finished`, `elapsed_ms` | When, and for how long |
 | `tools`, `sheriff` | This jar's version; Sheriff's image, the digest it was pulled by and its build date |
 | `project` | The repository, the component, the profile and the commit it started from |

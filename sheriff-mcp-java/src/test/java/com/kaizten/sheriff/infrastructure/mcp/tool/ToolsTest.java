@@ -678,6 +678,19 @@ final class ToolsTest {
     }
 
     @Test
+    void theAutofixSummarySaysWhenTheTestsAlreadyFailed() {
+        RunSummary already = new RunSummary(true, StopReason.TESTS_ALREADY_FAILING, 2, 3, false, List.of(), "", false,
+                false);
+        String text = SheriffAutofixTool.renderSummary("app", "JAVA", "claude_cli", already);
+        assertTrue(text.contains("as they did before it changed anything"), text);
+        assertFalse(text.contains("%n"), text);
+        RunSummary broken = new RunSummary(false, StopReason.REPAIR_FAILED, 2, 3, true, List.of(), "", false, true);
+        assertFalse(SheriffAutofixTool.renderSummary("app", "JAVA", "claude_cli", broken).contains("as they did"));
+        RunSummary passing = new RunSummary(true, StopReason.SUCCESS, 2, 3, false, List.of(), "", true, false);
+        assertTrue(SheriffAutofixTool.renderSummary("app", "JAVA", "claude_cli", passing).contains("tests pass"));
+    }
+
+    @Test
     void theAutofixSummaryNamesTheBranchTheRepositoryWasLeftOn() {
         RunSummary summary = new RunSummary(false, StopReason.STALLED, 2, 3, false, List.of(),
                 "sheriff-agent/20260924-231558");

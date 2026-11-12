@@ -102,6 +102,20 @@ class ReportComparisonTests {
     }
 
     @Test
+    @DisplayName("a run's row says how the tests stood before it, and nothing when they were not run then")
+    void aRunsRowCarriesTheTestsBefore() throws IOException {
+        Path already = folder.resolve("already.json");
+        new LoopReport(already, Map.of(), () -> AnalysisResult.failure("no")).finished(new RunSummary(true,
+                StopReason.TESTS_ALREADY_FAILING, 1, 3, false, List.of(), "", false, false));
+        Path unknown = folder.resolve("unknown.json");
+        new LoopReport(unknown, Map.of(), () -> AnalysisResult.failure("no")).finished(new RunSummary(false,
+                StopReason.STALLED, 1, 3, false, List.of(), "", false));
+        String page = ReportComparison.of(List.of(already, unknown)).markdown(folder.toString());
+        assertTrue(page.contains("| already.json | true | tests_already_failing | false | false |"), page);
+        assertTrue(page.contains("| unknown.json | false | stalled | false |  |"), page);
+    }
+
+    @Test
     @DisplayName("runs of a project with no tests leave the tests empty, not failed")
     void noTestsIsNotFailedTests() throws IOException {
         Path file = folder.resolve("untested.json");

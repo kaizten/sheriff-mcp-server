@@ -30,6 +30,7 @@ class StopReasonTests {
                         StopReason.OUT_OF_SCOPE,
                         StopReason.INFRA_ERROR,
                         StopReason.REPAIR_FAILED,
+                        StopReason.TESTS_ALREADY_FAILING,
                         StopReason.ITERATIONS_EXHAUSTED
                 },
                 StopReason.values());

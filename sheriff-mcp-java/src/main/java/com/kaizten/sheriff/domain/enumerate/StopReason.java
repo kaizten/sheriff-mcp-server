@@ -50,6 +50,12 @@ public enum StopReason {
     REPAIR_FAILED("repair_failed"),
 
     /**
+     * Sheriff went quiet and the tests are red, as they were before the run
+     * changed anything: they could not say whether the run broke something.
+     */
+    TESTS_ALREADY_FAILING("tests_already_failing"),
+
+    /**
      * The iteration cap was reached with errors still outstanding.
      */
     ITERATIONS_EXHAUSTED("iterations_exhausted");

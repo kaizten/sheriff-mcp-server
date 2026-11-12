@@ -34,8 +34,29 @@ public final class FakeTestRunner implements TestRunner {
         this.fixed = null;
     }
 
+    /**
+     * A runner that answers a script and then always the same.
+     *
+     * @param results the first answers, in order
+     * @param after the answer once they run out
+     */
+    private FakeTestRunner(List<VerificationResult> results, VerificationResult after) {
+        this.scripted = new ArrayDeque<>(results);
+        this.fixed = after;
+    }
+
+    /**
+     * Tests that pass before a run changes anything and fail ever after, as
+     * when the run broke them.
+     *
+     * @return that runner
+     */
+    public static FakeTestRunner brokenByTheRun() {
+        return new FakeTestRunner(List.of(VerificationResult.passed("")), new VerificationResult(false, "tests failed"));
+    }
+
     @Override
     public VerificationResult run() {
-        return scripted == null ? fixed : scripted.removeFirst();
+        return scripted == null || scripted.isEmpty() && fixed != null ? fixed : scripted.removeFirst();
     }
 }

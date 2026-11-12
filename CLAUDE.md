@@ -1049,3 +1049,13 @@ pass can break the build. So the loop runs the project's tests however it
 stops (`RunSummary.testsPassed`), `sheriff_fix` takes `verify`, the Stop
 hook requires green tests with `SHERIFF_STOP_RUNS_TESTS=1`, and `sheriff:fix`
 analyzes again and fails on what it could not repair.
+
+**The loop runs the tests before it changes anything too**
+(`RunSummary.testsPassedBefore`, `tests_passed_before` in the report), as
+tests that fail after a run say it broke something only when they passed
+before it: a build that needs another Java than the machine's fails either
+way. When they already failed, a run that leaves no errors ends
+`tests_already_failing`, reached (`ok`), with no repair pass, which would be
+spent on a failure that is not the run's: a check that cannot be made holds
+nothing, and the answer says the tests do not tell whether the run broke
+something.
