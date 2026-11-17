@@ -27,7 +27,9 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # 45, as release.yml: the TeX packages are about 1 GB from Ubuntu's
+    # mirror, and a run on main was cancelled at 20 minutes installing them.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - name: What the PDF files are made of
