@@ -18,8 +18,8 @@ FROM maven:3.9-eclipse-temurin-21@sha256:99e61abcff91a9b1333463bd8451fb18495d6eb
 WORKDIR /build
 
 # Dependencies first, as their own layer: the pom changes far less often than
-# the code, so a normal edit-build cycle skips re-downloading the Anthropic
-# SDK and Jackson entirely.
+# the code, so a normal edit-build cycle skips re-downloading Jackson and the
+# build's plugins entirely.
 COPY pom.xml ./
 RUN mvn -q -B dependency:go-offline
 
