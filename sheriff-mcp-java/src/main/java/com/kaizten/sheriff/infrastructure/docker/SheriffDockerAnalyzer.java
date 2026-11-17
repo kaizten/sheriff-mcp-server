@@ -79,6 +79,7 @@ public final class SheriffDockerAnalyzer implements CodeAnalyzer {
     private static final String ERRORS_STATE_FILE = "sheriff_errors.json";
     private static final String SUMMARY_STATE_FILE = "sheriff_summary.json";
     private static final String TRACKED_FILES_STATE_FILE = "sheriff_tracked_files.json";
+    private static final String AUDIT_TASKS_STATE_FILE = "sheriff_audit_tasks.json";
     private static final String TEST_SUBCOMMAND = "test";
     private static final String TEST_FLAG = "--test";
     private static final String URI_FLAG = "--uri";
@@ -111,13 +112,14 @@ public final class SheriffDockerAnalyzer implements CodeAnalyzer {
             + "Sheriff gives no other way to tell the two apart: it exits 0 either way and says "
             + "nothing on an empty result.";
     /**
-     * The state Sheriff writes at the root of the mounted volume.
+     * The state Sheriff writes at the root of the mounted volume and that no
+     * run may find left by another.
      */
     public static final List<String> STATE_FILES =
-            List.of(ERRORS_STATE_FILE, SUMMARY_STATE_FILE, TRACKED_FILES_STATE_FILE);
+            List.of(ERRORS_STATE_FILE, SUMMARY_STATE_FILE, TRACKED_FILES_STATE_FILE, AUDIT_TASKS_STATE_FILE);
     /**
      * The state worth keeping: the findings and the tracked files. The
-     * summary has been empty in every run seen.
+     * summary holds only the run's timing and a fingerprint of the component.
      */
     public static final List<String> EXPORTED_STATE_FILES = List.of(ERRORS_STATE_FILE, TRACKED_FILES_STATE_FILE);
     private final SheriffContainer container;
