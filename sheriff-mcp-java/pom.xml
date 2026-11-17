@@ -43,7 +43,7 @@
         <!-- Writes the commit a jar is built from beside its version. -->
         <git-commit-id.version>10.0.1</git-commit-id.version>
         <!-- The version ChangeCoverage measures a change with, so both agree. -->
-        <jacoco.version>0.8.15</jacoco.version>
+        <jacoco.version>0.8.16</jacoco.version>
     </properties>
 
     <dependencyManagement>
