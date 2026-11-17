@@ -3,11 +3,15 @@ package com.kaizten.sheriff.infrastructure.hook;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kaizten.sheriff.domain.valueobject.VerificationResult;
+import com.kaizten.sheriff.infrastructure.config.ChosenSettings;
+import com.kaizten.sheriff.infrastructure.config.LoosenedSettings;
+import com.kaizten.sheriff.infrastructure.config.Loosening;
 import com.kaizten.sheriff.infrastructure.coverage.CoverageVerdict;
 import com.kaizten.sheriff.infrastructure.git.GitVersionControl;
 import com.kaizten.sheriff.infrastructure.git.UntestedMethods;
 import com.kaizten.sheriff.infrastructure.process.BuildOutput;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -66,6 +70,15 @@ import java.util.stream.Collectors;
  * are errors, whose turn they belong to, when to stop asking. A weaker model
  * reads a long message as a list of options, and took the ones that let it
  * stop.
+ *
+ * <p>Before any of that, a turn does not end with the project's settings
+ * checking less than when it began ({@link LoosenedSettings}, against the
+ * record of {@link SettingsBaseline}, committed in the turn or not): the model
+ * can write {@code .sheriff.properties} and a {@code pom.xml} as it writes
+ * code, and a threshold it lowered there was the one thing nothing looked
+ * at. A line the user gave its value through
+ * {@code sheriff_config} asked by an MCP client or the settings page
+ * ({@link ChosenSettings}) is theirs: it is not sent back.
  */
 public final class SheriffStopHook {
 
@@ -83,6 +96,12 @@ public final class SheriffStopHook {
             Nothing changed since the last time this turn was sent back, and the errors below
             are still there. Fix them now. Stop again without changing anything only if none of
             them can be fixed, and then name each one and say why.
+
+            """;
+    private static final String SETTINGS_STALLED = """
+            Nothing changed since the last time this turn was sent back, and the lines below
+            still check less. Put them back now. If you stop again without changing them, tell
+            the user each one first: every later turn is sent back over them too.
 
             """;
     private static final String SOURCES_SEPARATOR = ",";
@@ -129,6 +148,18 @@ public final class SheriffStopHook {
     private static final String COVERAGE_REPORT = "%s: %s%s%n";
     private static final String NOT_MEASURED =
             "How well the tests test what this turn wrote in %s could not be measured (%s) -- not checked.%n";
+    private static final String SETTINGS_BLOCKED = """
+            Not done: the project's Sheriff settings now check less than they did, and only the
+            user decides what they check.
+
+            %s
+
+            Next step: put each line back to its value before the arrow; committing it does not
+            keep it. If the user asked for one of these changes, make it with the sheriff_config
+            tool, which they approve; written any other way it is sent back again.
+            """;
+    private static final String SETTINGS_LINE = "  %s";
+    private static final String NO_CONTENT = "";
     private static final String NO_GIT =
             "The code standards hook could not ask git what changed (%s) -- nothing is checked this turn.%n";
     private static final int TEST_OUTPUT_LIMIT = 1500;
@@ -147,6 +178,10 @@ public final class SheriffStopHook {
     private int maxStalls = DEFAULT_MAX_STALLS;
     private final Map<String, GateVerdict> dirtyVerdicts = new LinkedHashMap<>();
     private String reason = "";
+    private ChosenSettings chosen = new ChosenSettings();
+    private SettingsBaseline baselines = new SettingsBaseline();
+    private boolean gitAnswered;
+    private boolean settingsBlocked;
     private final ObjectMapper json = new ObjectMapper();
 
     /**
@@ -249,6 +284,30 @@ public final class SheriffStopHook {
     }
 
     /**
+     * The same hook, reading which settings the user chose from another
+     * record than the user's own.
+     *
+     * @param record where those settings are recorded
+     * @return this hook
+     */
+    public SheriffStopHook withChosenSettings(ChosenSettings record) {
+        this.chosen = record;
+        return this;
+    }
+
+    /**
+     * The same hook, keeping what the settings held at the start of a turn
+     * in another record than the user's own.
+     *
+     * @param record where those records go
+     * @return this hook
+     */
+    public SheriffStopHook withSettingsBaseline(SettingsBaseline record) {
+        this.baselines = record;
+        return this;
+    }
+
+    /**
      * The turn hook: records what every component git reports as changed
      * looks like before the turn does anything. It never blocks and prints
      * nothing, since what a prompt hook prints is added to the conversation.
@@ -263,11 +322,15 @@ public final class SheriffStopHook {
         } catch (IOException exception) {
             return HookExit.ALLOW;
         }
+        List<Path> changed = changedFiles();
         Map<String, String> fingerprints = new LinkedHashMap<>();
-        for (String component : touchedComponents()) {
+        for (String component : componentsOf(changed)) {
             fingerprints.put(component, gate.fingerprintOf(component));
         }
         turns.record(session, fingerprints);
+        if (gitAnswered) {
+            baselines.recordTurn(session, snapshotOf(changed));
+        }
         return HookExit.ALLOW;
     }
 
@@ -303,12 +366,22 @@ public final class SheriffStopHook {
             exit = HookExit.ALLOW;
         }
         if (exit == HookExit.BLOCK) {
-            System.err.print(stalledNow ? STALLED + reason : reason);
+            System.err.print(stalledNow ? stalledPreface() + reason : reason);
             blocks.recordBlock(session, sources, stalledNow);
         } else {
             blocks.reset(session);
         }
         return exit;
+    }
+
+    /**
+     * What goes before a block's reason when nothing changed since the last
+     * one.
+     *
+     * @return the preface for the settings, or for errors
+     */
+    private String stalledPreface() {
+        return settingsBlocked ? SETTINGS_STALLED : STALLED;
     }
 
     /**
@@ -323,7 +396,22 @@ public final class SheriffStopHook {
      * @return the exit code
      */
     private int check(String session) {
-        Set<String> touched = touchedComponents();
+        List<Path> changed = changedFiles();
+        SettingsSnapshot baseline = baselines.heldFor(gate.mount()).or(() -> baselines.turn(session))
+                .orElse(SettingsSnapshot.lastCommit());
+        List<String> loosened = loosenedSettings(changed, baseline);
+        if (!loosened.isEmpty()) {
+            baselines.hold(gate.mount(), baseline.hasCommit() ? baseline
+                    : new SettingsSnapshot(git.headCommit().orElse(NO_CONTENT), baseline.contents()));
+            settingsBlocked = true;
+            sources = String.join(SOURCES_SEPARATOR, loosened);
+            reason = String.format(SETTINGS_BLOCKED, String.join(System.lineSeparator(), loosened));
+            return HookExit.BLOCK;
+        }
+        if (gitAnswered) {
+            baselines.release(gate.mount());
+        }
+        Set<String> touched = componentsOf(changed);
         Optional<Map<String, String>> start = turns.recorded(session);
         start.ifPresent(recorded -> touched.removeIf(component -> unchanged(component, recorded)));
         boolean changedNone = touched.isEmpty();
@@ -464,9 +552,19 @@ public final class SheriffStopHook {
      * @return those component names, in a stable order
      */
     Set<String> touchedComponents() {
+        return componentsOf(changedFiles());
+    }
+
+    /**
+     * The components some files belong to.
+     *
+     * @param changed the files
+     * @return those component names, in a stable order
+     */
+    private Set<String> componentsOf(List<Path> changed) {
         Set<String> components = new LinkedHashSet<>();
-        for (String path : changedFiles()) {
-            String component = gate.componentFor(path);
+        for (Path path : changed) {
+            String component = gate.componentFor(path.toString());
             if (!component.isEmpty()) {
                 components.add(component);
             }
@@ -483,12 +581,102 @@ public final class SheriffStopHook {
      *
      * @return those paths, absolute
      */
-    private List<String> changedFiles() {
+    private List<Path> changedFiles() {
         try {
-            return git.changedPaths().stream().map(Path::toString).toList();
+            List<Path> changed = git.changedPaths();
+            gitAnswered = true;
+            return changed;
         } catch (IllegalStateException exception) {
+            gitAnswered = false;
             System.err.printf(NO_GIT, String.valueOf(exception.getMessage()).strip());
             return List.of();
+        }
+    }
+
+    /**
+     * What the settings hold as a turn begins: the commit, and the settings
+     * files that differ from it, with their text.
+     *
+     * @param changed the files git reports as changed
+     * @return that record, its commit empty when there is none yet
+     */
+    private SettingsSnapshot snapshotOf(List<Path> changed) {
+        Map<Path, String> contents = new LinkedHashMap<>();
+        for (Path file : changed.stream().filter(LoosenedSettings::holdsSettings).toList()) {
+            contents.put(file, textOf(file));
+        }
+        return new SettingsSnapshot(git.headCommit().orElse(NO_CONTENT), contents);
+    }
+
+    /**
+     * The lines of the settings files that check less than they did in a
+     * record, and that the user did not give their value: those changed
+     * since its commit, committed or not, and those it kept the text of.
+     * Best effort, as the rest: a file git cannot show is not compared.
+     *
+     * @param changed the files git reports as changed
+     * @param baseline what the settings held before
+     * @return each such line, as the message shows it
+     */
+    private List<String> loosenedSettings(List<Path> changed, SettingsSnapshot baseline) {
+        Set<Path> files = new LinkedHashSet<>(changed);
+        files.addAll(baseline.contents().keySet());
+        if (baseline.hasCommit()) {
+            files.addAll(changedSince(baseline.commit()));
+        }
+        List<String> lines = new ArrayList<>();
+        for (Path file : files.stream().filter(LoosenedSettings::holdsSettings).toList()) {
+            for (Loosening loosening : loosenedIn(file, baseline)) {
+                if (!chosen.chose(file, loosening.key(), loosening.after())) {
+                    lines.add(String.format(SETTINGS_LINE, loosening.describeFrom(gate.mount())));
+                }
+            }
+        }
+        return lines;
+    }
+
+    /**
+     * The lines of one settings file that check less than in a record.
+     *
+     * @param file the file
+     * @param baseline what the settings held before
+     * @return those lines, none when git cannot show the file
+     */
+    private List<Loosening> loosenedIn(Path file, SettingsSnapshot baseline) {
+        try {
+            String before = baseline.contents().containsKey(file) ? baseline.contents().get(file)
+                    : git.contentAt(baseline.revision(), file);
+            return LoosenedSettings.between(file, before, textOf(file));
+        } catch (IllegalStateException exception) {
+            return List.of();
+        }
+    }
+
+    /**
+     * The tracked files changed since a commit, best effort.
+     *
+     * @param commit the commit
+     * @return those files, none when git cannot compare
+     */
+    private List<Path> changedSince(String commit) {
+        try {
+            return git.changedSince(commit);
+        } catch (IllegalStateException exception) {
+            return List.of();
+        }
+    }
+
+    /**
+     * A file's text, empty when it is gone or cannot be read.
+     *
+     * @param file the file
+     * @return its text
+     */
+    private static String textOf(Path file) {
+        try {
+            return Files.isRegularFile(file) ? Files.readString(file) : NO_CONTENT;
+        } catch (IOException exception) {
+            return NO_CONTENT;
         }
     }
 }

@@ -83,6 +83,17 @@ public final class ToolCall {
     }
 
     /**
+     * Whether the calls come from an MCP client, which a user can be asked to
+     * approve each of, rather than from {@code --call}, which any shell can
+     * run.
+     *
+     * @return {@code true} for a client's calls
+     */
+    public boolean fromAClient() {
+        return directory == null;
+    }
+
+    /**
      * One call, written so it can be made as it stands.
      *
      * @param tool the tool's name

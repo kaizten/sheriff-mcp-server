@@ -4,7 +4,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -244,5 +246,40 @@ class SystemProcessRunnerTests {
         assertEquals(ProcessStatus.CANCELLED, outcome.status());
         assertFalse(Files.exists(touched));
         assertTrue(stillInterrupted);
+    }
+
+    private static String drained(String written, int head, int tail) throws IOException {
+        return SystemProcessRunner.drain(new ByteArrayInputStream(written.getBytes(StandardCharsets.UTF_8)), head, tail);
+    }
+
+    @Test
+    @DisplayName("output that fits is kept whole, up to both limits together")
+    void outputThatFitsIsKeptWhole() throws IOException {
+        assertEquals("", drained("", 4, 6));
+        assertEquals("abc", drained("abc", 4, 6));
+        assertEquals("abcdefghij", drained("abcdefghij", 4, 6));
+    }
+
+    @Test
+    @DisplayName("a stream without end keeps its start and its end, and says how much of the middle it left out")
+    void aRunawayStreamKeepsItsStartAndEnd() throws IOException {
+        String kept = drained("START" + "x".repeat(200_000) + "Tests run: 3, Failures: 0", 5, 25);
+        assertEquals("START" + System.lineSeparator() + "[... 200000 bytes of output left out ...]"
+                + System.lineSeparator() + "Tests run: 3, Failures: 0", kept);
+        assertEquals("ab" + System.lineSeparator() + "[... 1 bytes of output left out ...]" + System.lineSeparator()
+                + "defg", drained("abcdefg", 2, 4));
+    }
+
+    @Test
+    @DisplayName("a real process that writes more than is kept is read to its end, and ends with its last line")
+    void aRealProcessKeepsItsLastLine() {
+        ProcessOutcome outcome = new SystemProcessRunner(7, 11).run(List.of("sh", "-c",
+                "i=0; while [ $i -lt 20000 ]; do echo line $i; i=$((i+1)); done; echo done >&2"), HERE, Map.of(),
+                GENEROUS);
+        assertTrue(outcome.succeeded(), outcome.toString());
+        assertTrue(outcome.standardOutput().startsWith("line 0\n"), outcome.standardOutput());
+        assertTrue(outcome.standardOutput().endsWith("line 19999\n"), outcome.standardOutput());
+        assertTrue(outcome.standardOutput().contains("bytes of output left out"), outcome.standardOutput());
+        assertEquals("done\n", outcome.standardError());
     }
 }

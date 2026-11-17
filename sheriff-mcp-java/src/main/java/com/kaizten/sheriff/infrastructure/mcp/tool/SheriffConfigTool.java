@@ -97,7 +97,9 @@ final class SheriffConfigTool implements AutoCloseable {
     }
 
     /**
-     * Lists the settings, or changes one.
+     * Lists the settings, or changes one. A change asked through an MCP
+     * client, which the user approves, is recorded as the user's choice; the
+     * same call made with {@code --call} from a shell is not.
      *
      * @param arguments the call's arguments
      * @return the text to answer with
@@ -116,8 +118,13 @@ final class SheriffConfigTool implements AutoCloseable {
             throw new IllegalArgumentException(String.format(NO_VALUE, setting));
         }
         boolean project = YES.equalsIgnoreCase(ToolContext.textArgument(arguments, PROJECT_ARGUMENT));
+        String value = ToolContext.textArgument(arguments, VALUE_ARGUMENT);
+        if (context.toolCall().fromAClient()) {
+            return Settings.changeAsChosen(context.config().givenEnvironment(), context.config().settingsProject(),
+                    setting, value, project);
+        }
         return Settings.change(context.config().givenEnvironment(), context.config().settingsProject(), setting,
-                ToolContext.textArgument(arguments, VALUE_ARGUMENT), project);
+                value, project);
     }
 
     /**

@@ -171,6 +171,8 @@ class SettingsPageTest {
         assertTrue(Files.readString(userFile).contains("\nSHERIFF_STOP_MAX_STALLS=0\n"));
         assertEquals(200, forProject.statusCode(), forProject.body());
         assertEquals("SHERIFF_GATE_TTL=60\n", Files.readString(project.resolve(".sheriff.properties")));
+        assertTrue(new com.kaizten.sheriff.infrastructure.config.ChosenSettings()
+                .chose(project.resolve(".sheriff.properties"), "SHERIFF_GATE_TTL", "60"), "the page's change is the user's");
         assertEquals("60", find(JSON.readTree(get("settings").body()), "SHERIFF_GATE_TTL").path("value").asText());
         assertEquals(400, refused.statusCode());
         assertEquals("SHERIFF_PULL takes one of always, check, never, not 'sometimes'.",

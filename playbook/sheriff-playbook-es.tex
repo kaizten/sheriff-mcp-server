@@ -739,7 +739,8 @@ Compuerta & Antes de la primera edición de la sesión en un componente &
 Fin de turno & Cuando el asistente va a terminar &
   Si lo que ha cambiado en el turno tiene errores, o la compuerta paró una
   edición del turno y siguen ahí, o hay métodos nuevos sin test (en Java), le
-  devuelve el turno con la lista. \\
+  devuelve el turno con la lista. También si los ajustes del proyecto
+  comprueban menos que al empezar el turno. \\
 Inicio de turno & Al llegar tu mensaje &
   Anota cómo estaban los componentes, para que el fin de turno mire solo lo que
   cambia en este turno y no el trabajo anterior sin confirmar. \\
@@ -799,6 +800,34 @@ since, so no fixer makes it again and they are left for the end:
 spring-petclinic/pom.xml: Maven dependency 'com.puppycrawl.tools:checkstyle' is
 outdated: 12.3.1 -> 14.3.0. [JavaPomOutdatedDependency]
 \end{command}
+  \item \textbf{El asistente no baja el listón.} Cuando el
+        \code{.sheriff.properties} del proyecto, o las propiedades
+        \code{sheriff.*} de un \code{pom.xml}, comprueban menos que cuando
+        llegó tu mensaje (un umbral más bajo, el modo prototipo activado, los
+        tests quitados, un perfil cambiado), con commit en el turno o sin él,
+        el fin de turno devuelve el turno con cada línea (copiado de una
+        ejecución real):
+\begin{command}[basicstyle=\ttfamily\footnotesize]{respuesta}
+Not done: the project's Sheriff settings now check less than they did, and only the
+user decides what they check.
+
+  .sheriff.properties: SHERIFF_PROTOTYPE unset -> 1
+  .sheriff.properties: coverage 100 -> 50
+
+Next step: put each line back to its value before the arrow; committing it does not
+keep it. If the user asked for one of these changes, make it with the sheriff_config
+tool, which they approve; written any other way it is sent back again.
+\end{command}
+        Un cambio hecho con la página de ajustes, o pidiéndoselo al asistente
+        (\code{sheriff_config}, que tú apruebas), es tuyo y no se devuelve.
+        También lo es lo que cambies entre turnos, a mano o con
+        \code{--config}, con commit o sin él: el turno siguiente parte de ahí.
+        Durante un turno, \code{--config --project} cuenta como una edición a
+        mano, porque la shell del asistente también podría ejecutarlo. Si el
+        asistente para sin devolver una línea a su valor, el hook le pide que
+        te lo diga antes, y cada
+        turno siguiente se devuelve por esa línea hasta que se deshaga o se
+        haga con \code{sheriff_config}.
   \item \textbf{Se apartan para el agente de reparación}, que ya hace sus propias
         comprobaciones.
 \end{itemize}
@@ -1031,7 +1060,11 @@ cambiado se queda como está. Hay varias formas de cambiar uno:
   \item \textbf{Desde la línea de comandos}:
         \code{java -jar ~/.local/share/sheriff-agent/sheriff-mcp.jar --config SHERIFF_PROTOTYPE=1},
         con \code{--project} para escribirlo en el fichero del proyecto. También comprueba el valor.
+        Entre turnos es tuyo; durante uno, el fin de turno lo trata como una
+        edición a mano (sección~\ref{sec:hooks}).
   \item \textbf{Edita el fichero}: quita el \texttt{\#} de una línea y cambia su valor.
+        Hazlo entre turnos, no mientras el asistente trabaja: entonces el fin
+        de turno lo cuenta como del asistente (sección~\ref{sec:hooks}).
   \item \textbf{Para todo el equipo}, pon la misma línea en el
         \code{.sheriff.properties} del proyecto; en ese proyecto gana a la tuya.
         Va en la raíz del proyecto, donde se abre la sesión: uno dentro de un
@@ -1091,7 +1124,7 @@ ajuste.
   da el comando para actualizar (la línea de instalación o, en un clon del
   repositorio, \code{git pull && scripts/install.sh}). \code{auto}: el servidor
   descarga el jar nuevo, lo comprueba con el checksum y la firma de su release
-  y lo pone en lugar del instalado; las sesiones abiertas lo usan al reiniciarlas.
+  y que sea la versión publicada, y lo pone en lugar del instalado; las sesiones abiertas lo usan al reiniciarlas.
   \code{never}: no mira. Solo de tu fichero.}
 
 \subsubsection*{El análisis} Con qué reglas y cuánto tiempo.

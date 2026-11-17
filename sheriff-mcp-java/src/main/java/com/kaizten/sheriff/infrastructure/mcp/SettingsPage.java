@@ -514,7 +514,7 @@ public final class SettingsPage implements AutoCloseable {
             return;
         }
         try {
-            answer(exchange, OK, Map.of(MESSAGE_FIELD, Settings.change(environment, project, name,
+            answer(exchange, OK, Map.of(MESSAGE_FIELD, Settings.changeAsChosen(environment, project, name,
                     request.path(VALUE_FIELD).asText(), request.path(PROJECT_FIELD).asBoolean())));
         } catch (IllegalArgumentException refused) {
             answer(exchange, BAD_REQUEST, Map.of(ERROR_FIELD, refused.getMessage()));

@@ -256,7 +256,9 @@ again. `scripts/ci-local.sh` still runs `install.sh` under bash 3.2 and
 Every action a workflow uses is pinned by commit, with its exact version in a
 comment beside it (`actions/checkout@fbc6f39... # v5.1.0`): a tag can be moved
 to other code, and `release.yml` runs with `contents: write`. To update one,
-change both.
+change both. Dependabot (`.github/dependabot.yml`) proposes that weekly, and
+the two modules' Maven dependencies, all but the Maven the plugin is built
+against (`maven-core`, `maven-plugin-api`), which is the oldest it runs on.
 
 `image.yml` publishes `ghcr.io/kaizten/sheriff-mcp-server` when CI passes on
 `main`, only builds it on a pull request, and fails rather than publish the
@@ -703,6 +705,33 @@ step is done, `sheriff_fix` with `verify` does not measure, the Stop hook
 checks neither the new methods, the tests nor the coverage, and the repair
 loop's test gate does not run (`Composition.testRunner`). Standards stay.
 
+**A turn does not end while the project's settings check less than when it
+began** (`LoosenedSettings`, first in the Stop hook, prototype mode or not):
+a threshold lowered, prototype mode on, the tests off, a profile changed or
+removed, in a `.sheriff.properties` or a `pom.xml`'s `sheriff.*`, as a model
+writes those files as it writes code and only a sentence of the
+instructions kept it from turning off a check it could not pass. The turn
+hook records the commit `HEAD` is at and the text of the settings files that
+differ from it (`SettingsBaseline`), and the Stop hook compares with that,
+committed since or not: compared with `HEAD`, a model that committed its
+loosening walked through. So what a person does between turns, committed or
+not, is the next turn's starting point. With no record (no turn hook, or no
+session id) it compares with `HEAD`. A loosening a turn still ends with, when
+the stops run out, holds the record it was found against for the repository,
+whatever session comes next, until a stop finds nothing looser: it is never
+adopted as a starting point, and the stalled message has the model tell the
+user first. A line `Settings.changeAsChosen` wrote (`sheriff_config` asked
+through an MCP client, which the installers leave to the user to allow, and
+the settings page: `ChosenSettings`) is the user's; `--config --project` and
+`--call sheriff_config` are not, as a model's shell runs them as a person's
+does. Not covered: the user's file and the environment, which are not in the
+repository; a `.sheriff.properties` git ignores; a session whose permission
+mode does not ask before `sheriff_config`; the records of chosen settings and
+of baselines, which are in folders the model's shell can write; the settings
+page's address, which a model that opened it could post to; and a person's
+commit of a looser line while a held record waits, which is sent back too.
+`scripts/e2e.sh` scenario 27 runs it.
+
 `sheriff_fix`, the loop's first pass and `sheriff:fix` repair with one class,
 `SheriffRepair` (`SheriffRunner.fix` and `DeterministicFixer` only call it
 and word its outcome): Sheriff's default set, one `fix` after each analysis,
@@ -760,7 +789,9 @@ it over the installed one in one move, for the sessions that start after;
 download cut short; the signature (`ReleaseSignature`, Ed25519) is made by
 `release.yml` with the `RELEASE_SIGNING_KEY` secret and checked with the
 public half the jar carries (`release-key.pem`), so a release someone else
-filled is refused. A new key pair needs a release with the new public half
+filled is refused. The signature covers the bytes, not the release they are
+served as, so the jar must also record the version announced
+(`ServerVersion.of`): an older signed jar served as the newest is refused. A new key pair needs a release with the new public half
 installed by hand, as jars carrying the old one refuse what the new one
 signs. The install line checks the checksum alone. Only a jar outside a build's `target/` is replaced. On Linux a running
 server keeps answering after its jar is replaced that way, new classes
@@ -787,7 +818,10 @@ and `SheriffContainer` removes the run's container, which outlives a killed
 `docker run`. Claude Code sends it when its user presses Esc during a call and
 when a call outlasts its time limit (2.1.318); Codex sent none when a call
 outlasted its `tool_timeout_sec` (0.164), and its Esc was not measured.
-`scripts/e2e.sh` scenario 26 cancels a `sheriff_fix`.
+`scripts/e2e.sh` scenario 26 cancels a `sheriff_fix`. Of what a command
+writes, `SystemProcessRunner` keeps each stream's first 8 MiB and last 24 MiB,
+saying how much of the middle it left out, so one that writes without end
+cannot take the server's memory.
 
 Background tasks run on one daemon thread;
 when the client disconnects the server waits for them. A client that stops

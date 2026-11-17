@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -18,6 +19,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -29,7 +32,7 @@ import org.junit.jupiter.api.io.TempDir;
  */
 class ServerUpdatesTest {
 
-    private static final byte[] NEW_JAR = "the jar of 0.1.9".getBytes(StandardCharsets.UTF_8);
+    private static final byte[] NEW_JAR = jarOf("version=0.1.9\ncommit=abc1234\n");
     private static final KeyPair KEYS = newKeys();
 
     @TempDir
@@ -94,6 +97,24 @@ class ServerUpdatesTest {
     private Releases signedWith(String version, String checksum, byte[] signature) {
         return new Releases(Optional.of(version), Map.of("sheriff-mcp.jar", NEW_JAR, "sheriff-mcp.jar.sha256",
                 checksum.getBytes(StandardCharsets.UTF_8), "sheriff-mcp.jar.sig", signature), false);
+    }
+
+    /**
+     * A jar holding a version file, as the build writes it, and a class.
+     */
+    static byte[] jarOf(String versionFile) {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        try (ZipOutputStream jar = new ZipOutputStream(bytes)) {
+            jar.putNextEntry(new ZipEntry("com/kaizten/Some.class"));
+            jar.write(new byte[] {1, 2, 3});
+            if (versionFile != null) {
+                jar.putNextEntry(new ZipEntry("sheriff-mcp-version.properties"));
+                jar.write(versionFile.getBytes(StandardCharsets.UTF_8));
+            }
+        } catch (IOException exception) {
+            throw new IllegalStateException(exception);
+        }
+        return bytes.toByteArray();
     }
 
     private static KeyPair newKeys() {
@@ -320,6 +341,38 @@ class ServerUpdatesTest {
                 () -> wrong.replace(jar, "0.1.9"));
         assertEquals("the jar downloaded does not match its release's checksum", refused.getMessage());
         assertEquals("the jar of 0.1.8", Files.readString(jar));
+    }
+
+    @Test
+    @DisplayName("an older release, signed in its day, served as the newest is refused: the jar says its version")
+    void aJarMustBeTheVersionAnnounced() throws Exception {
+        byte[] old = jarOf("version=0.1.7\ncommit=0ld0000\n");
+        Releases replayed = new Releases(Optional.of("0.1.9"), Map.of("sheriff-mcp.jar", old,
+                "sheriff-mcp.jar.sha256", sha256(old).getBytes(StandardCharsets.UTF_8),
+                "sheriff-mcp.jar.sig", signatureOf(KEYS, old)), false);
+        ServerUpdates updates = updates("auto", replayed);
+        updates.check();
+        assertTrue(updates.notice().orElseThrow().contains("updating to it by itself failed (the jar downloaded says "
+                + "it is version 0.1.7, not the release's 0.1.9)"), updates.notice().orElseThrow());
+        assertEquals("the jar of 0.1.8", Files.readString(jar));
+        for (byte[] silent : List.of(jarOf(null), jarOf("version=${project.version}\n"),
+                "no jar at all".getBytes(StandardCharsets.UTF_8))) {
+            ServerUpdates unsaid = updates("auto", new Releases(Optional.of("0.1.9"), Map.of("sheriff-mcp.jar", silent,
+                    "sheriff-mcp.jar.sha256", sha256(silent).getBytes(StandardCharsets.UTF_8),
+                    "sheriff-mcp.jar.sig", signatureOf(KEYS, silent)), false));
+            java.io.IOException refused = org.junit.jupiter.api.Assertions.assertThrows(java.io.IOException.class,
+                    () -> unsaid.replace(jar, "0.1.9"));
+            assertEquals("the jar downloaded does not say which version it is", refused.getMessage());
+        }
+        assertEquals("the jar of 0.1.8", Files.readString(jar));
+    }
+
+    @Test
+    @DisplayName("a jar's own version is read from its version file")
+    void readsTheVersionAJarRecords() {
+        assertEquals(Optional.of("0.1.9"), ServerVersion.of(NEW_JAR));
+        assertEquals(Optional.empty(), ServerVersion.of(jarOf(null)));
+        assertEquals(Optional.empty(), ServerVersion.of(new byte[0]));
     }
 
     @Test

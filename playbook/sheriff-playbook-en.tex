@@ -734,7 +734,8 @@ Gate & Before the session's first edit to a component &
 Stop & When the assistant is about to finish &
   If what the turn changed has errors, or the gate stopped an edit of the turn
   and they are still there, or there are new methods with no test (in Java),
-  it sends the turn back with the list. \\
+  it sends the turn back with the list. So it does if the project's settings
+  check less than when the turn began. \\
 Turn start & When your message arrives &
   Records how the components looked, so that the Stop hook looks only at what
   changes in this turn, not at earlier uncommitted work. \\
@@ -794,6 +795,31 @@ since, so no fixer makes it again and they are left for the end:
 spring-petclinic/pom.xml: Maven dependency 'com.puppycrawl.tools:checkstyle' is
 outdated: 12.3.1 -> 14.3.0. [JavaPomOutdatedDependency]
 \end{command}
+  \item \textbf{The assistant does not lower the bar.} When the project's
+        \code{.sheriff.properties}, or the \code{sheriff.*} properties of a
+        \code{pom.xml}, check less than when your message arrived (a threshold
+        lowered, prototype mode on, the tests off, a profile changed), committed
+        in the turn or not, the Stop hook sends the turn back with each line
+        (copied from a real run):
+\begin{command}[basicstyle=\ttfamily\footnotesize]{answer}
+Not done: the project's Sheriff settings now check less than they did, and only the
+user decides what they check.
+
+  .sheriff.properties: SHERIFF_PROTOTYPE unset -> 1
+  .sheriff.properties: coverage 100 -> 50
+
+Next step: put each line back to its value before the arrow; committing it does not
+keep it. If the user asked for one of these changes, make it with the sheriff_config
+tool, which they approve; written any other way it is sent back again.
+\end{command}
+        A change made with the settings page, or by asking the assistant
+        (\code{sheriff_config}, which you approve), is yours and is not sent
+        back. So is whatever you change between turns, by hand or with
+        \code{--config}, committed or not: the next turn starts from it. During
+        a turn, \code{--config --project} counts as an edit by hand, as the
+        assistant's shell could run it too. If the assistant stops without
+        putting a line back, the hook tells it to tell you first, and every later turn is sent back
+        over that line until it is put back or made with \code{sheriff_config}.
   \item \textbf{They stand aside for the repair agent}, which runs its own
         checks.
 \end{itemize}
@@ -1024,7 +1050,11 @@ There are several ways to change one:
   \item \textbf{From the command line}:
         \code{java -jar ~/.local/share/sheriff-agent/sheriff-mcp.jar --config SHERIFF_PROTOTYPE=1},
         with \code{--project} to write it in the project's file. It checks the value too.
+        Between turns it is yours; during one, the Stop hook takes it as an
+        edit by hand (section~\ref{sec:hooks}).
   \item \textbf{Edit the file}: take the \texttt{\#} off a line and change its value.
+        Do it between turns, not while the assistant works: then the Stop hook
+        counts it as the assistant's (section~\ref{sec:hooks}).
   \item \textbf{For the whole team}, put the same line in the project's
         \code{.sheriff.properties}; it wins over yours for that project.
         It goes at the top of the project, where the session is opened: one
@@ -1083,7 +1113,8 @@ code is updated. The image is always Kaizten's latest; it is no setting.
   gives you the command that updates them (the install line or, in a clone of
   the repository, \code{git pull && scripts/install.sh}). \code{auto}: the
   server downloads the new jar, checks it against its release's checksum and
-  signature and puts it in place of the installed one; open sessions use it
+  signature and that it is the version published, and puts it in place of the
+  installed one; open sessions use it
   once restarted. \code{never}: it does not look. From your file only.}
 
 \subsubsection*{The analysis} With which rules, and for how long.

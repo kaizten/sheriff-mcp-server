@@ -3,17 +3,21 @@ package com.kaizten.sheriff.infrastructure.config;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.Reader;
+import java.io.StringReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.TreeMap;
 import javax.xml.XMLConstants;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
+import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
 import org.xml.sax.helpers.DefaultHandler;
 
@@ -45,10 +49,14 @@ public final class DeclaredProfile {
     private static final String ERROR_UTILITY_CLASS = "This is a utility class and cannot be instantiated.";
     private static final String MAVEN_BUILD = "pom.xml";
     private static final String PROPERTIES_ELEMENT = "properties";
-    private static final String PROPERTY_ELEMENT = "sheriff.profile";
+    private static final String SHERIFF_PROPERTY_START = "sheriff.";
     private static final String UNRESOLVED_REFERENCE = "${";
     private static final String DOCTYPE_FEATURE = "http://apache.org/xml/features/disallow-doctype-decl";
     private static final String NO_ACCESS = "";
+    /**
+     * The {@code pom.xml} property that declares the profile.
+     */
+    static final String PROPERTY_ELEMENT = "sheriff.profile";
     /**
      * The key that declares the profile in that file.
      */
@@ -122,6 +130,32 @@ public final class DeclaredProfile {
                     .flatMap(property -> usable(property.getTextContent()));
         } catch (IOException | ParserConfigurationException | SAXException exception) {
             return Optional.empty();
+        }
+    }
+
+    /**
+     * Every property of a {@code pom.xml}'s own {@code <properties>} that
+     * these tools read, {@code sheriff.profile} and the thresholds among
+     * them, as written.
+     *
+     * @param pom the file's text
+     * @return each property's value by its name, nothing when the text is
+     *     not a {@code pom.xml} that can be read
+     */
+    static Map<String, String> sheriffProperties(String pom) {
+        Map<String, String> properties = new TreeMap<>();
+        try {
+            Element project = parser().parse(new InputSource(new StringReader(pom))).getDocumentElement();
+            Optional<Element> declared = child(project, PROPERTIES_ELEMENT);
+            for (Node node = declared.map(Element::getFirstChild).orElse(null); node != null;
+                    node = node.getNextSibling()) {
+                if (node instanceof Element element && element.getTagName().startsWith(SHERIFF_PROPERTY_START)) {
+                    properties.put(element.getTagName(), element.getTextContent().strip());
+                }
+            }
+            return properties;
+        } catch (IOException | ParserConfigurationException | SAXException exception) {
+            return Map.of();
         }
     }
 

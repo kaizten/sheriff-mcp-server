@@ -1213,6 +1213,30 @@ final class ToolsTest {
     }
 
     @Test
+    @DisplayName("sheriff_config asked through an MCP client records a project's change as the user's; the same call "
+            + "made with --call from a shell does not")
+    void onlyAClientsSheriffConfigIsTheUsersChoice() throws IOException {
+        mavenComponent("app");
+        Map<String, String> environment = Map.of("SHERIFF_REPO", repository.toString(), "XDG_STATE_HOME",
+                state.toString(), "XDG_CONFIG_HOME", state.toString(), "APPDATA", state.toString());
+        McpConfig config = new McpConfig(environment);
+        Path file = config.settingsProject().resolve(".sheriff.properties");
+        com.kaizten.sheriff.infrastructure.config.ChosenSettings chosen =
+                new com.kaizten.sheriff.infrastructure.config.ChosenSettings();
+        Tools shell = new Tools(config, null, List::of, config::rulesCatalog, component -> null,
+                ImageProvisioning.alreadyReady(), ToolCall.throughCommandLine(repository, repository.resolve("x.jar")));
+        assertFalse(shell.call("sheriff_config", Map.of("setting", "SHERIFF_COVERAGE", "value", "10", "project", "true"))
+                .isError());
+        assertTrue(Files.readString(file).contains("SHERIFF_COVERAGE=10"));
+        assertFalse(chosen.chose(file, "SHERIFF_COVERAGE", "10"));
+        Tools client = new Tools(config, null, List::of, config::rulesCatalog, component -> null,
+                ImageProvisioning.alreadyReady(), ToolCall.throughMcp());
+        assertFalse(client.call("sheriff_config", Map.of("setting", "SHERIFF_COVERAGE", "value", "20", "project", true))
+                .isError());
+        assertTrue(chosen.chose(file, "SHERIFF_COVERAGE", "20"));
+    }
+
+    @Test
     @DisplayName("sheriff_config with page opens one settings page a session, answers with its address, and the "
             + "page closes with the tools")
     void sheriffConfigOpensThePage() throws Exception {
