@@ -775,7 +775,9 @@ it over the installed one in one move, for the sessions that start after;
 download cut short; the signature (`ReleaseSignature`, Ed25519) is made by
 `release.yml` with the `RELEASE_SIGNING_KEY` secret and checked with the
 public half the jar carries (`release-key.pem`), so a release someone else
-filled is refused. A new key pair needs a release with the new public half
+filled is refused. The signature covers the bytes, not the release they are
+served as, so the jar must also record the version announced
+(`ServerVersion.of`): an older signed jar served as the newest is refused. A new key pair needs a release with the new public half
 installed by hand, as jars carrying the old one refuse what the new one
 signs. The install line checks the checksum alone. Only a jar outside a build's `target/` is replaced. On Linux a running
 server keeps answering after its jar is replaced that way, new classes

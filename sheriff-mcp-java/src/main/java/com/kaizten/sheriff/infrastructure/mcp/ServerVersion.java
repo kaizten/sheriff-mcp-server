@@ -1,8 +1,12 @@
 package com.kaizten.sheriff.infrastructure.mcp;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Optional;
 import java.util.Properties;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
 /**
  * Which version of this jar is running, as the build recorded it from the
@@ -14,6 +18,7 @@ import java.util.Properties;
 public final class ServerVersion {
 
     private static final String RESOURCE = "/sheriff-mcp-version.properties";
+    private static final String ENTRY = RESOURCE.substring(1);
     private static final String VERSION_KEY = "version";
     private static final String COMMIT_KEY = "commit";
     private static final String DESCRIBED = "%s (%s)";
@@ -68,6 +73,27 @@ public final class ServerVersion {
     }
 
     /**
+     * The version another jar of these tools records, as a downloaded one
+     * says it is.
+     *
+     * @param jar the jar's bytes
+     * @return its version, or empty when it is no jar, records none, or the
+     *     build did not fill it in
+     */
+    public static Optional<String> of(byte[] jar) {
+        try (ZipInputStream entries = new ZipInputStream(new ByteArrayInputStream(jar))) {
+            for (ZipEntry entry = entries.getNextEntry(); entry != null; entry = entries.getNextEntry()) {
+                if (ENTRY.equals(entry.getName())) {
+                    return Optional.of(valueIn(entries, VERSION_KEY)).filter(version -> !UNKNOWN.equals(version));
+                }
+            }
+            return Optional.empty();
+        } catch (IOException | IllegalArgumentException exception) {
+            return Optional.empty();
+        }
+    }
+
+    /**
      * One value the build recorded.
      *
      * @param key its name in the version file
@@ -79,12 +105,25 @@ public final class ServerVersion {
             if (stream == null) {
                 return UNKNOWN;
             }
-            Properties properties = new Properties();
-            properties.load(stream);
-            String value = properties.getProperty(key, UNKNOWN).strip();
-            return value.isEmpty() || value.contains(UNFILTERED_MARKER) ? UNKNOWN : value;
+            return valueIn(stream, key);
         } catch (IOException exception) {
             return UNKNOWN;
         }
+    }
+
+    /**
+     * One value of a version file.
+     *
+     * @param stream the file's content
+     * @param key its name in the file
+     * @return its value, or {@code unknown} when it is empty or the build did
+     *     not fill it in
+     * @throws IOException when the file cannot be read
+     */
+    private static String valueIn(InputStream stream, String key) throws IOException {
+        Properties properties = new Properties();
+        properties.load(stream);
+        String value = properties.getProperty(key, UNKNOWN).strip();
+        return value.isEmpty() || value.contains(UNFILTERED_MARKER) ? UNKNOWN : value;
     }
 }
