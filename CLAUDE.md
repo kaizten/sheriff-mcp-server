@@ -804,7 +804,10 @@ and `SheriffContainer` removes the run's container, which outlives a killed
 `docker run`. Claude Code sends it when its user presses Esc during a call and
 when a call outlasts its time limit (2.1.318); Codex sent none when a call
 outlasted its `tool_timeout_sec` (0.164), and its Esc was not measured.
-`scripts/e2e.sh` scenario 26 cancels a `sheriff_fix`.
+`scripts/e2e.sh` scenario 26 cancels a `sheriff_fix`. Of what a command
+writes, `SystemProcessRunner` keeps each stream's first 8 MiB and last 24 MiB,
+saying how much of the middle it left out, so one that writes without end
+cannot take the server's memory.
 
 Background tasks run on one daemon thread;
 when the client disconnects the server waits for them. A client that stops

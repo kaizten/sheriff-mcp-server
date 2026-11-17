@@ -24,6 +24,13 @@ import java.util.regex.Pattern;
  * output on a real repository is hundreds of kilobytes. Reading stdout only
  * after {@code waitFor} returns is the classic version of this bug, and it
  * does not show up on small fixtures.
+ *
+ * <p>What a stream says is kept in memory up to a limit far above any real
+ * output (tens of megabytes): its start and its end, with the middle left out
+ * and a line saying how much. A process that writes without end, such as a
+ * test stuck in a loop that logs, would otherwise take the server's memory
+ * with it. The end is what Maven and Sheriff close on, and the start where
+ * Maven puts the cause.
  */
 public final class SystemProcessRunner implements ProcessRunner {
 
@@ -35,6 +42,33 @@ public final class SystemProcessRunner implements ProcessRunner {
     private static final Pattern NO_SUCH_FILE = Pattern.compile(NO_SUCH_FILE_PATTERN);
     private static final int STREAM_COUNT = 3;
     private static final String NO_INPUT = "";
+    private static final int MEBIBYTE = 1024 * 1024;
+    private static final int HEAD_KEPT = 8 * MEBIBYTE;
+    private static final int TAIL_KEPT = 24 * MEBIBYTE;
+    private static final int CHUNK = 64 * 1024;
+    private static final int START = 0;
+    private static final int END_OF_STREAM = -1;
+    private static final String LEFT_OUT = "%n[... %d bytes of output left out ...]%n";
+    private final int headKept;
+    private final int tailKept;
+
+    /**
+     * A runner that keeps the first 8 MiB and the last 24 MiB of each stream.
+     */
+    public SystemProcessRunner() {
+        this(HEAD_KEPT, TAIL_KEPT);
+    }
+
+    /**
+     * A runner that keeps other amounts of each stream, for the tests.
+     *
+     * @param headKept how many bytes of a stream's start are kept
+     * @param tailKept how many bytes of its end are kept, at least one
+     */
+    SystemProcessRunner(int headKept, int tailKept) {
+        this.headKept = headKept;
+        this.tailKept = tailKept;
+    }
 
     /**
      * Runs one command to completion and collects everything it said.
@@ -133,8 +167,8 @@ public final class SystemProcessRunner implements ProcessRunner {
             Duration timeout, ExecutorService drains, String standardInput)
             throws IOException, InterruptedException {
         Process process = builder.start();
-        Future<String> standardOutput = drains.submit(() -> drain(process.getInputStream()));
-        Future<String> standardError = drains.submit(() -> drain(process.getErrorStream()));
+        Future<String> standardOutput = drains.submit(() -> drain(process.getInputStream(), headKept, tailKept));
+        Future<String> standardError = drains.submit(() -> drain(process.getErrorStream(), headKept, tailKept));
         drains.submit(() -> feed(process.getOutputStream(), standardInput));
         boolean finished;
         try {
@@ -205,19 +239,63 @@ public final class SystemProcessRunner implements ProcessRunner {
     }
 
     /**
-     * Reads one stream of the process to its end.
+     * Reads one stream of the process to its end, keeping its start and its
+     * end: past the two limits, the middle is left out, and a line says how
+     * many bytes.
      *
-     * <p>Closes the stream afterwards, since a drain that leaks its handle
-     * leaks one per invocation and this runner is called in a loop.
+     * <p>Only a stream that fills its start allocates the room for its end.
+     * Closes the stream afterwards, since a drain that leaks its handle leaks
+     * one per invocation and this runner is called in a loop.
      *
      * @param stream the process stream to read
-     * @return everything it wrote, decoded as UTF-8
+     * @param headKept how many bytes of its start are kept
+     * @param tailKept how many bytes of its end are kept, at least one
+     * @return what it wrote, decoded as UTF-8, whole when it fits
      * @throws IOException when the stream cannot be read
      */
-    private static String drain(InputStream stream) throws IOException {
+    static String drain(InputStream stream, int headKept, int tailKept) throws IOException {
         try (InputStream open = stream) {
-            return new String(open.readAllBytes(), StandardCharsets.UTF_8);
+            byte[] head = open.readNBytes(headKept);
+            String start = new String(head, StandardCharsets.UTF_8);
+            if (head.length < headKept) {
+                return start;
+            }
+            byte[] tail = new byte[tailKept];
+            byte[] chunk = new byte[CHUNK];
+            long after = START;
+            for (int read = open.read(chunk); read != END_OF_STREAM; read = open.read(chunk)) {
+                after = kept(chunk, read, tail, after);
+            }
+            if (after <= tailKept) {
+                return start + new String(tail, START, (int) after, StandardCharsets.UTF_8);
+            }
+            int oldest = (int) (after % tailKept);
+            byte[] end = new byte[tailKept];
+            System.arraycopy(tail, oldest, end, START, tailKept - oldest);
+            System.arraycopy(tail, START, end, tailKept - oldest, oldest);
+            return start + String.format(LEFT_OUT, after - tailKept) + new String(end, StandardCharsets.UTF_8);
         }
+    }
+
+    /**
+     * Writes what was read into the ring that keeps a stream's end.
+     *
+     * @param chunk what was read
+     * @param read how many of its bytes
+     * @param tail the ring
+     * @param written how many bytes the ring was given before
+     * @return how many it has been given now
+     */
+    private static long kept(byte[] chunk, int read, byte[] tail, long written) {
+        long total = written;
+        for (int offset = START; offset < read;) {
+            int position = (int) (total % tail.length);
+            int length = Math.min(read - offset, tail.length - position);
+            System.arraycopy(chunk, offset, tail, position, length);
+            offset += length;
+            total += length;
+        }
+        return total;
     }
 
     /**
