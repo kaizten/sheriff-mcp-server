@@ -153,8 +153,8 @@ class ChangeCoverageTests {
         CoverageVerdict verdict = coverage(mount, maven).measure("app");
 
         assertEquals(4, maven.commands.size(), maven.commands.toString());
-        assertTrue(maven.commands.get(0).contains("org.jacoco:jacoco-maven-plugin:0.8.15:prepare-agent test "
-                + "org.jacoco:jacoco-maven-plugin:0.8.15:report"), maven.commands.get(0));
+        assertTrue(maven.commands.get(0).contains("org.jacoco:jacoco-maven-plugin:0.8.16:prepare-agent test "
+                + "org.jacoco:jacoco-maven-plugin:0.8.16:report"), maven.commands.get(0));
         assertTrue(maven.commands.get(1).contains("maven-dependency-plugin:3.8.1:copy "
                 + "-Dartifact=org.pitest:pitest-junit5-plugin:1.2.3"), maven.commands.get(1));
         assertTrue(maven.commands.get(2).contains("maven-help-plugin:3.5.1:effective-pom"), maven.commands.get(2));

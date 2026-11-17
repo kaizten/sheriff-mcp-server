@@ -27,7 +27,7 @@
         <surefire.version>3.6.1</surefire.version>
         <resources.version>3.5.0</resources.version>
         <!-- The version ChangeCoverage measures a change with, so both agree. -->
-        <jacoco.version>0.8.15</jacoco.version>
+        <jacoco.version>0.8.16</jacoco.version>
     </properties>
 
     <dependencies>
