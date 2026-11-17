@@ -306,29 +306,29 @@ installers and both workflows compare it with a release's. Do not move to a
   `tmpfs`: Sheriff neither reads nor repairs them, and nothing on the disk
   changes. It goes by the build file, not by name alone, since a `build/` may
   be a project's own source. `scripts/e2e.sh` scenario 20 checks it.
-- **`test` exits 0 however many errors it found**, and with a profile it does
-  not know; only a component that does not exist exits 1. `fix` exits 0 when
+- **`test` exits 0 however many errors it found**; only a component that
+  does not exist exits 1, and a profile it does not know 2. `fix` exits 0 when
   it runs and 1 when it cannot start. Decide what happened from the output,
   or by analyzing again.
 - **A fixer that cannot run looks like one that changed nothing**, and one
   that lies looks like one that worked. Two defences, both needed:
   - A fixer that *fails* says so on stdout: `Could not apply fixer for
     finding 'CODE'` (`for error` in older images), then `Error: <reason>`.
-    `FixerFailures` reads those lines and every report of a repair names
-    them.
+    `FixerFailures` reads those lines, and every report of a repair names
+    those whose rule the last analysis still finds
+    (`SheriffRepair.stillFailing`): `FolderNameUnderscore`'s moves the
+    package, then reads its file where it was and prints a failure for a
+    repair that is done.
   - A fixer that *exits 0 having done nothing* says nothing. Only analyzing
     again catches it, so a repair is always followed by another analysis.
     Never report a repair from the list of fixers that were run, nor from
-    a finding's status in `fix --report`'s JSON or its "Errors fixed": a
-    fixer that clears every finding of its rule in a file marks one `fixed`
-    and the rest `unattempted`, one that says "no changes required" is
-    counted as fixing them all, and `--dry-run` plans findings one run never
-    reaches.
-  And a fixer can break the build and be right by Sheriff:
-  `FolderNameUnderscore` renames a package's folder and its files'
-  `package` line but no other file's `import` of it, and the analysis after
-  finds nothing. Only the project's tests catch that, which is why a repair
-  is verified by them.
+    a finding's status in `fix --report`'s JSON or its "Errors fixed": it
+    marks `failed` findings another fixer removed, and counts more errors
+    fixed than there were.
+  And a fixer can break the build and be right by Sheriff, as
+  `FolderNameUnderscore`'s did when it left the `import`s of a package it
+  renamed. Only the project's tests catch that, which is why a repair is
+  verified by them.
 - **`fix` is always recursive** (image of 11 November 2026, which took
   `--disable-recursive` away): after each fixer it analyzes again and repairs
   what it finds, so a finding taken out of the record it reads is repaired
@@ -356,11 +356,10 @@ installers and both workflows compare it with a release's. Do not move to a
   `Selected error: CODE` lines `FixersRun` reads): nor is the default set run
   again, which would run it first, and a round runs for the fixers it kept
   from running though the count did not drop.
-- **A bad `--test` profile exits 0 too**, printing a usage banner to stdout
-  and the reason to stderr. Locating the findings array by the first `[`
-  parses the banner instead. So does a `fix` argument it refuses, among
-  them `--type DETERMINISTIC` as its help lists it, and no `--type` at all,
-  as `all` needs `--ai-provider`: `SheriffRepair` passes
+- **An argument `fix` refuses exits 0**, printing a usage banner to stdout
+  and the reason to stderr; locating the findings array by the first `[`
+  parses the banner instead. No `--type` at all is one, as `all` needs
+  `--ai-provider`: `SheriffRepair` passes
   `--type deterministic`, lower case, as `fix` would run its AI fixer too with
   credentials within reach, and a `fix` that answers with the banner did not
   run.
@@ -382,12 +381,12 @@ installers and both workflows compare it with a release's. Do not move to a
 - **The TypeScript profile traces every checker on stdout**, one
   `COMMAND: node ...` line each, before any findings; the analyzer drops
   them, or a clean TypeScript run reads as "not JSON".
-- **Sheriff finds its TypeScript analyzer in `./node_modules`**, under `/`,
-  so `SheriffContainer` runs it with `--workdir /`: the image declares
-  `WORKDIR /data`, where every TypeScript analysis reports 0 errors and exits
-  0, Node's "Cannot find module" on stdout. `scripts/e2e.sh` scenarios 9 and
-  10 catch it.
-- **Every run drops three `sheriff_*.json` files at the root of the mount**,
+- **`SheriffContainer` runs Sheriff with `--workdir /`**: images that found
+  their TypeScript analyzer in `./node_modules` reported 0 errors on every
+  TypeScript component from the image's `WORKDIR /data`, Node's "Cannot find
+  module" on stdout. `scripts/e2e.sh` scenarios 9 and 10 catch it.
+- **Every run drops four `sheriff_*.json` files at the root of the mount**
+  (`SheriffDockerAnalyzer.STATE_FILES`),
   which is the component's state folder,
   `${XDG_CACHE_HOME:-~/.cache}/sheriff-mcp/state/<digest of its path>`
   (`sheriff.state.home` in the tests), never the project. Docker runs there,
@@ -399,8 +398,9 @@ installers and both workflows compare it with a release's. Do not move to a
   clean-up, `sheriff_errors.json` is **where findings are read from** (stdout
   is the fallback) and `sheriff_tracked_files.json` gives
   `AnalysisResult.trackedFiles`, whose hashes name what a repair changed
-  (`changedSince`); both can be exported. `sheriff_summary.json` is always
-  `{ }` and ignored. `sheriff_history.json` (every run appended) and
+  (`changedSince`); both can be exported. `sheriff_summary.json` (the run's
+  timing) and `sheriff_audit_tasks.json` are ignored. `sheriff_history.json`
+  (every run appended) and
   `sheriff_tracked_components.json` (a hash per component) stay in the state
   folder, as a run with them kept found the same errors (measured).
 - **Sheriff is incremental, so its state is cleared *before* every run too.**
@@ -582,11 +582,13 @@ rule; a line it cannot read keeps its finding. It drops:
   below).
 
 When an image brought the middle three, they were 13,981 of this repository's
-14,879 errors. They are withheld from `fix` too (`SheriffRepair`, which reads
-them in the record through `SheriffDockerAnalyzer.recorded`), as a fixer given
-one changes code that was right: `FourSpaceIndentation`'s takes the space
-before the `*` of a `/* */` comment away, and `JavaPomOutdatedDependency`'s
-writes the plugin a Maven it does not run on.
+14,879 errors. The image of 16 November no longer reports a text block's
+lines, a constant, an annotation's import or a switch expression's brace;
+their defences stay for the images before it. They are withheld from
+`fix` too (`SheriffRepair`, which reads them in the record through
+`SheriffDockerAnalyzer.recorded`), as a fixer given one changes code that was
+right: `JavaPomOutdatedDependency`'s writes the plugin a Maven it does not
+run on.
 
 ## The MCP's answers
 
@@ -903,7 +905,8 @@ the image as profiles. When writing code here:
 
 - **Both modules must stay green under `JAVA`.** Check before finishing, and
   prefer the plugin's own goal for the plugin. **`test JAVA` does not read
-  `pom.xml` in the image of 12 November 2026** (measured: it is not among the
+  `pom.xml` since the image of 12 November 2026** (measured on 16 November's
+  too: it is not among the
   files tracked, and the pom rules are in no profile; `JAVA_POM` is listed
   and answers "Test not defined"). In the images before, `JAVA` checked it
   too, and its outdated-dependency rule asks the network, so a new release
