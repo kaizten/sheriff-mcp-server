@@ -256,7 +256,7 @@ again. `scripts/ci-local.sh` still runs `install.sh` under bash 3.2 and
 Every action a workflow uses is pinned by commit, with its exact version in a
 comment beside it (`actions/checkout@fbc6f39... # v5.1.0`): a tag can be moved
 to other code, and `release.yml` runs with `contents: write`. To update one,
-change both. Dependabot (`.github/dependabot.yml`) proposes that weekly, and
+change both. Dependabot (`.github/dependabot.yml`) proposes that monthly, and
 the two modules' Maven dependencies, all but the Maven the plugin is built
 against (`maven-core`, `maven-plugin-api`), which is the oldest it runs on.
 
