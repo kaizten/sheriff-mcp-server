@@ -1,24 +1,26 @@
-# Weekly pull requests for what the workflows and the two Maven modules use.
+# Monthly pull requests for what the workflows and the two Maven modules use.
 #
 # Every action is pinned by commit with its version in a comment beside it
-# (`uses: actions/checkout@<sha> # v5.1.0`); Dependabot's documentation says
-# it updates both together, which no pull request of it here has shown yet.
-# The Maven plugin is built against the oldest Maven it runs on, which
-# maven-plugin-plugin writes into its descriptor (3.10.0 refused Maven 3.9),
-# so maven-core and maven-plugin-api are never raised for the sake of it. The
-# MCP module is this repository's own, built before the plugin.
+# (`uses: actions/checkout@<sha> # v5.1.0`), and Dependabot updates both
+# together, to the commit the version's tag names (checked on #108, #111,
+# #112 and #114). The Maven plugin is built against the oldest Maven it runs
+# on, which maven-plugin-plugin writes into its descriptor (3.10.0 refused
+# Maven 3.9), so maven-core and maven-plugin-api are never raised for the
+# sake of it. The MCP module is this repository's own, built before the
+# plugin. JaCoCo's version is in ChangeCoverage too, which Dependabot does not
+# read: a pull request that raises it in a pom is not merged alone.
 version: 2
 updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: weekly
+      interval: monthly
   - package-ecosystem: maven
     directories:
       - /sheriff-mcp-java
       - /sheriff-maven-plugin
     schedule:
-      interval: weekly
+      interval: monthly
     ignore:
       - dependency-name: org.apache.maven:maven-core
       - dependency-name: org.apache.maven:maven-plugin-api

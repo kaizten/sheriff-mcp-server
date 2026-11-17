@@ -51,7 +51,7 @@ import java.util.stream.Stream;
  */
 public final class ChangeCoverage {
 
-    private static final String JACOCO = "org.jacoco:jacoco-maven-plugin:0.8.15";
+    private static final String JACOCO = "org.jacoco:jacoco-maven-plugin:0.8.16";
     private static final String PITEST = "org.pitest:pitest-maven:1.30.0";
     private static final String JUNIT5_PLUGIN = "org.pitest:pitest-junit5-plugin:1.2.3";
     private static final String JUNIT5_PLUGIN_JAR = "pitest-junit5-plugin-1.2.3.jar";
