@@ -887,8 +887,17 @@ class HookTests {
 
         private SheriffStopHook stop(ChosenSettings chosen) {
             return new SheriffStopHook(gate(ProcessOutcome.completed(0, "", "")),
-                    new GitVersionControl(new SystemProcessRunner(), repository, repository, ""))
-                    .withChosenSettings(chosen);
+                    new GitVersionControl(new SystemProcessRunner(), repository, repository, ""), null,
+                    new StopBlocks(repository.resolve("stop-blocks")), new TurnStart(repository.resolve("turns")), 5)
+                    .withChosenSettings(chosen).withSettingsBaseline(new SettingsBaseline(repository.resolve("base")));
+        }
+
+        private void turnStarts() {
+            assertEquals(HookExit.ALLOW, stop().startTurn("{\"session_id\":\"s\"}"));
+        }
+
+        private void write(String settings) throws IOException {
+            Files.writeString(repository.resolve(".sheriff.properties"), settings);
         }
 
         private SheriffStopHook stop() {
@@ -902,7 +911,7 @@ class HookTests {
             Files.writeString(repository.resolve(".sheriff.properties"), "SHERIFF_PROTOTYPE=1\n");
             assertEquals(HookExit.BLOCK, capturingStandardError(() -> stop().decide(STOP)));
             assertTrue(errors.contains(".sheriff.properties: SHERIFF_PROTOTYPE unset -> 1"), errors);
-            assertTrue(errors.contains("Next step: put each line back as the last commit has it."), errors);
+            assertTrue(errors.contains("Next step: put each line back to its value before the arrow;"), errors);
         }
 
         @Test
@@ -950,6 +959,79 @@ class HookTests {
             Files.writeString(repository.resolve(".sheriff.properties"), "profile=JAVA_HEXAGONAL\nmutation=90\n");
             assertEquals(HookExit.ALLOW, capturingStandardError(() -> stop().decide(STOP)));
             assertFalse(errors.contains("Not done"), errors);
+        }
+
+        @Test
+        @DisplayName("a loosening the model writes and commits inside the turn is caught: the turn's start is "
+                + "compared with, not the last commit")
+        void aLooseningCommittedInTheTurnIsCaught() throws IOException, InterruptedException {
+            write("coverage=100\n");
+            commitEverything();
+            turnStarts();
+            write("coverage=10\n");
+            git("commit", "-q", "-am", "lower");
+            assertEquals(HookExit.BLOCK, capturingStandardError(() -> stop().decide(STOP)));
+            assertTrue(errors.contains(".sheriff.properties: coverage 100 -> 10"), errors);
+        }
+
+        @Test
+        @DisplayName("a person who commits a looser setting between turns, or leaves one uncommitted, is not sent "
+                + "anything; what the turn itself loosens is")
+        void whatThePersonDidBetweenTurnsIsTheirs() throws IOException, InterruptedException {
+            write("coverage=100\nbranches=100\nmutation=90\n");
+            commitEverything();
+            write("coverage=50\nbranches=100\nmutation=90\n");
+            git("commit", "-q", "-am", "the person's");
+            write("coverage=50\nbranches=60\nmutation=90\n");
+            turnStarts();
+            assertEquals(HookExit.ALLOW, capturingStandardError(() -> stop().decide(STOP)));
+            assertFalse(errors.contains("Not done"), errors);
+            write("coverage=50\nbranches=60\nmutation=10\n");
+            assertEquals(HookExit.BLOCK, capturingStandardError(() -> stop().decide(STOP)));
+            assertTrue(errors.contains("mutation 90 -> 10"), errors);
+            assertFalse(errors.contains("coverage") || errors.contains("branches"), errors);
+        }
+
+        @Test
+        @DisplayName("a loosening a turn ended with, the stops run out, is not the next turn's starting point: it is "
+                + "sent back until put back, and only then let go")
+        void aLooseningThatOutlastsTheStopsIsHeld() throws IOException, InterruptedException {
+            write("coverage=100\n");
+            commitEverything();
+            turnStarts();
+            write("coverage=10\n");
+            git("commit", "-q", "-am", "lower");
+            assertEquals(HookExit.BLOCK, capturingStandardError(() -> stop().decide(STOP)));
+            turnStarts();
+            assertEquals(HookExit.BLOCK, capturingStandardError(() -> stop().decide(STOP)));
+            assertTrue(errors.contains("coverage 100 -> 10"), errors);
+            write("coverage=100\n");
+            assertEquals(HookExit.ALLOW, capturingStandardError(() -> stop().decide(STOP)));
+            git("commit", "-q", "-am", "back");
+            write("coverage=10\n");
+            git("commit", "-q", "-am", "the person's, between turns");
+            turnStarts();
+            assertEquals(HookExit.ALLOW, capturingStandardError(() -> stop().decide(STOP)));
+            assertFalse(errors.contains("Not done"), errors);
+        }
+
+        @Test
+        @DisplayName("a model that will not put the lines back is told to tell the user before it stops, and the turn "
+                + "after is sent back over them again")
+        void aStalledLooseningIsToldAndKept() throws IOException, InterruptedException {
+            String again = "{\"session_id\":\"s\",\"stop_hook_active\":true}";
+            write("coverage=100\n");
+            commitEverything();
+            turnStarts();
+            write("coverage=10\n");
+            assertEquals(HookExit.BLOCK, capturingStandardError(() -> stop().decide(STOP)));
+            assertEquals(HookExit.BLOCK, capturingStandardError(() -> stop().decide(again)));
+            assertTrue(errors.contains("still check less. Put them back now. If you stop again without changing them, "
+                    + "tell\nthe user each one first"), errors);
+            assertEquals(HookExit.ALLOW, capturingStandardError(() -> stop().decide(again)));
+            turnStarts();
+            assertEquals(HookExit.BLOCK, capturingStandardError(() -> stop().decide(STOP)));
+            assertTrue(errors.contains("coverage 100 -> 10"), errors);
         }
     }
 }

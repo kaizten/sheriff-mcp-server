@@ -3,13 +3,12 @@ package com.kaizten.sheriff.infrastructure.config;
 import java.nio.file.Path;
 
 /**
- * One line of a project's settings that now checks less than the last commit
- * has it check.
+ * One line of a project's settings that now checks less than it did before.
  *
  * @param file the file the line is in
  * @param key the key as the file writes it, such as {@code coverage} or
  *     {@code sheriff.coverage}
- * @param before its value in the last commit, empty when it was not set
+ * @param before its value before, empty when it was not set
  * @param after its value now, empty when it is not set
  */
 public record Loosening(Path file, String key, String before, String after) {

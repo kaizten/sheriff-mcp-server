@@ -14,16 +14,16 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 
 /**
- * The lines of a project's settings that check less than the last commit has
- * them check: a threshold lowered, prototype mode turned on, the tests taken
+ * The lines of a project's settings that check less than they did before: a
+ * threshold lowered, prototype mode turned on, the tests taken
  * out of the end of a turn, a profile changed or removed.
  *
  * <p>A project's {@code .sheriff.properties}, and the {@code sheriff.*}
  * properties of its {@code pom.xml}, decide what the hooks hold an assistant
  * to, and the assistant can write both. A sentence of the instructions was all
  * that kept a model from turning a check off where it could not pass it. So
- * the Stop hook compares each such file git reports changed with the last
- * commit, and this says which of its lines loosen a check. Each file is
+ * the Stop hook compares each such file with what it held when the turn began,
+ * and this says which of its lines loosen a check. Each file is
  * compared on its own, a line it does not set taken at the setting's default:
  * what the file says, not what the layers add up to.
  *
@@ -90,13 +90,11 @@ public final class LoosenedSettings {
     }
 
     /**
-     * The lines of a settings file that check less now than in the last
-     * commit.
+     * The lines of a settings file that check less now than before.
      *
      * @param file the file, a {@code .sheriff.properties} or a
      *     {@code pom.xml}
-     * @param committed its text in the last commit, empty when the commit
-     *     does not hold it
+     * @param committed its text before, empty when it did not exist
      * @param current its text now, empty when it is gone
      * @return each line that checks less, in the order of its key
      */
@@ -136,7 +134,7 @@ public final class LoosenedSettings {
      * Whether a setting checks less with one value than with another.
      *
      * @param setting the setting
-     * @param before its value in the last commit, empty when not set
+     * @param before its value before, empty when not set
      * @param after its value now, empty when not set
      * @return {@code true} when the value now checks less
      */

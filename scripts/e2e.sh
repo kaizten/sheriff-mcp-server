@@ -758,13 +758,15 @@ check "the cancelled call is never answered, and the next request is" \
 echo "27. A turn that leaves the project's settings checking less is sent back, unless the user made the change"
 loose="$work/loose"
 component "$loose/app"
+printf 'coverage=100\n' > "$loose/.sheriff.properties"
 repository "$loose"
-printf 'SHERIFF_PROTOTYPE=1\ncoverage=50\n' > "$loose/.sheriff.properties"
-stop_on_loose() {
-  echo '{"stop_hook_active":false}' | CLAUDE_PROJECT_DIR="$loose" XDG_CACHE_HOME="$lone/cache" \
-    java -jar "$mcp_jar" --hook-stop >"$work/$1.out" 2>&1
+on_loose() {
+  echo '{"session_id":"e2e-27","stop_hook_active":false}' | CLAUDE_PROJECT_DIR="$loose" XDG_CACHE_HOME="$lone/cache" \
+    java -jar "$mcp_jar" "$1" >"$work/$2.out" 2>&1
 }
-stop_on_loose 27a
+on_loose --hook-turn 27-turn1
+printf 'SHERIFF_PROTOTYPE=1\ncoverage=50\n' > "$loose/.sheriff.properties"
+on_loose --hook-stop 27a
 loose_exit=$?
 # A model's shell can run the command line as a person can, so neither --config
 # nor --call makes a change the user's: only sheriff_config asked through an MCP
@@ -773,7 +775,7 @@ loose_exit=$?
   >"$work/27b.out" 2>&1
 (cd "$loose" && XDG_CONFIG_HOME="$work/config27" XDG_CACHE_HOME="$lone/cache" java -jar "$mcp_jar" \
   --call sheriff_config setting=SHERIFF_COVERAGE value=10 project=true) >>"$work/27b.out" 2>&1
-stop_on_loose 27c
+on_loose --hook-stop 27c
 shell_exit=$?
 cat > "$work/configurer.py" <<'PY'
 import json, subprocess, sys
@@ -792,20 +794,37 @@ server.wait(timeout=120)
 PY
 (cd "$loose" && XDG_CONFIG_HOME="$work/config27" XDG_STATE_HOME="$work/state27" XDG_CACHE_HOME="$lone/cache" \
   python3 "$work/configurer.py" java -jar "$mcp_jar") >"$work/27d.out" 2>&1
-stop_on_loose 27e
+on_loose --hook-stop 27e
 client_exit=$?
-git -C "$loose" add -A
-git -C "$loose" commit -q -m "the user's settings"
-stop_on_loose 27f
+git -C "$loose" commit -q -am "the model commits its turn"
+on_loose --hook-stop 27f
 committed_exit=$?
+on_loose --hook-turn 27-turn2
+on_loose --hook-stop 27g
+next_turn_exit=$?
+printf 'SHERIFF_PROTOTYPE=1\ncoverage=100\n' > "$loose/.sheriff.properties"
+on_loose --hook-stop 27h
+put_back_exit=$?
+git -C "$loose" commit -q -am "put back"
+printf 'SHERIFF_PROTOTYPE=1\ncoverage=40\n' > "$loose/.sheriff.properties"
+git -C "$loose" commit -q -am "the person's, between turns"
+on_loose --hook-turn 27-turn3
+on_loose --hook-stop 27i
+person_exit=$?
 check "a file the turn wrote with prototype mode on and a lower coverage cannot end the turn" \
-  '(( loose_exit == 2 )) && grep -q "^  .sheriff.properties: SHERIFF_PROTOTYPE unset -> 1$" "$work/27a.out" && grep -q "coverage unset -> 50" "$work/27a.out"'
-check "and is told to put the lines back" 'grep -q "^Next step: put each line back" "$work/27a.out"'
+  '(( loose_exit == 2 )) && grep -q "^  .sheriff.properties: SHERIFF_PROTOTYPE unset -> 1$" "$work/27a.out" && grep -q "coverage 100 -> 50" "$work/27a.out"'
+check "and is told to put the lines back" 'grep -q "^Next step: put each line back to its value before the arrow" "$work/27a.out"'
 check "a line written with --config --project or --call sheriff_config is not the user's" \
   '(( shell_exit == 2 )) && grep -q "SHERIFF_COVERAGE unset -> 10" "$work/27c.out"'
 check "one written with sheriff_config through an MCP client is, and the ones beside it still are not" \
   'grep -q "SHERIFF_PROTOTYPE is 1" "$work/27d.out" && (( client_exit == 2 )) && ! grep -q SHERIFF_PROTOTYPE "$work/27e.out" && grep -q "SHERIFF_COVERAGE unset -> 10" "$work/27e.out"'
-check "once committed, the turn ends" '(( committed_exit == 0 )) && ! grep -q "Not done" "$work/27f.out"'
+check "the model committing its loosening does not end the turn" \
+  '(( committed_exit == 2 )) && grep -q "coverage 100 -> 50" "$work/27f.out"'
+check "nor does the next turn take it as its starting point" \
+  '(( next_turn_exit == 2 )) && grep -q "coverage 100 -> 50" "$work/27g.out"'
+check "put back, the turn ends" '(( put_back_exit == 0 )) && ! grep -q "Not done" "$work/27h.out"'
+check "a looser setting the person commits between turns is theirs" \
+  '(( person_exit == 0 )) && ! grep -q "Not done" "$work/27i.out"'
 
 echo
 if (( failures > 0 )); then

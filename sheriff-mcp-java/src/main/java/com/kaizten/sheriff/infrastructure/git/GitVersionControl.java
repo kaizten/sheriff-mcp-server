@@ -14,6 +14,7 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.regex.Matcher;
@@ -52,7 +53,10 @@ public final class GitVersionControl implements VersionControl {
     private static final Duration TIMEOUT = Duration.ofSeconds(60);
     private static final String GIT = "git";
     private static final String SHOW = "show";
-    private static final String HEAD_REVISION = "HEAD:";
+    private static final String REVISION_PATH = "%s:%s";
+    private static final String NAMES_ONLY = "--name-only";
+    private static final String NO_RENAMES = "--no-renames";
+    private static final String COMMIT_ID = "[0-9a-f]{40}|[0-9a-f]{64}";
     private static final String HEAD = "HEAD";
     private static final String DIFF = "diff";
     private static final String NO_COLOR = "--no-color";
@@ -319,10 +323,57 @@ public final class GitVersionControl implements VersionControl {
      *     last commit does not hold it, or there is no commit yet
      */
     public String committedContent(Path file) {
+        return contentAt(HEAD, file);
+    }
+
+    /**
+     * A file as a commit has it.
+     *
+     * @param revision the commit, or {@code HEAD}
+     * @param file the file, inside the repository
+     * @return its content there, or the empty string when the commit does
+     *     not hold it, or there is no such commit
+     */
+    public String contentAt(String revision, Path file) {
         Path root = repositoryRoot();
         Path relative = realPathOf(root).relativize(realPathOf(file));
-        ProcessOutcome outcome = git(List.of(GIT, SHOW, HEAD_REVISION + Platform.slashes(relative)));
+        ProcessOutcome outcome = git(List.of(GIT, SHOW, String.format(REVISION_PATH, revision,
+                Platform.slashes(relative))));
         return outcome.succeeded() ? outcome.standardOutput() : NO_CONTENT;
+    }
+
+    /**
+     * The commit the repository is at.
+     *
+     * @return its full id, or empty when there is no commit yet or git
+     *     cannot say
+     */
+    public Optional<String> headCommit() {
+        ProcessOutcome outcome = git(List.of(GIT, REV_PARSE, HEAD));
+        String commit = outcome.standardOutput().strip();
+        return outcome.succeeded() && commit.matches(COMMIT_ID) ? Optional.of(commit) : Optional.empty();
+    }
+
+    /**
+     * Every tracked file that differs between a commit and the working tree,
+     * committed since or not, as an absolute path. Untracked files are
+     * {@link #changedPaths}'.
+     *
+     * @param revision the commit
+     * @return those paths
+     * @throws IllegalStateException when git cannot compare them
+     */
+    public List<Path> changedSince(String revision) {
+        Path root = repositoryRoot();
+        String output = required(List.of(GIT, DIFF, NAMES_ONLY, NO_RENAMES, NUL_TERMINATED, revision, PATHS), DIFF)
+                .standardOutput();
+        List<Path> paths = new ArrayList<>();
+        for (String name : output.split(ENTRY_SEPARATOR)) {
+            if (!name.isBlank()) {
+                paths.add(mountRoot.resolve(mountRelative(root, name)).normalize());
+            }
+        }
+        return paths;
     }
 
     /**

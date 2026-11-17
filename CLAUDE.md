@@ -705,22 +705,32 @@ step is done, `sheriff_fix` with `verify` does not measure, the Stop hook
 checks neither the new methods, the tests nor the coverage, and the repair
 loop's test gate does not run (`Composition.testRunner`). Standards stay.
 
-**A turn does not end while the project's settings check less than the
-last commit has them check** (`LoosenedSettings`, first in the Stop hook,
-prototype mode or not): a threshold lowered, prototype mode on, the tests
-off, a profile changed or removed, in a `.sheriff.properties` or a
-`pom.xml`'s `sheriff.*`, as a model writes those files as it writes code and
-only a sentence of the instructions kept it from turning off a check it
-could not pass. A line `Settings.changeAsChosen` wrote (`sheriff_config`
-asked through an MCP client, which the installers leave to the user to
-allow, and the settings page: `ChosenSettings`) is the user's, and so is one
-committed; `--config --project` and `--call sheriff_config` are not, as a
-model's shell runs them as a person's does. It compares with `git show HEAD:`, not with
-the start of the turn, so a loosening a model kept past the stall cap is
-reported again every turn, and one a person writes by hand is committed.
-Outside it: the user's file and the environment, which are not in the
-repository, and a `.sheriff.properties` git ignores. `scripts/e2e.sh`
-scenario 27 runs it.
+**A turn does not end while the project's settings check less than when it
+began** (`LoosenedSettings`, first in the Stop hook, prototype mode or not):
+a threshold lowered, prototype mode on, the tests off, a profile changed or
+removed, in a `.sheriff.properties` or a `pom.xml`'s `sheriff.*`, as a model
+writes those files as it writes code and only a sentence of the
+instructions kept it from turning off a check it could not pass. The turn
+hook records the commit `HEAD` is at and the text of the settings files that
+differ from it (`SettingsBaseline`), and the Stop hook compares with that,
+committed since or not: compared with `HEAD`, a model that committed its
+loosening walked through. So what a person does between turns, committed or
+not, is the next turn's starting point. With no record (no turn hook, or no
+session id) it compares with `HEAD`. A loosening a turn still ends with, when
+the stops run out, holds the record it was found against for the repository,
+whatever session comes next, until a stop finds nothing looser: it is never
+adopted as a starting point, and the stalled message has the model tell the
+user first. A line `Settings.changeAsChosen` wrote (`sheriff_config` asked
+through an MCP client, which the installers leave to the user to allow, and
+the settings page: `ChosenSettings`) is the user's; `--config --project` and
+`--call sheriff_config` are not, as a model's shell runs them as a person's
+does. Not covered: the user's file and the environment, which are not in the
+repository; a `.sheriff.properties` git ignores; a session whose permission
+mode does not ask before `sheriff_config`; the records of chosen settings and
+of baselines, which are in folders the model's shell can write; the settings
+page's address, which a model that opened it could post to; and a person's
+commit of a looser line while a held record waits, which is sent back too.
+`scripts/e2e.sh` scenario 27 runs it.
 
 `sheriff_fix`, the loop's first pass and `sheriff:fix` repair with one class,
 `SheriffRepair` (`SheriffRunner.fix` and `DeterministicFixer` only call it
