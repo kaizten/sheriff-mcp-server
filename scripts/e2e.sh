@@ -766,20 +766,46 @@ stop_on_loose() {
 }
 stop_on_loose 27a
 loose_exit=$?
-(cd "$loose" && XDG_CONFIG_HOME="$work/config27" java -jar "$mcp_jar" --config SHERIFF_PROTOTYPE=1 --project) \
+# A model's shell can run the command line as a person can, so neither --config
+# nor --call makes a change the user's: only sheriff_config asked through an MCP
+# client, which the user approves, and the settings page.
+(cd "$loose" && XDG_CONFIG_HOME="$work/config27" java -jar "$mcp_jar" --config SHERIFF_COVERAGE=10 --project) \
   >"$work/27b.out" 2>&1
+(cd "$loose" && XDG_CONFIG_HOME="$work/config27" XDG_CACHE_HOME="$lone/cache" java -jar "$mcp_jar" \
+  --call sheriff_config setting=SHERIFF_COVERAGE value=10 project=true) >>"$work/27b.out" 2>&1
 stop_on_loose 27c
-chosen_exit=$?
+shell_exit=$?
+cat > "$work/configurer.py" <<'PY'
+import json, subprocess, sys
+server = subprocess.Popen(sys.argv[1:], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                          text=True)
+def send(message):
+    server.stdin.write(json.dumps(message) + "\n")
+    server.stdin.flush()
+send({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-06-18"}})
+server.stdout.readline()
+send({"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "sheriff_config",
+      "arguments": {"setting": "SHERIFF_PROTOTYPE", "value": "1", "project": True}}})
+print(server.stdout.readline().strip())
+server.stdin.close()
+server.wait(timeout=120)
+PY
+(cd "$loose" && XDG_CONFIG_HOME="$work/config27" XDG_STATE_HOME="$work/state27" XDG_CACHE_HOME="$lone/cache" \
+  python3 "$work/configurer.py" java -jar "$mcp_jar") >"$work/27d.out" 2>&1
+stop_on_loose 27e
+client_exit=$?
 git -C "$loose" add -A
 git -C "$loose" commit -q -m "the user's settings"
-stop_on_loose 27d
+stop_on_loose 27f
 committed_exit=$?
 check "a file the turn wrote with prototype mode on and a lower coverage cannot end the turn" \
   '(( loose_exit == 2 )) && grep -q "^  .sheriff.properties: SHERIFF_PROTOTYPE unset -> 1$" "$work/27a.out" && grep -q "coverage unset -> 50" "$work/27a.out"'
-check "and is told to put the lines back" 'grep -q "Next step: put each line back as the last commit has it" "$work/27a.out"'
-check "a line written with --config --project is the user's, the one beside it still is not" \
-  '(( chosen_exit == 2 )) && ! grep -q SHERIFF_PROTOTYPE "$work/27c.out" && grep -q "coverage unset -> 50" "$work/27c.out"'
-check "once committed, the turn ends" '(( committed_exit == 0 )) && ! grep -q "Not done" "$work/27d.out"'
+check "and is told to put the lines back" 'grep -q "^Next step: put each line back" "$work/27a.out"'
+check "a line written with --config --project or --call sheriff_config is not the user's" \
+  '(( shell_exit == 2 )) && grep -q "SHERIFF_COVERAGE unset -> 10" "$work/27c.out"'
+check "one written with sheriff_config through an MCP client is, and the ones beside it still are not" \
+  'grep -q "SHERIFF_PROTOTYPE is 1" "$work/27d.out" && (( client_exit == 2 )) && ! grep -q SHERIFF_PROTOTYPE "$work/27e.out" && grep -q "SHERIFF_COVERAGE unset -> 10" "$work/27e.out"'
+check "once committed, the turn ends" '(( committed_exit == 0 )) && ! grep -q "Not done" "$work/27f.out"'
 
 echo
 if (( failures > 0 )); then

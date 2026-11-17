@@ -739,8 +739,9 @@ files. A turn does not end while the project's file, or the `sheriff.*`
 properties of a `pom.xml`, check less than the last commit has them check (a
 threshold lowered, prototype mode on, the tests off, a profile changed): the
 Stop hook sends it back with each line, unless the line was written with the
-page, `sheriff_config` or `--config --project`, so commit a change of that kind
-you make by hand.
+settings page or with `sheriff_config` asked through the assistant, which you
+approve. `--config --project` and `--call sheriff_config` count as a hand edit,
+as the assistant's shell can run them too: commit a change of that kind.
 
 **The easiest way is a page in your browser**: `java -jar sheriff-mcp.jar
 --config-ui` opens it (the installers name the line), and so does asking the

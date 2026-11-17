@@ -811,10 +811,11 @@ Next step: put each line back as the last commit has it. If the user asked for o
 make it with the sheriff_config tool instead; if the user wrote it, leave it and tell
 them the hooks report it until it is committed.
 \end{command}
-        A change made with the settings page, \code{sheriff_config} or
-        \code{--config --project} is yours and is not sent back, nor is one
-        committed. One you write by hand, commit it: until then, the Stop hook
-        sends each turn back over it and has the assistant tell you.
+        A change made with the settings page, or by asking the assistant
+        (\code{sheriff_config}, which you approve), is yours and is not sent
+        back, nor is one committed. One you write by hand, or with
+        \code{--config --project}, which the assistant's shell could run too,
+        commit it: until then, the Stop hook sends each turn back over it.
   \item \textbf{They stand aside for the repair agent}, which runs its own
         checks.
 \end{itemize}
@@ -1045,6 +1046,8 @@ There are several ways to change one:
   \item \textbf{From the command line}:
         \code{java -jar ~/.local/share/sheriff-agent/sheriff-mcp.jar --config SHERIFF_PROTOTYPE=1},
         with \code{--project} to write it in the project's file. It checks the value too.
+        In the project's file the Stop hook takes it as a hand edit
+        (section~\ref{sec:hooks}).
   \item \textbf{Edit the file}: take the \texttt{\#} off a line and change its value.
         In the project's file, commit a change that checks less, or the Stop
         hook keeps reporting it (section~\ref{sec:hooks}).

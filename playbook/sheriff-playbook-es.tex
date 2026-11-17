@@ -817,10 +817,12 @@ Next step: put each line back as the last commit has it. If the user asked for o
 make it with the sheriff_config tool instead; if the user wrote it, leave it and tell
 them the hooks report it until it is committed.
 \end{command}
-        Un cambio hecho con la página de ajustes, \code{sheriff_config} o
-        \code{--config --project} es tuyo y no se devuelve, ni uno confirmado
-        con commit. Si lo escribes a mano, haz commit: hasta entonces, el fin
-        de turno devuelve cada turno por él y hace que el asistente te avise.
+        Un cambio hecho con la página de ajustes, o pidiéndoselo al asistente
+        (\code{sheriff_config}, que tú apruebas), es tuyo y no se devuelve, ni
+        uno confirmado con commit. Si lo escribes a mano, o con
+        \code{--config --project}, que la shell del asistente también podría
+        ejecutar, haz commit: hasta entonces, el fin de turno devuelve cada
+        turno por él.
   \item \textbf{Se apartan para el agente de reparación}, que ya hace sus propias
         comprobaciones.
 \end{itemize}
@@ -1053,6 +1055,8 @@ cambiado se queda como está. Hay varias formas de cambiar uno:
   \item \textbf{Desde la línea de comandos}:
         \code{java -jar ~/.local/share/sheriff-agent/sheriff-mcp.jar --config SHERIFF_PROTOTYPE=1},
         con \code{--project} para escribirlo en el fichero del proyecto. También comprueba el valor.
+        En el del proyecto, el fin de turno lo trata como una edición a mano
+        (sección~\ref{sec:hooks}).
   \item \textbf{Edita el fichero}: quita el \texttt{\#} de una línea y cambia su valor.
         En el del proyecto, haz commit de un cambio que comprueba menos, o el
         fin de turno seguirá avisando de él (sección~\ref{sec:hooks}).

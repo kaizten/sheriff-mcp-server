@@ -76,9 +76,8 @@ import java.util.stream.Collectors;
  * ({@link LoosenedSettings}): the model can write {@code .sheriff.properties}
  * and a {@code pom.xml} as it writes code, and a threshold it lowered there
  * was the one thing nothing looked at. A line the user gave its value through
- * {@code sheriff_config}, {@code --config} or the settings page
- * ({@link ChosenSettings}) is theirs, and so is one committed: neither is
- * sent back.
+ * {@code sheriff_config} asked by an MCP client or the settings page
+ * ({@link ChosenSettings}) is theirs: it is not sent back.
  */
 public final class SheriffStopHook {
 

@@ -36,10 +36,12 @@ class ChosenSettingsTests {
     }
 
     @Test
-    @DisplayName("sheriff_config, --config and the settings page record what they write into a project's file")
-    void aChangeToAProjectIsRecorded() throws IOException {
+    @DisplayName("a change the user's way is recorded as theirs; one through Settings.change alone, as --config, is not")
+    void onlyAChosenChangeIsRecorded() throws IOException {
         Path project = Files.createDirectories(folder.resolve("project"));
-        Settings.change(Map.of(), project, "SHERIFF_STOP_MAX_BLOCKS", "2", true);
+        Settings.change(Map.of(), project, "SHERIFF_STOP_MAX_BLOCKS", "3", true);
+        assertFalse(new ChosenSettings().chose(Settings.projectFile(project), "SHERIFF_STOP_MAX_BLOCKS", "3"));
+        Settings.changeAsChosen(Map.of(), project, "SHERIFF_STOP_MAX_BLOCKS", " 2 ", true);
         assertTrue(new ChosenSettings().chose(Settings.projectFile(project), "SHERIFF_STOP_MAX_BLOCKS", "2"));
     }
 }

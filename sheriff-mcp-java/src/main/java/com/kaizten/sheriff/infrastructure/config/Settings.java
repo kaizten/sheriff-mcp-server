@@ -416,9 +416,10 @@ public final class Settings {
 
     /**
      * Sets one setting in the user's file or the project's, or puts its
-     * default back with an empty value. A change to the project's file is
-     * recorded as the user's ({@link ChosenSettings}), as this is how a user
-     * changes it, so the Stop hook does not send it back for checking less.
+     * default back with an empty value. A change made this way is not the
+     * user's choice to the Stop hook: {@code --config} on the command line
+     * comes here, and a model's shell can run it as a person can. Only
+     * {@link #changeAsChosen} records one.
      *
      * @param environment the environment the tools were started with
      * @param project the project's folder
@@ -452,9 +453,6 @@ public final class Settings {
                 ensureUserFile(environment);
             }
             write(file, setting, trimmed);
-            if (forProject) {
-                new ChosenSettings().record(file, name, trimmed);
-            }
         } catch (IOException exception) {
             throw new IllegalArgumentException(exception.getMessage(), exception);
         }
@@ -464,6 +462,31 @@ public final class Settings {
                         file, when)
                 : String.format(CHANGED, name, trimmed, file, when);
         return isSet(environment, name) ? done + String.format(OVERRIDDEN, name, environment.get(name)) : done;
+    }
+
+    /**
+     * Sets one setting as {@link #change} does, and records a change to the
+     * project's file as the user's ({@link ChosenSettings}), so the Stop hook
+     * does not send it back for checking less. Only the paths the user
+     * approves or performs call it: the {@code sheriff_config} tool asked
+     * through an MCP client, which the installers leave to the user to
+     * allow, and the settings page.
+     *
+     * @param environment the environment the tools were started with
+     * @param project the project's folder
+     * @param name the setting
+     * @param value its new value, empty for the default
+     * @param forProject whether it goes in the project's file
+     * @return what was done, as a person reads it
+     * @throws IllegalArgumentException as {@link #change} does
+     */
+    public static String changeAsChosen(Map<String, String> environment, Path project, String name, String value,
+            boolean forProject) {
+        String done = change(environment, project, name, value, forProject);
+        if (forProject) {
+            new ChosenSettings().record(projectFile(project), name, value.strip());
+        }
+        return done;
     }
 
     /**

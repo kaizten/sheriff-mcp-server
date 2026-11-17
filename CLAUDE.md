@@ -711,9 +711,11 @@ prototype mode or not): a threshold lowered, prototype mode on, the tests
 off, a profile changed or removed, in a `.sheriff.properties` or a
 `pom.xml`'s `sheriff.*`, as a model writes those files as it writes code and
 only a sentence of the instructions kept it from turning off a check it
-could not pass. A line `Settings.change` wrote
-(`sheriff_config`, `--config --project`, the page: `ChosenSettings`) is the
-user's, and so is one committed. It compares with `git show HEAD:`, not with
+could not pass. A line `Settings.changeAsChosen` wrote (`sheriff_config`
+asked through an MCP client, which the installers leave to the user to
+allow, and the settings page: `ChosenSettings`) is the user's, and so is one
+committed; `--config --project` and `--call sheriff_config` are not, as a
+model's shell runs them as a person's does. It compares with `git show HEAD:`, not with
 the start of the turn, so a loosening a model kept past the stall cap is
 reported again every turn, and one a person writes by hand is committed.
 Outside it: the user's file and the environment, which are not in the

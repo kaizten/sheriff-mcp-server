@@ -13,16 +13,18 @@ import java.util.HexFormat;
 import java.util.Properties;
 
 /**
- * The settings written into a project's file through {@link Settings#change},
- * the one way a user changes them: {@code sheriff_config}, which an assistant
- * calls only with the user's leave, {@code --config NAME=VALUE --project} and
- * the settings page.
+ * The settings written into a project's file in a way the user approves or
+ * performs ({@link Settings#changeAsChosen}): the {@code sheriff_config} tool
+ * asked through an MCP client, which the installers leave to the user to
+ * allow, and the settings page. Not {@code --config NAME=VALUE --project} nor
+ * {@code --call sheriff_config}: a model's shell runs those as a person's
+ * does, so a person who uses them is in the place of one who edits the file.
  *
  * <p>The Stop hook sends a turn back when a project's settings check less than
- * the last commit has them check, as an assistant can write that file like any
- * other. A change made this way is the user's, so the hook leaves it alone
- * while the line still holds the value written here. A line changed by any
- * other means afterwards is not, even in the same file. Kept per user in the
+ * they did, as an assistant can write that file like any other. A change made
+ * the user's way is theirs, so the hook leaves it alone while the line still
+ * holds the value written here. A line changed by any other means afterwards
+ * is not, even in the same file. Kept per user in the
  * temporary directory, a file per settings file, and never pruned: a record
  * gone would send back a change the user made.
  */
