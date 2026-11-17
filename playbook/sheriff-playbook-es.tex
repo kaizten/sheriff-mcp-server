@@ -739,7 +739,8 @@ Compuerta & Antes de la primera edición de la sesión en un componente &
 Fin de turno & Cuando el asistente va a terminar &
   Si lo que ha cambiado en el turno tiene errores, o la compuerta paró una
   edición del turno y siguen ahí, o hay métodos nuevos sin test (en Java), le
-  devuelve el turno con la lista. \\
+  devuelve el turno con la lista. También si los ajustes del proyecto
+  comprueban menos que en el último commit. \\
 Inicio de turno & Al llegar tu mensaje &
   Anota cómo estaban los componentes, para que el fin de turno mire solo lo que
   cambia en este turno y no el trabajo anterior sin confirmar. \\
@@ -799,6 +800,27 @@ since, so no fixer makes it again and they are left for the end:
 spring-petclinic/pom.xml: Maven dependency 'com.puppycrawl.tools:checkstyle' is
 outdated: 12.3.1 -> 14.3.0. [JavaPomOutdatedDependency]
 \end{command}
+  \item \textbf{El asistente no baja el listón.} Cuando el
+        \code{.sheriff.properties} del proyecto, o las propiedades
+        \code{sheriff.*} de un \code{pom.xml}, comprueban menos que en el
+        último commit (un umbral más bajo, el modo prototipo activado, los tests
+        quitados, un perfil cambiado), el fin de turno devuelve el turno con
+        cada línea (copiado de una ejecución real):
+\begin{command}[basicstyle=\ttfamily\footnotesize]{respuesta}
+Not done: the project's Sheriff settings now check less than in the last commit, and
+only the user decides what they check.
+
+  .sheriff.properties: SHERIFF_PROTOTYPE unset -> 1
+  .sheriff.properties: coverage unset -> 50
+
+Next step: put each line back as the last commit has it. If the user asked for one,
+make it with the sheriff_config tool instead; if the user wrote it, leave it and tell
+them the hooks report it until it is committed.
+\end{command}
+        Un cambio hecho con la página de ajustes, \code{sheriff_config} o
+        \code{--config --project} es tuyo y no se devuelve, ni uno confirmado
+        con commit. Si lo escribes a mano, haz commit: hasta entonces, el fin
+        de turno devuelve cada turno por él y hace que el asistente te avise.
   \item \textbf{Se apartan para el agente de reparación}, que ya hace sus propias
         comprobaciones.
 \end{itemize}
@@ -1032,6 +1054,8 @@ cambiado se queda como está. Hay varias formas de cambiar uno:
         \code{java -jar ~/.local/share/sheriff-agent/sheriff-mcp.jar --config SHERIFF_PROTOTYPE=1},
         con \code{--project} para escribirlo en el fichero del proyecto. También comprueba el valor.
   \item \textbf{Edita el fichero}: quita el \texttt{\#} de una línea y cambia su valor.
+        En el del proyecto, haz commit de un cambio que comprueba menos, o el
+        fin de turno seguirá avisando de él (sección~\ref{sec:hooks}).
   \item \textbf{Para todo el equipo}, pon la misma línea en el
         \code{.sheriff.properties} del proyecto; en ese proyecto gana a la tuya.
         Va en la raíz del proyecto, donde se abre la sesión: uno dentro de un

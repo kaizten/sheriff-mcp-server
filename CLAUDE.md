@@ -703,6 +703,21 @@ step is done, `sheriff_fix` with `verify` does not measure, the Stop hook
 checks neither the new methods, the tests nor the coverage, and the repair
 loop's test gate does not run (`Composition.testRunner`). Standards stay.
 
+**A turn does not end while the project's settings check less than the
+last commit has them check** (`LoosenedSettings`, first in the Stop hook,
+prototype mode or not): a threshold lowered, prototype mode on, the tests
+off, a profile changed or removed, in a `.sheriff.properties` or a
+`pom.xml`'s `sheriff.*`, as a model writes those files as it writes code and
+only a sentence of the instructions kept it from turning off a check it
+could not pass. A line `Settings.change` wrote
+(`sheriff_config`, `--config --project`, the page: `ChosenSettings`) is the
+user's, and so is one committed. It compares with `git show HEAD:`, not with
+the start of the turn, so a loosening a model kept past the stall cap is
+reported again every turn, and one a person writes by hand is committed.
+Outside it: the user's file and the environment, which are not in the
+repository, and a `.sheriff.properties` git ignores. `scripts/e2e.sh`
+scenario 27 runs it.
+
 `sheriff_fix`, the loop's first pass and `sheriff:fix` repair with one class,
 `SheriffRepair` (`SheriffRunner.fix` and `DeterministicFixer` only call it
 and word its outcome): Sheriff's default set, one `fix` after each analysis,

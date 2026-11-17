@@ -416,7 +416,9 @@ public final class Settings {
 
     /**
      * Sets one setting in the user's file or the project's, or puts its
-     * default back with an empty value.
+     * default back with an empty value. A change to the project's file is
+     * recorded as the user's ({@link ChosenSettings}), as this is how a user
+     * changes it, so the Stop hook does not send it back for checking less.
      *
      * @param environment the environment the tools were started with
      * @param project the project's folder
@@ -450,6 +452,9 @@ public final class Settings {
                 ensureUserFile(environment);
             }
             write(file, setting, trimmed);
+            if (forProject) {
+                new ChosenSettings().record(file, name, trimmed);
+            }
         } catch (IOException exception) {
             throw new IllegalArgumentException(exception.getMessage(), exception);
         }

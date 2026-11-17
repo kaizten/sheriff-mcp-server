@@ -755,6 +755,32 @@ check "and no container of it is left" \
 check "the cancelled call is never answered, and the next request is" \
   'python3 -c "import json,sys; sys.exit(json.load(open(sys.argv[1]))[\"answered\"] != [3])" "$work/26.out"'
 
+echo "27. A turn that leaves the project's settings checking less is sent back, unless the user made the change"
+loose="$work/loose"
+component "$loose/app"
+repository "$loose"
+printf 'SHERIFF_PROTOTYPE=1\ncoverage=50\n' > "$loose/.sheriff.properties"
+stop_on_loose() {
+  echo '{"stop_hook_active":false}' | CLAUDE_PROJECT_DIR="$loose" XDG_CACHE_HOME="$lone/cache" \
+    java -jar "$mcp_jar" --hook-stop >"$work/$1.out" 2>&1
+}
+stop_on_loose 27a
+loose_exit=$?
+(cd "$loose" && XDG_CONFIG_HOME="$work/config27" java -jar "$mcp_jar" --config SHERIFF_PROTOTYPE=1 --project) \
+  >"$work/27b.out" 2>&1
+stop_on_loose 27c
+chosen_exit=$?
+git -C "$loose" add -A
+git -C "$loose" commit -q -m "the user's settings"
+stop_on_loose 27d
+committed_exit=$?
+check "a file the turn wrote with prototype mode on and a lower coverage cannot end the turn" \
+  '(( loose_exit == 2 )) && grep -q "^  .sheriff.properties: SHERIFF_PROTOTYPE unset -> 1$" "$work/27a.out" && grep -q "coverage unset -> 50" "$work/27a.out"'
+check "and is told to put the lines back" 'grep -q "Next step: put each line back as the last commit has it" "$work/27a.out"'
+check "a line written with --config --project is the user's, the one beside it still is not" \
+  '(( chosen_exit == 2 )) && ! grep -q SHERIFF_PROTOTYPE "$work/27c.out" && grep -q "coverage unset -> 50" "$work/27c.out"'
+check "once committed, the turn ends" '(( committed_exit == 0 )) && ! grep -q "Not done" "$work/27d.out"'
+
 echo
 if (( failures > 0 )); then
   echo "$failures check(s) failed. The repositories and outputs are kept in $work."

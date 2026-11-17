@@ -4,13 +4,16 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.kaizten.sheriff.infrastructure.config.ChosenSettings;
 import com.kaizten.sheriff.infrastructure.config.Composition;
 import com.kaizten.sheriff.infrastructure.config.Configuration;
 import com.kaizten.sheriff.infrastructure.coverage.CoverageThresholds;
 import com.kaizten.sheriff.infrastructure.coverage.CoverageVerdict;
 import com.kaizten.sheriff.infrastructure.coverage.Tally;
+import com.kaizten.sheriff.infrastructure.git.GitVersionControl;
 import com.kaizten.sheriff.infrastructure.process.FakeProcessRunner;
 import com.kaizten.sheriff.infrastructure.process.ProcessOutcome;
+import com.kaizten.sheriff.infrastructure.process.SystemProcessRunner;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.PrintStream;
@@ -857,6 +860,96 @@ class HookTests {
         @Test
         void ignoresInputItCannotParse() {
             assertEquals(HookExit.ALLOW, hook(ProcessOutcome.completed(0, "", "")).decide("not json"));
+        }
+    }
+
+    @Nested
+    @DisplayName("the project's settings at the end of a turn")
+    class ProjectSettings {
+
+        private static final String STOP = "{\"session_id\":\"s\",\"stop_hook_active\":false}";
+
+        private void git(String... arguments) throws IOException, InterruptedException {
+            List<String> command = new ArrayList<>(List.of("git", "-c", "user.email=t@example.com",
+                    "-c", "user.name=t"));
+            command.addAll(List.of(arguments));
+            Process process = new ProcessBuilder(command).directory(repository.toFile()).redirectErrorStream(true)
+                    .start();
+            process.getInputStream().readAllBytes();
+            process.waitFor();
+        }
+
+        private void commitEverything() throws IOException, InterruptedException {
+            git("init", "-q");
+            git("add", "-A");
+            git("commit", "-q", "-m", "seed");
+        }
+
+        private SheriffStopHook stop(ChosenSettings chosen) {
+            return new SheriffStopHook(gate(ProcessOutcome.completed(0, "", "")),
+                    new GitVersionControl(new SystemProcessRunner(), repository, repository, ""))
+                    .withChosenSettings(chosen);
+        }
+
+        private SheriffStopHook stop() {
+            return stop(new ChosenSettings(repository.resolve("chosen")));
+        }
+
+        @Test
+        @DisplayName("a model that turns prototype mode on in the project's file is sent back, told which line")
+        void aLooserProjectFileSendsTheTurnBack() throws IOException, InterruptedException {
+            commitEverything();
+            Files.writeString(repository.resolve(".sheriff.properties"), "SHERIFF_PROTOTYPE=1\n");
+            assertEquals(HookExit.BLOCK, capturingStandardError(() -> stop().decide(STOP)));
+            assertTrue(errors.contains(".sheriff.properties: SHERIFF_PROTOTYPE unset -> 1"), errors);
+            assertTrue(errors.contains("Next step: put each line back as the last commit has it."), errors);
+        }
+
+        @Test
+        @DisplayName("a threshold a pom.xml lowers is sent back too, and one it raises is not")
+        void aLowerThresholdInAPomSendsTheTurnBack() throws IOException, InterruptedException {
+            String pom = "<project><properties><sheriff.coverage>%s</sheriff.coverage></properties></project>";
+            Files.writeString(repository.resolve("app/pom.xml"), String.format(pom, "90"));
+            commitEverything();
+            Files.writeString(repository.resolve("app/pom.xml"), String.format(pom, "40"));
+            assertEquals(HookExit.BLOCK, capturingStandardError(() -> stop().decide(STOP)));
+            assertTrue(errors.contains("pom.xml: sheriff.coverage 90 -> 40"), errors);
+            Files.writeString(repository.resolve("app/pom.xml"), String.format(pom, "100"));
+            assertEquals(HookExit.ALLOW, capturingStandardError(() -> stop().decide(STOP)));
+            assertFalse(errors.contains("Not done"), errors);
+        }
+
+        @Test
+        @DisplayName("a person who edits the file by hand and commits it is not sent anything")
+        void aCommittedChangeIsTheUsers() throws IOException, InterruptedException {
+            Files.writeString(repository.resolve(".sheriff.properties"), "SHERIFF_PROTOTYPE=1\ncoverage=50\n");
+            commitEverything();
+            assertEquals(HookExit.ALLOW, capturingStandardError(() -> stop().decide(STOP)));
+            assertFalse(errors.contains("Not done"), errors);
+        }
+
+        @Test
+        @DisplayName("a line sheriff_config wrote is the user's; one written by hand beside it is not")
+        void aChangeMadeTheUsersWayEndsTheTurn() throws IOException, InterruptedException {
+            commitEverything();
+            Path file = repository.resolve(".sheriff.properties");
+            Files.writeString(file, "SHERIFF_STOP_MAX_BLOCKS=2\n");
+            ChosenSettings chosen = new ChosenSettings(repository.resolve("chosen"));
+            chosen.record(file, "SHERIFF_STOP_MAX_BLOCKS", "2");
+            assertEquals(HookExit.ALLOW, capturingStandardError(() -> stop(chosen).decide(STOP)));
+            Files.writeString(file, "SHERIFF_STOP_MAX_BLOCKS=2\nSHERIFF_COVERAGE=10\n");
+            assertEquals(HookExit.BLOCK, capturingStandardError(() -> stop(chosen).decide(STOP)));
+            assertTrue(errors.contains("SHERIFF_COVERAGE unset -> 10"), errors);
+            assertFalse(errors.contains("SHERIFF_STOP_MAX_BLOCKS"), errors);
+        }
+
+        @Test
+        @DisplayName("a settings file that checks as much or more ends the turn as before")
+        void aStricterFileIsNotSentBack() throws IOException, InterruptedException {
+            commitEverything();
+            Files.writeString(repository.resolve(".sheriff.properties"), "profile=JAVA_HEXAGONAL\nmutation=90\n");
+            assertEquals(HookExit.ALLOW, capturingStandardError(() -> stop().decide(STOP)));
+            assertFalse(errors.contains("Not done"), errors);
         }
     }
 }

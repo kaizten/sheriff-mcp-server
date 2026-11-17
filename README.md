@@ -735,7 +735,12 @@ starts, commented out the same way; nothing already in it is touched. A project'
 but who answers in the repair loop and how: `AI_BACKEND`, `SHERIFF_AGENT_*`,
 `CODEX_COMMAND`, `ANTIGRAVITY_COMMAND` and the APIs' `ANTHROPIC_*` and
 `OPENAI_*`, which a cloned project must not choose), and an environment variable of the same name wins over both
-files.
+files. A turn does not end while the project's file, or the `sheriff.*`
+properties of a `pom.xml`, check less than the last commit has them check (a
+threshold lowered, prototype mode on, the tests off, a profile changed): the
+Stop hook sends it back with each line, unless the line was written with the
+page, `sheriff_config` or `--config --project`, so commit a change of that kind
+you make by hand.
 
 **The easiest way is a page in your browser**: `java -jar sheriff-mcp.jar
 --config-ui` opens it (the installers name the line), and so does asking the

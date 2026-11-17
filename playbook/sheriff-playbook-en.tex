@@ -734,7 +734,8 @@ Gate & Before the session's first edit to a component &
 Stop & When the assistant is about to finish &
   If what the turn changed has errors, or the gate stopped an edit of the turn
   and they are still there, or there are new methods with no test (in Java),
-  it sends the turn back with the list. \\
+  it sends the turn back with the list. So it does if the project's settings
+  check less than in the last commit. \\
 Turn start & When your message arrives &
   Records how the components looked, so that the Stop hook looks only at what
   changes in this turn, not at earlier uncommitted work. \\
@@ -794,6 +795,26 @@ since, so no fixer makes it again and they are left for the end:
 spring-petclinic/pom.xml: Maven dependency 'com.puppycrawl.tools:checkstyle' is
 outdated: 12.3.1 -> 14.3.0. [JavaPomOutdatedDependency]
 \end{command}
+  \item \textbf{The assistant does not lower the bar.} When the project's
+        \code{.sheriff.properties}, or the \code{sheriff.*} properties of a
+        \code{pom.xml}, check less than in the last commit (a threshold
+        lowered, prototype mode on, the tests off, a profile changed), the Stop
+        hook sends the turn back with each line (copied from a real run):
+\begin{command}[basicstyle=\ttfamily\footnotesize]{answer}
+Not done: the project's Sheriff settings now check less than in the last commit, and
+only the user decides what they check.
+
+  .sheriff.properties: SHERIFF_PROTOTYPE unset -> 1
+  .sheriff.properties: coverage unset -> 50
+
+Next step: put each line back as the last commit has it. If the user asked for one,
+make it with the sheriff_config tool instead; if the user wrote it, leave it and tell
+them the hooks report it until it is committed.
+\end{command}
+        A change made with the settings page, \code{sheriff_config} or
+        \code{--config --project} is yours and is not sent back, nor is one
+        committed. One you write by hand, commit it: until then, the Stop hook
+        sends each turn back over it and has the assistant tell you.
   \item \textbf{They stand aside for the repair agent}, which runs its own
         checks.
 \end{itemize}
@@ -1025,6 +1046,8 @@ There are several ways to change one:
         \code{java -jar ~/.local/share/sheriff-agent/sheriff-mcp.jar --config SHERIFF_PROTOTYPE=1},
         with \code{--project} to write it in the project's file. It checks the value too.
   \item \textbf{Edit the file}: take the \texttt{\#} off a line and change its value.
+        In the project's file, commit a change that checks less, or the Stop
+        hook keeps reporting it (section~\ref{sec:hooks}).
   \item \textbf{For the whole team}, put the same line in the project's
         \code{.sheriff.properties}; it wins over yours for that project.
         It goes at the top of the project, where the session is opened: one
