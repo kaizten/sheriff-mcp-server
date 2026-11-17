@@ -80,6 +80,33 @@ class SheriffRepairTests {
     }
 
     @Test
+    @DisplayName("a fixer that says it failed while its rule is gone after is no failure to report")
+    void aFailureWhoseRuleIsGoneIsNotReported() {
+        ProcessOutcome failedButDone = ProcessOutcome.completed(0,
+                "Could not apply fixer for finding 'SortedImport' in file '/data/app/A.java'\nError: moved\n", "");
+        FakeProcessRunner runner = new FakeProcessRunner(List.of(ProcessOutcome.completed(0, TWO, ""), failedButDone,
+                ProcessOutcome.completed(0, ONE, ""), FIXED, ProcessOutcome.completed(0, ONE, "")));
+
+        RepairOutcome outcome = repair(runner).everyFixer(List.of());
+
+        assertEquals(List.of(), outcome.fixerFailures());
+    }
+
+    @Test
+    @DisplayName("a fixer that failed is reported while the last analysis still finds its rule")
+    void aFailureWhoseRuleStaysIsReported() {
+        ProcessOutcome failed = ProcessOutcome.completed(0,
+                "Could not apply fixer for finding 'JavaDocCommentsInMethod' in file '/data/app/A.java'\n"
+                + "Error: no method\n", "");
+        FakeProcessRunner runner = new FakeProcessRunner(List.of(ProcessOutcome.completed(0, TWO, ""), failed,
+                ProcessOutcome.completed(0, ONE, ""), FIXED, ProcessOutcome.completed(0, ONE, "")));
+
+        RepairOutcome outcome = repair(runner).everyFixer(List.of());
+
+        assertEquals(List.of("JavaDocCommentsInMethod: no method"), outcome.fixerFailures());
+    }
+
+    @Test
     @DisplayName("every round is told as it happens: what its analysis found, and whether fixers ran on it")
     void everyRoundIsToldAsItHappens() {
         FakeProcessRunner runner = new FakeProcessRunner(List.of(ProcessOutcome.completed(0, TWO, ""), FIXED,

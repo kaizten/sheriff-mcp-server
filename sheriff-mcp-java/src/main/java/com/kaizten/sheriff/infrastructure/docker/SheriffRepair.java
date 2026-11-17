@@ -230,8 +230,24 @@ public final class SheriffRepair {
             repairRounds += repaired ? ONE_ROUND : NO_ROUNDS;
             round++;
         } while (repaired);
-        return new RepairOutcome(before, after, List.copyOf(codes), failures.stream().distinct().toList(),
+        return new RepairOutcome(before, after, List.copyOf(codes), stillFailing(failures, after),
                 Optional.empty(), repairRounds);
+    }
+
+    /**
+     * The failures Sheriff's fixers printed whose rule the last analysis still
+     * finds: a fixer can report a failure after its repair is done, as
+     * {@code FolderNameUnderscore}'s reads its file again where it was before
+     * it moved it, and a rule with nothing left needs no editing by hand.
+     *
+     * @param failures what the fixers printed, each as {@code CODE: reason}
+     * @param after the last analysis of the repair
+     * @return those failures whose rule is still found, each once
+     */
+    static List<String> stillFailing(List<String> failures, AnalysisResult after) {
+        Set<String> left = new LinkedHashSet<>(codesOf(after.errors()));
+        return failures.stream().distinct()
+                .filter(failure -> left.containsAll(FixerFailures.codesOf(List.of(failure)))).toList();
     }
 
     /**
