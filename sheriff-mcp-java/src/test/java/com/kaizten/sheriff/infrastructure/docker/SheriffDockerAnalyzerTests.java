@@ -284,32 +284,31 @@ class SheriffDockerAnalyzerTests {
     }
 
     @Test
-    @DisplayName("withheld findings leave the record fix reads, the others stay; with no record nothing happens")
-    void withheldFindingsLeaveTheRecord() throws IOException {
+    @DisplayName("the record a fix would start from is read whole: this profile's, with what marks a fixer")
+    void theRecordIsReadWhole() throws IOException {
         Path state = state();
         SheriffDockerAnalyzer analyzer = analyzer(FakeProcessRunner.always(ProcessOutcome.completed(0, "", "")));
-        assertEquals(0, analyzer.withholdFromState(finding -> true), "no record, nothing to withhold");
+        assertEquals(List.of(), analyzer.recorded(), "no record, nothing recorded");
         Files.writeString(state.resolve("sheriff_errors.json"), "{\"file:/other\": {\"lib\": {}}, "
                 + "\"file:/data\": {\"app\": {\"JAVA\": ["
                 + "{\"file\": \"/data/app/pom.xml\", \"description\": \"outdated\", \"referenceCode\": \"Old\"},"
-                + "{\"file\": \"/data/app/A.java\", \"description\": \"unsorted\", \"referenceCode\": \"Sort\"}],"
+                + "{\"file\": \"/data/app/A.java\", \"description\": \"unsorted\", \"referenceCode\": \"Sort\","
+                + " \"script\": \"sort.py\"}],"
                 + "\"JAVA_DDD\": [{\"file\": \"/data/app/pom.xml\", \"referenceCode\": \"Old\"}]}}}");
 
-        int withheld = analyzer.withholdFromState(finding -> finding.file().equals("app/pom.xml"));
+        List<SheriffFinding> recorded = analyzer.recorded();
 
-        assertEquals(1, withheld, "only the profile analyzed is this analyzer's");
-        String record = Files.readString(state.resolve("sheriff_errors.json"));
-        assertFalse(record.contains("outdated"), record);
-        assertTrue(record.contains("unsorted"), record);
-        assertTrue(record.contains("JAVA_DDD"), record);
-        String untouched = record;
-        assertEquals(0, analyzer.withholdFromState(finding -> false));
-        assertEquals(untouched, Files.readString(state.resolve("sheriff_errors.json")));
+        assertEquals(List.of("app/pom.xml", "app/A.java"), recorded.stream().map(SheriffFinding::file).toList(),
+                "only the profile analyzed is this analyzer's");
+        assertFalse(recorded.get(0).raw().containsKey("script"));
+        assertTrue(recorded.get(1).raw().containsKey("script"));
+        assertEquals("/data/app/A.java", SheriffDockerAnalyzer.inContainer(recorded.get(1).file()));
+        assertEquals("/data/app/A.java", SheriffDockerAnalyzer.inContainer("/data/app/A.java"));
     }
 
     @Test
-    @DisplayName("a known false positive leaves the record fix reads too, so no fixer changes the comment")
-    void knownFalsePositivesLeaveTheRecord() throws IOException {
+    @DisplayName("a known false positive is in the record, which an analysis drops it from, and is told apart")
+    void knownFalsePositivesAreToldApartInTheRecord() throws IOException {
         Path state = state();
         Path source = repository.resolve("app/src/main/java/A.java");
         Files.createDirectories(source.getParent());
@@ -319,44 +318,12 @@ class SheriffDockerAnalyzerTests {
                 + " \"referenceCode\": \"FourSpaceIndentation\"},"
                 + "{\"file\": \"/data/app/src/main/java/A.java\", \"description\": \"Tab at line 5\","
                 + " \"referenceCode\": \"FourSpaceIndentation\"}]}}}");
+        SheriffDockerAnalyzer analyzer = analyzer(FakeProcessRunner.always(ProcessOutcome.completed(0, "", "")));
 
-        int withheld = analyzer(FakeProcessRunner.always(ProcessOutcome.completed(0, "", "")))
-                .withholdFromState(finding -> false);
+        List<String> wrong = analyzer.recorded().stream().filter(analyzer.falsePositives())
+                .map(SheriffFinding::description).toList();
 
-        assertEquals(1, withheld, "the comment's line, not the tab");
-        String record = Files.readString(state.resolve("sheriff_errors.json"));
-        assertFalse(record.contains("line 2"), record);
-        assertTrue(record.contains("line 5"), record);
-    }
-
-    @Test
-    @DisplayName("withholding nothing leaves Sheriff's record as it wrote it, not rewritten")
-    void withholdingNothingRewritesNothing() throws IOException {
-        Path state = state();
-        String asWritten = "{\n  \"file:/data\" : {\n    \"app\" : {\n      \"JAVA\" : [ {\n"
-                + "        \"file\" : \"/data/app/A.java\", \"referenceCode\" : \"Sort\" } ] } } }\n";
-        Files.writeString(state.resolve("sheriff_errors.json"), asWritten);
-
-        assertEquals(0, analyzer(FakeProcessRunner.always(ProcessOutcome.completed(0, "", "")))
-                .withholdFromState(finding -> false));
-
-        assertEquals(asWritten, Files.readString(state.resolve("sheriff_errors.json")));
-    }
-
-    @Test
-    @DisplayName("a record that cannot be replaced is left as it was, and nothing counts as withheld")
-    void aRecordThatCannotBeReplacedIsLeft() throws IOException {
-        Path state = state();
-        String record = "{\"file:/data\": {\"app\": {\"JAVA\": [{\"file\": \"/data/app/pom.xml\"}]}}}";
-        Files.writeString(state.resolve("sheriff_errors.json"), record);
-        state.toFile().setWritable(false);
-        try {
-            assertEquals(0, analyzer(FakeProcessRunner.always(ProcessOutcome.completed(0, "", "")))
-                    .withholdFromState(finding -> true));
-        } finally {
-            state.toFile().setWritable(true);
-        }
-        assertEquals(record, Files.readString(state.resolve("sheriff_errors.json")));
+        assertEquals(List.of("Wrong indentation at line 2"), wrong, "the comment's line, not the tab");
     }
 
     @Test

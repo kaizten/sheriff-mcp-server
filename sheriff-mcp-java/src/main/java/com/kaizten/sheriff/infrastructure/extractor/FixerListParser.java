@@ -21,6 +21,8 @@ public final class FixerListParser {
     private static final String NEWLINE = "\n";
     private static final String WHITESPACE_REGEX = "\\s+";
     private static final String UTILITY_CLASS_MESSAGE = "This is a utility class and cannot be instantiated.";
+    private static final int CODE_GROUP = 2;
+    private static final int REST_GROUP = 3;
 
     /**
      * Prevents instantiation of this utility class.
@@ -46,11 +48,11 @@ public final class FixerListParser {
             if (!entry.find()) {
                 continue;
             }
-            String code = entry.group(2);
+            String code = entry.group(CODE_GROUP);
             if (!Character.isLetter(code.charAt(0))) {
                 continue;
             }
-            String rest = entry.group(3).replace(NO_FIXER, EMPTY).strip();
+            String rest = entry.group(REST_GROUP).replace(NO_FIXER, EMPTY).strip();
             fixers.put(code, rest.isEmpty() ? EMPTY : rest.split(WHITESPACE_REGEX)[0]);
         }
         return fixers;

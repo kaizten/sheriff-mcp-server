@@ -132,9 +132,7 @@ final class SheriffRunnerTest {
         SheriffRunner runner = runner(
                 ProcessOutcome.completed(0, base, ""),
                 ProcessOutcome.completed(1, "fix report", ""),
-                ProcessOutcome.completed(1, "fix report", ""),
                 ProcessOutcome.completed(0, layers, ""),
-                ProcessOutcome.completed(1, "fix report", ""),
                 ProcessOutcome.completed(1, "fix report", ""),
                 ProcessOutcome.completed(0, "", ""),
                 ProcessOutcome.completed(0, "", ""));
@@ -146,7 +144,7 @@ final class SheriffRunnerTest {
     }
 
     @Test
-    @DisplayName("a repair with no rule named runs the fixer of every rule found, and again while the count drops")
+    @DisplayName("a repair with no rule named runs every fixer Sheriff has, and again while the count drops")
     void aRepairWithNoRuleRunsEveryFixerUntilItStopsHelping() {
         String two = "[{\"file\":\"/data/A.java\",\"description\":\"d\",\"howToSolve\":\"h\","
                 + "\"referenceCode\":\"EmptyLinesInMethod\",\"type\":\"ERROR\"},"
@@ -155,17 +153,16 @@ final class SheriffRunnerTest {
         String one = "[{\"file\":\"/data/A.java\",\"description\":\"e\",\"howToSolve\":\"h\","
                 + "\"referenceCode\":\"JavaLineCommentsChecker\",\"type\":\"ERROR\"}]";
         QueuedProcessRunner processes = new QueuedProcessRunner(
-                ProcessOutcome.completed(0, two, ""), ProcessOutcome.completed(1, "fix report", ""),
-                ProcessOutcome.completed(1, "fix report", ""), ProcessOutcome.completed(0, one, ""),
-                ProcessOutcome.completed(1, "fix report", ""), ProcessOutcome.completed(1, "fix report", ""),
+                ProcessOutcome.completed(0, two, ""), ProcessOutcome.completed(1, "fix report", ""), ProcessOutcome.completed(0, one, ""),
+                ProcessOutcome.completed(1, "fix report", ""),
                 ProcessOutcome.completed(0, one, ""));
         FixRun run = new SheriffRunner(processes, IMAGE, repository, TIMEOUT).fix("conversor-temperatura", "JAVA", "");
 
         assertEquals(2, run.before().total());
         assertEquals(1, run.after().total());
-        List<String> named = processes.commands.get(2);
-        assertEquals("EmptyLinesInMethod,JavaLineCommentsChecker", named.get(named.indexOf("--fixers") + 1));
-        assertEquals(7, processes.commands.size(),
+        List<String> fix = processes.commands.get(1);
+        assertTrue(fix.contains("fix") && !fix.contains("--fixers"), "Sheriff's own set, every fixer: " + fix);
+        assertEquals(5, processes.commands.size(),
                 "each round's analysis measures the one before and feeds its own repair; the third repaired nothing");
     }
 

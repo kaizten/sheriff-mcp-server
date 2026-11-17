@@ -272,6 +272,27 @@ class SheriffContainerTests {
     }
 
     @Test
+    @DisplayName("arguments given for the file go into it, one a line, after the token; with no folder, on the line")
+    void argumentsCanGoInTheFile(@TempDir Path repository) throws IOException {
+        Files.createDirectories(repository.resolve("app"));
+        FakeProcessRunner runner = FakeProcessRunner.always(ProcessOutcome.completed(0, "", ""));
+        SheriffContainer container = new SheriffContainer(runner, "kaizten/sheriff:latest", repository,
+                Duration.ofSeconds(5), () -> "sheriff-agent-test", () -> Optional.of("ghp_secretValue0000"));
+        List<String> files = List.of("--file", "/data/app/src/my demo/A.java");
+
+        container.run(List.of("fix", "--component", "app"), files);
+        container.run(List.of("fix"), files);
+
+        assertEquals("--github-token\nghp_secretValue0000\n--file\n/data/app/src/my demo/A.java\n",
+                runner.argumentFiles().get(0));
+        assertTrue(runner.commands().get(0).contains("@/data/sheriff-arguments"));
+        assertFalse(runner.commands().get(0).contains("--file"));
+        assertEquals("", runner.argumentFiles().get(1));
+        assertTrue(runner.commands().get(1).containsAll(files), "no folder of its own to hold a file");
+        assertFalse(Files.exists(container.stateFolder("app").resolve("sheriff-arguments")), "deleted after the run");
+    }
+
+    @Test
     @DisplayName("with no token nothing is added, and a file that cannot be written fails the run, saying why")
     void withNoTokenNothingIsAdded(@TempDir Path repository) throws IOException {
         Files.createDirectories(repository.resolve("app"));

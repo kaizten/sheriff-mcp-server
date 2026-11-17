@@ -69,6 +69,9 @@ final class SheriffAutofixTool {
     private static final String TESTS_PASSED_LINE = "%nThe project's own tests pass on what the run left behind.";
     private static final String TESTS_FAILED_LINE =
             "%nThe project's own tests FAIL on what the run left behind: review the branch before using it.";
+    private static final String TESTS_FAILED_BEFORE_LINE =
+            "%nThe project's own tests FAIL on what the run left behind, as they did before it changed anything, "
+            + "so they do not say whether the run broke something: fix them and run them on the branch.";
     private static final String TESTS_NOT_RUN_LINE = "%nThe project's own tests were not run.";
     private static final String NO_TESTS_LINE =
             "%nNo build tool with tests was found in the component, so no tests were run: only Sheriff checked "
@@ -224,20 +227,24 @@ final class SheriffAutofixTool {
         if (!summary.workingBranch().isEmpty()) {
             body.append(String.format(WORKING_BRANCH_LINE, summary.workingBranch()));
         }
-        body.append(String.format(tested ? testsLine(summary.testsPassed()) : NO_TESTS_LINE));
+        body.append(String.format(tested ? testsLine(summary) : NO_TESTS_LINE));
         return body.toString();
     }
 
     /**
      * The line saying how the project's tests stand after a run.
      *
-     * @param testsPassed the verdict, {@code null} when they were not run
+     * @param summary the run, whose verdict is {@code null} when they were
+     *     not run
      * @return that line, as a format with no arguments
      */
-    private static String testsLine(Boolean testsPassed) {
-        if (testsPassed == null) {
+    private static String testsLine(RunSummary summary) {
+        if (summary.testsPassed() == null) {
             return TESTS_NOT_RUN_LINE;
         }
-        return testsPassed ? TESTS_PASSED_LINE : TESTS_FAILED_LINE;
+        if (summary.testsPassed()) {
+            return TESTS_PASSED_LINE;
+        }
+        return Boolean.FALSE.equals(summary.testsPassedBefore()) ? TESTS_FAILED_BEFORE_LINE : TESTS_FAILED_LINE;
     }
 }

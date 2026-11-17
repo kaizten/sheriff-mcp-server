@@ -47,6 +47,11 @@ import java.util.stream.Collectors;
  * clean, the project's own tests are the last gate — if a fix satisfied Sheriff
  * but broke a caller outside its scope, one unrestricted repair pass gets a
  * shot at it before the run is called a failure.
+ *
+ * <p>The tests are also run once before anything is changed. Tests that
+ * already failed then say nothing about the run: it spends no repair pass on
+ * a failure that is not its own, and ends saying so rather than that a fix
+ * broke something.
  */
 public final class FixLoop implements FixCodeUntilClean {
 
@@ -113,6 +118,7 @@ public final class FixLoop implements FixCodeUntilClean {
     private final LoopSettings settings;
     private final RunMetrics metrics;
     private PassMeter meter;
+    private Boolean testsPassedBefore;
 
     /**
      * A prompt section, or nothing at all.
@@ -230,6 +236,7 @@ public final class FixLoop implements FixCodeUntilClean {
             System.out.printf("Working on dedicated branch '%s' — every iteration with changes becomes its own commit.%n%n",
                     branch);
         }
+        testsPassedBefore = testsBefore();
         applyAutomaticRepair();
         while (state.maxIterations() == null || state.iteration() <= state.maxIterations()) {
             RunSummary outcome = runIteration(state);
@@ -249,6 +256,37 @@ public final class FixLoop implements FixCodeUntilClean {
                     String.join(COMMA, state.parkedFiles()));
         }
         return finish(state, false, StopReason.ITERATIONS_EXHAUSTED);
+    }
+
+    /**
+     * Runs the project's own tests before anything is changed, so that tests
+     * failing after the run are held against it only when they passed here.
+     *
+     * @return whether they pass, {@code null} when there are none to run
+     */
+    private Boolean testsBefore() {
+        System.out.println("Checking the project's own tests before changing anything...");
+        VerificationResult verification = testRunner.run();
+        if (!verification.ran()) {
+            System.out.printf("  there are none to run.%n%n");
+            return null;
+        }
+        if (verification.ok()) {
+            System.out.printf("  they pass.%n%n");
+        } else {
+            System.out.printf("  they ALREADY FAIL, before this run changed anything, so they cannot say whether "
+                    + "it breaks something:%n%s%n%n", excerpt(verification.output()));
+        }
+        return verification.ok();
+    }
+
+    /**
+     * Whether the tests failed before the run changed anything.
+     *
+     * @return {@code true} when they were run then and failed
+     */
+    private boolean testsFailedBefore() {
+        return Boolean.FALSE.equals(testsPassedBefore);
     }
 
     /**
@@ -408,6 +446,12 @@ public final class FixLoop implements FixCodeUntilClean {
             System.out.println("Tests pass too — goal achieved.");
             return finish(state, true, StopReason.SUCCESS);
         }
+        if (testsFailedBefore()) {
+            System.out.printf("%nSheriff is happy. The project's own tests fail, as they did before this run "
+                    + "changed anything, so no repair pass is spent on them: fix them and run the tests on this "
+                    + "branch.%n%s%n", excerpt(verification.output()));
+            return finish(state, true, StopReason.TESTS_ALREADY_FAILING, false);
+        }
         System.out.printf("%nSheriff is happy, but the project's own tests failed -- the fix broke something "
                         + "Sheriff can't see.%n%s%n", verification.output());
         state.markRepairPassUsed();
@@ -553,7 +597,8 @@ public final class FixLoop implements FixCodeUntilClean {
      */
     private RunSummary finish(RunState state, boolean ok, StopReason reason, Boolean testsPassed) {
         RunSummary summary = new RunSummary(ok, reason, state.iteration(), state.maxIterations(),
-                state.repairPassUsed(), state.parkedFilesAsList(), state.workingBranch(), testsPassed);
+                state.repairPassUsed(), state.parkedFilesAsList(), state.workingBranch(), testsPassed,
+                testsPassedBefore);
         meter.finished(summary);
         return summary;
     }
@@ -585,6 +630,9 @@ public final class FixLoop implements FixCodeUntilClean {
         }
         if (verification.ok()) {
             System.out.println("  they pass.");
+        } else if (testsFailedBefore()) {
+            System.out.printf("  they fail, as they did before this run changed anything:%n%s%n",
+                    excerpt(verification.output()));
         } else {
             System.out.printf("  they FAIL on what this run leaves behind:%n%s%n", excerpt(verification.output()));
         }

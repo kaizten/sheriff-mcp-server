@@ -52,16 +52,16 @@ class DeterministicFixerTests {
     }
 
     @Test
-    @DisplayName("every fixable code goes to Sheriff in one --fixers list, one container instead of one per code")
-    void asksForEveryCodeInOneCall() {
+    @DisplayName("every fixer runs in one fix with no rule named, one container instead of one per code")
+    void runsEveryFixerInOneCall() {
         FakeProcessRunner runner = FakeProcessRunner.always(ProcessOutcome.completed(0, OUTPUT, ""));
         DeterministicFixReport report = fixer(runner, CATALOG).run();
         assertTrue(report.ran());
         assertEquals(List.of("SortedImport"), report.codes());
-        List<List<String>> named = runner.commands().stream().filter(command -> command.contains("--fixers")).toList();
-        assertEquals(1, named.size(), "a second round whose analysis did not drop repairs nothing");
-        assertEquals("SortedImport,JavaDocCommentsInMethod", named.get(0).get(named.get(0).indexOf("--fixers") + 1),
-                "every rule found, as sheriff_fix names them: a rule with no fixer in the list is ignored");
+        List<List<String>> fixes = runner.commands().stream().filter(command -> command.contains("fix")).toList();
+        assertEquals(1, fixes.size(), "a second round whose analysis did not drop repairs nothing");
+        assertFalse(fixes.get(0).contains("--fixers"),
+                "a rule named that has no fixer fails the whole run, and Sheriff's own set leaves none out");
     }
 
     @Test
@@ -82,7 +82,7 @@ class DeterministicFixerTests {
     }
 
     @Test
-    @DisplayName("a plain fix -f runs first, because it applies some fixers the codes do not")
+    @DisplayName("the repair is a plain fix -f, which runs the fixer of every finding that has one")
     void runsThePlainFixFirst() {
         FakeProcessRunner runner = FakeProcessRunner.always(ProcessOutcome.completed(0, OUTPUT, ""));
         fixer(runner, CATALOG).run();
@@ -152,7 +152,7 @@ class DeterministicFixerTests {
                 .map(command -> command.contains("test") ? "test " + command.get(command.indexOf("--test") + 1)
                         : command.contains("--fixers") ? "fix codes" : "fix")
                 .toList();
-        assertEquals(List.of("test JAVA", "fix", "fix codes", "test JAVA_HEXAGONAL", "fix", "fix codes",
+        assertEquals(List.of("test JAVA", "fix", "test JAVA_HEXAGONAL", "fix",
                 "test JAVA", "test JAVA_HEXAGONAL"), steps, "a second round analyzes, and repairs only what dropped");
         assertEquals(2, report.errorsBefore());
         assertEquals(List.of("SortedImport"), report.codes());

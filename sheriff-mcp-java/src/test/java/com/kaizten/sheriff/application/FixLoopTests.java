@@ -231,7 +231,7 @@ class FixLoopTests {
         void verificationFailureThenSuccessfulRepair() {
             FakeFixer fixer = new FakeFixer();
             FakeTestRunner runner = new FakeTestRunner(List.of(
-                    VerificationResult.failed("broke"), VerificationResult.passed("")));
+                    VerificationResult.passed(""), VerificationResult.failed("broke"), VerificationResult.passed("")));
             FixLoop loop = loop(new FakeAnalyzer(cleanAfterOneFix), fixer,
                     new FakeVersionControl(), runner, 8, false, 0);
             RunSummary summary = loop.execute();
@@ -246,7 +246,7 @@ class FixLoopTests {
             FakeFixer fixer = new FakeFixer();
             FakeVersionControl vc = new FakeVersionControl(List.of("a.py"));
             FixLoop loop = loop(new FakeAnalyzer(cleanAfterOneFix), fixer, vc,
-                    new FakeTestRunner(false), 8, true, 0);
+                    FakeTestRunner.brokenByTheRun(), 8, true, 0);
             RunSummary summary = loop.execute();
             assertFalse(summary.ok());
             assertEquals(2, fixer.requests().size());
@@ -258,7 +258,7 @@ class FixLoopTests {
             FakeFixer fixer = new FakeFixer();
             FixLoop loop = loop(new FakeAnalyzer(List.of(
                     FakeAnalyzer.result(2, "a.py"), FakeAnalyzer.result(0, "a.py"), FakeAnalyzer.result(3, "a.py"))),
-                    fixer, new FakeVersionControl(), new FakeTestRunner(false), 8, false, 0);
+                    fixer, new FakeVersionControl(), FakeTestRunner.brokenByTheRun(), 8, false, 0);
             RunSummary summary = loop.execute();
             assertFalse(summary.ok());
             assertEquals(2, fixer.requests().size());
@@ -271,7 +271,7 @@ class FixLoopTests {
             FixLoop loop = loop(new FakeAnalyzer(List.of(
                     FakeAnalyzer.result(2, "a.py"), FakeAnalyzer.result(0, "a.py"),
                     AnalysisResult.failure("docker down"))),
-                    fixer, new FakeVersionControl(), new FakeTestRunner(false), 8, false, 0);
+                    fixer, new FakeVersionControl(), FakeTestRunner.brokenByTheRun(), 8, false, 0);
             RunSummary summary = loop.execute();
             assertFalse(summary.ok());
             assertEquals(2, fixer.requests().size());
@@ -281,7 +281,7 @@ class FixLoopTests {
         void theRepairRequestNeverCarriesAFileScope() {
             FakeFixer fixer = new FakeFixer();
             FakeTestRunner runner = new FakeTestRunner(List.of(
-                    VerificationResult.failed("x"), VerificationResult.passed("")));
+                    VerificationResult.passed(""), VerificationResult.failed("x"), VerificationResult.passed("")));
             FixLoop loop = loop(new FakeAnalyzer(List.of(
                     FakeAnalyzer.result(2, "Only.java"), FakeAnalyzer.result(0, "a.py"),
                     FakeAnalyzer.result(0, "a.py"))), fixer, new FakeVersionControl(), runner, 8, false, 0);
@@ -598,7 +598,7 @@ class FixLoopTests {
         @Test
         void successAfterRepair() {
             FakeTestRunner runner = new FakeTestRunner(List.of(
-                    VerificationResult.failed("broke"), VerificationResult.passed("")));
+                    VerificationResult.passed(""), VerificationResult.failed("broke"), VerificationResult.passed("")));
             FixLoop loop = loop(new FakeAnalyzer(List.of(
                     FakeAnalyzer.result(2, "a.py"), FakeAnalyzer.result(0, "a.py"), FakeAnalyzer.result(0, "a.py"))),
                     new FakeFixer(), new FakeVersionControl(), runner, 8, false, 0);
@@ -612,7 +612,7 @@ class FixLoopTests {
         void repairFailed() {
             FixLoop loop = loop(new FakeAnalyzer(List.of(
                     FakeAnalyzer.result(2, "a.py"), FakeAnalyzer.result(0, "a.py"), FakeAnalyzer.result(0, "a.py"))),
-                    new FakeFixer(), new FakeVersionControl(), new FakeTestRunner(false), 8, false, 0);
+                    new FakeFixer(), new FakeVersionControl(), FakeTestRunner.brokenByTheRun(), 8, false, 0);
             RunSummary summary = loop.execute();
             assertFalse(summary.ok());
             assertEquals(StopReason.REPAIR_FAILED, summary.stoppedReason());
@@ -694,7 +694,7 @@ class FixLoopTests {
             FixLoop loop = loop(new FakeAnalyzer(List.of(
                     FakeAnalyzer.result(1, "a.py"), FakeAnalyzer.result(0, "a.py"), FakeAnalyzer.result(0, "a.py"))),
                     fixer, new FakeVersionControl(), new FakeTestRunner(List.of(
-                            VerificationResult.failed("expected 25.0 but was 0.0"), VerificationResult.passed("ok"))),
+                            VerificationResult.passed(""), VerificationResult.failed("expected 25.0 but was 0.0"), VerificationResult.passed("ok"))),
                     1, false, 0);
             RunSummary summary = loop.execute();
             assertEquals(StopReason.SUCCESS_AFTER_REPAIR, summary.stoppedReason());
@@ -778,6 +778,135 @@ class FixLoopTests {
     }
 
     @Nested
+    @DisplayName("the project's tests, before the run changes anything")
+    class TestsBeforeTheRun {
+
+        private final List<AnalysisResult> cleanAfterOneFix = List.of(
+                FakeAnalyzer.result(2, "a.py"), FakeAnalyzer.result(0, "a.py"), FakeAnalyzer.result(0, "a.py"));
+
+        @Test
+        @DisplayName("tests that already failed are not held against the run, and get no repair pass")
+        void testsThatAlreadyFailedSpendNoRepairPass() {
+            FakeFixer fixer = new FakeFixer();
+            RunSummary summary = loop(new FakeAnalyzer(cleanAfterOneFix), fixer, new FakeVersionControl(),
+                    new FakeTestRunner(false), 8, false, 0).execute();
+            assertTrue(summary.ok());
+            assertEquals(StopReason.TESTS_ALREADY_FAILING, summary.stoppedReason());
+            assertFalse(summary.repairPassUsed());
+            assertEquals(1, fixer.requests().size());
+            assertEquals(Boolean.FALSE, summary.testsPassed());
+            assertEquals(Boolean.FALSE, summary.testsPassedBefore());
+        }
+
+        @Test
+        @DisplayName("tests the run broke are still its own, and the summary says they passed before")
+        void testsTheRunBrokeAreItsOwn() {
+            RunSummary summary = loop(new FakeAnalyzer(cleanAfterOneFix), new FakeFixer(), new FakeVersionControl(),
+                    FakeTestRunner.brokenByTheRun(), 8, false, 0).execute();
+            assertEquals(StopReason.REPAIR_FAILED, summary.stoppedReason());
+            assertEquals(Boolean.TRUE, summary.testsPassedBefore());
+            assertEquals(Boolean.FALSE, summary.testsPassed());
+        }
+
+        @Test
+        @DisplayName("tests that failed before and pass after are a plain success")
+        void testsThatPassAfterAllAreASuccess() {
+            FakeTestRunner runner = new FakeTestRunner(List.of(
+                    VerificationResult.failed("red"), VerificationResult.passed("")));
+            RunSummary summary = loop(new FakeAnalyzer(cleanAfterOneFix), new FakeFixer(), new FakeVersionControl(),
+                    runner, 8, false, 0).execute();
+            assertEquals(StopReason.SUCCESS, summary.stoppedReason());
+            assertEquals(Boolean.FALSE, summary.testsPassedBefore());
+            assertEquals(Boolean.TRUE, summary.testsPassed());
+        }
+
+        @Test
+        @DisplayName("they run before Sheriff's own fixers, which already change the code")
+        void theyRunBeforeTheAutomaticRepair() {
+            List<String> order = new ArrayList<>();
+            TestRunner runner = () -> {
+                order.add("tests");
+                return VerificationResult.passed("");
+            };
+            AutomaticRepair repair = () -> {
+                order.add("repair");
+                return "";
+            };
+            new FixLoop(new FakeAnalyzer(List.of(new AnalysisResult(List.of(), false, ""))), new FakeFixer(),
+                    new FakeVersionControl(), runner, repair, RULES_CONTEXT, List.of(),
+                    new LoopSettings(2, false, 0)).execute();
+            assertEquals(List.of("tests", "repair", "tests"), order);
+        }
+
+        @Test
+        @DisplayName("with no tests to run, nothing is said of how they stood")
+        void noTestsMeansNoVerdictBefore() {
+            RunSummary summary = loop(new FakeAnalyzer(cleanAfterOneFix), new FakeFixer(), new FakeVersionControl(),
+                    () -> VerificationResult.notRun("no build tool"), 8, false, 0).execute();
+            assertNull(summary.testsPassedBefore());
+        }
+
+        @Test
+        @DisplayName("a run cut short carries how the tests stood before it too")
+        void aRunCutShortCarriesTheVerdictBefore() {
+            RunSummary summary = loop(new FakeAnalyzer(List.of(FakeAnalyzer.result(5, "a.py"),
+                    FakeAnalyzer.result(5, "a.py"))), new FakeFixer(), new FakeVersionControl(),
+                    new FakeTestRunner(false), 8, false, 0).execute();
+            assertEquals(StopReason.STALLED, summary.stoppedReason());
+            assertEquals(Boolean.FALSE, summary.testsPassedBefore());
+            assertEquals(Boolean.FALSE, summary.testsPassed());
+        }
+
+        private String printedBy(List<AnalysisResult> analyses, TestRunner runner) {
+            ByteArrayOutputStream printed = new ByteArrayOutputStream();
+            PrintStream console = System.out;
+            System.setOut(new PrintStream(printed, true, StandardCharsets.UTF_8));
+            try {
+                loop(new FakeAnalyzer(analyses), new FakeFixer(), new FakeVersionControl(), runner, 8, false, 0)
+                        .execute();
+            } finally {
+                System.setOut(console);
+            }
+            return printed.toString(StandardCharsets.UTF_8);
+        }
+
+        @Test
+        @DisplayName("the run says at its start that the tests already fail, with the head of what they printed")
+        void theRunSaysTheTestsAlreadyFail() {
+            TestRunner red = () -> VerificationResult.failed("x".repeat(500) + "TAIL");
+            String output = printedBy(cleanAfterOneFix, red);
+            assertTrue(output.startsWith("Checking the project's own tests before changing anything..."), output);
+            assertTrue(output.contains("they ALREADY FAIL, before this run changed anything"), output);
+            assertTrue(output.contains("as they did before this run changed anything, so no repair pass"), output);
+            assertFalse(output.contains("TAIL"), output);
+            assertFalse(output.contains("the fix broke something"), output);
+        }
+
+        @Test
+        @DisplayName("tests that pass before are said to, and a failure after is the run's")
+        void theRunSaysTheTestsPassedBefore() {
+            String output = printedBy(cleanAfterOneFix, FakeTestRunner.brokenByTheRun());
+            assertTrue(output.contains("before changing anything..." + System.lineSeparator() + "  they pass."),
+                    output);
+            assertFalse(output.contains("ALREADY FAIL"), output);
+            assertTrue(output.contains("the fix broke something"), output);
+        }
+
+        @Test
+        @DisplayName("a run cut short tells tests it broke from tests that already failed")
+        void aRunCutShortTellsWhoseTheFailureIs() {
+            List<AnalysisResult> stalled = List.of(FakeAnalyzer.result(5, "a.py"), FakeAnalyzer.result(5, "a.py"));
+            String already = printedBy(stalled, () -> VerificationResult.failed("x".repeat(500) + "TAIL"));
+            assertTrue(already.contains("they fail, as they did before this run changed anything:"), already);
+            assertFalse(already.contains("they FAIL on what this run leaves behind"), already);
+            assertFalse(already.contains("TAIL"), already);
+            String broken = printedBy(stalled, FakeTestRunner.brokenByTheRun());
+            assertTrue(broken.contains("they FAIL on what this run leaves behind"), broken);
+            assertFalse(broken.contains("as they did before"), broken);
+        }
+    }
+
+    @Nested
     @DisplayName("the project's tests, whatever way the run stops")
     class TestsAtTheEnd {
 
@@ -800,7 +929,7 @@ class FixLoopTests {
         }
 
         @Test
-        @DisplayName("a successful run is not tested twice")
+        @DisplayName("a successful run is tested once before it changes anything and once after")
         void successIsNotTestedAgain() {
             List<Boolean> runs = new ArrayList<>();
             TestRunner counting = () -> {
@@ -810,7 +939,8 @@ class FixLoopTests {
             RunSummary summary = loop(new FakeAnalyzer(List.of(new AnalysisResult(List.of(), false, ""))),
                     new FakeFixer(), new FakeVersionControl(), counting, 2, false, 0).execute();
             assertEquals(Boolean.TRUE, summary.testsPassed());
-            assertEquals(1, runs.size());
+            assertEquals(Boolean.TRUE, summary.testsPassedBefore());
+            assertEquals(2, runs.size());
         }
 
         @Test
@@ -990,7 +1120,7 @@ class FixLoopTests {
         @Test
         @DisplayName("the repair of a failing test is a pass of its own, on the whole component, with its cost")
         void theTestRepairIsMeasuredToo() {
-            List<Boolean> results = new ArrayList<>(List.of(false, true));
+            List<Boolean> results = new ArrayList<>(List.of(true, false, true));
             TestRunner failsOnce = () -> results.remove(0) ? VerificationResult.passed("ok")
                     : VerificationResult.failed("red");
             List<PassMetrics> passes = run(List.of(new AnalysisResult(List.of(), false, ""),

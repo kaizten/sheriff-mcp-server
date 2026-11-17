@@ -57,6 +57,18 @@ class FixerFailuresTests {
     }
 
     @Test
+    @DisplayName("the image of 11 November says 'for finding', and its reason is read the same")
+    void theNewWordingIsReadToo() {
+        String output = """
+                Selected error: SentencePositionFirstLine | hasScript=true
+                Could not apply fixer for finding 'SentencePositionFirstLine' in file '/data/app/src/main/java/demo/T.java'
+                Error: Fixer failed with exit code '1' for 'SentencePositionFirstLine' with output 'Could not position'
+                """;
+        assertEquals(List.of("SentencePositionFirstLine: Fixer failed with exit code '1' for "
+                + "'SentencePositionFirstLine' with output 'Could not position'"), FixerFailures.in(output));
+    }
+
+    @Test
     @DisplayName("the deterministic report says which fixers were not applied")
     void theReportSaysSo() {
         DeterministicFixReport report = DeterministicFixReport.applied(

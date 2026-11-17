@@ -310,9 +310,10 @@ installers and both workflows compare it with a release's. Do not move to a
   or by analyzing again.
 - **A fixer that cannot run looks like one that changed nothing**, and one
   that lies looks like one that worked. Two defences, both needed:
-  - A fixer that *fails* says so on stdout: `Could not apply fixer for error
-    'CODE'`, then `Error: <reason>`. `FixerFailures` reads those lines and
-    every report of a repair names them.
+  - A fixer that *fails* says so on stdout: `Could not apply fixer for
+    finding 'CODE'` (`for error` in older images), then `Error: <reason>`.
+    `FixerFailures` reads those lines and every report of a repair names
+    them.
   - A fixer that *exits 0 having done nothing* says nothing. Only analyzing
     again catches it, so a repair is always followed by another analysis.
     Never report a repair from the list of fixers that were run, nor from
@@ -326,29 +327,33 @@ installers and both workflows compare it with a release's. Do not move to a
   `package` line but no other file's `import` of it, and the analysis after
   finds nothing. Only the project's tests catch that, which is why a repair
   is verified by them.
-- **`fix` gives a file's every finding up after its first fixer** (image of
-  5 November 2026): it runs that fixer, counts all of the file's findings
-  fixed even when the fixer changed nothing, runs no other fixer on it, and a
-  second `fix` on the same state finds no error. The braces fixer, which
-  does not handle an `if` on two lines and runs first in the default set,
-  so cost a file every other repair. Each `fix` names the fixers it ran
-  (`Selected error: CODE`, read by `FixersRun`), so `SheriffRepair` keeps,
-  per profile (`FixerAttempts`), the fixers that ran and left their rule's
-  count where it was: they are not given again in that repair, the default
-  set is not run again (it would run them first), and a round runs for the
-  fixers they kept from running though the count did not drop. Until a fixer
-  changes nothing, no round differs. `docs/sheriff/` has the request.
-- **`fix -f` with no `--fixers` is not every fixer, nor only the state's.**
-  Its default set leaves fixers out and runs some regardless of the state.
-  With `--fixers A,B` it runs only those. So `sheriff_fix` with no arguments
-  runs the default set and then `--fixers` with every rule found, in rounds
-  while the count drops: one call, the same end state every time.
-- **`fix` is recursive unless told not to**: after its fixers it analyzes
-  again and repairs what it finds, so a finding taken out of the record it
-  reads comes back and is repaired anyway (given only a tab's finding, it
-  repaired the comment's lines taken out too; measured). So
-  `SheriffRepair` passes `--disable-recursive` to every `fix`: its own
-  rounds repair again, each measured by an analysis.
+- **`fix` is always recursive** (image of 11 November 2026, which took
+  `--disable-recursive` away): after each fixer it analyzes again and repairs
+  what it finds, so a finding taken out of the record it reads is repaired
+  all the same (measured). What keeps a fixer from a finding is what the run
+  is kept to: `--fixers A,B` to those rules and `--file` to those files, by
+  their path in the container, later analyses included. So a finding
+  withheld keeps its rule's fixer out of its file (`FixPlan`): one `fix` for
+  the files with nothing withheld, and one for the files with something
+  withheld, without the rules withheld in any of them. The `--file` lines go
+  in the file of arguments, as there can be thousands.
+- **`fix -f` with no `--fixers` runs the fixer of every finding that has
+  one**, those its own repairs bring included, and that is what `sheriff_fix`
+  with no arguments runs when nothing is withheld. **A rule named to
+  `--fixers` that has no fixer fails the whole run** ("Invalid fixer
+  reference code", on stderr, nothing repaired), so `FixPlan` names only
+  rules whose finding carries a `script` in `sheriff_errors.json`, which is
+  how the record marks a fixer.
+- **A `fix` runs only on a record no older than the files**: a second one
+  after the first answers "Fix skipped because the selected components are
+  dirty", exits 0 and repairs nothing. So every `fix` has an analysis of its
+  own just before it, and `SheriffRepair` reads that answer as a `fix` that
+  did not run.
+- **A fixer that ran and left its rule's count where it was is not given
+  again in that repair** (`FixerAttempts`, per profile, from the
+  `Selected error: CODE` lines `FixersRun` reads): nor is the default set run
+  again, which would run it first, and a round runs for the fixers it kept
+  from running though the count did not drop.
 - **A bad `--test` profile exits 0 too**, printing a usage banner to stdout
   and the reason to stderr. Locating the findings array by the first `[`
   parses the banner instead. So does a `fix` argument it refuses, among
@@ -366,10 +371,10 @@ installers and both workflows compare it with a release's. Do not move to a
   `@/data/sheriff-arguments`, a file of arguments Sheriff reads as its own
   (JCommander's `@`), created owner-only in the state folder (on POSIX in
   one call, never at the umask's permissions) and deleted after the run: on
-  the command line every user of the machine would see it. A fake
-  token in the right form makes `JavaPomValidation` "Cannot complete Maven
-  dependency/version checks", which is how `scripts/e2e.sh` scenario 25 tells
-  it arrived. The tests set `sheriff.github.token` to `none`, which wins over
+  the command line every user of the machine would see it. Nothing
+  `test JAVA` answers tells a token arrived since it stopped reading
+  `pom.xml` (below), so `scripts/e2e.sh` scenario 25 puts a `docker` in front
+  of the real one, which keeps the file of arguments and the command line. The tests set `sheriff.github.token` to `none`, which wins over
   the variable. Codex forwards it to the server through `env_vars` in its
   entry (`CodexInstaller`, measured on 0.164); its hooks do not get it.
 - **The TypeScript profile traces every checker on stdout**, one
@@ -575,11 +580,11 @@ rule; a line it cannot read keeps its finding. It drops:
   below).
 
 When an image brought the middle three, they were 13,981 of this repository's
-14,879 errors. They are also taken out of the record `fix` reads
-(`SheriffRepair`, through `withholdFromState`), as a fixer given one changes
-code that was right: `FourSpaceIndentation`'s takes the space before the `*`
-of a `/* */` comment away. As it repairs only the line it is given, and `fix`
-runs not recursive, no comment is touched (measured on PetClinic).
+14,879 errors. They are withheld from `fix` too (`SheriffRepair`, which reads
+them in the record through `SheriffDockerAnalyzer.recorded`), as a fixer given
+one changes code that was right: `FourSpaceIndentation`'s takes the space
+before the `*` of a `/* */` comment away, and `JavaPomOutdatedDependency`'s
+writes the plugin a Maven it does not run on.
 
 ## The MCP's answers
 
@@ -651,10 +656,10 @@ deferred.
 keeps the errors Sheriff's fixers removed; one of them back later had its
 repair undone, which a model does when the repair broke the build. Such an
 error is left for the end at once, so it blocks neither the gate nor the
-Stop hook, and `SheriffRepair` takes it out of `sheriff_errors.json` before
-every `fix`, which repairs only what that record holds (measured). The
-answer names it. Tests that fail after a repair that changed nothing name
-the files an earlier repair of the session changed (`AnswerMemory`), and a
+Stop hook, and `SheriffRepair` withholds it from every `fix`, which so runs
+without its rule in its file. The answer names it. Tests that fail after a
+repair that changed nothing name the files an earlier repair of the session
+changed (`AnswerMemory`), and a
 failed build is shown by `BuildOutput.excerpt`: the lines that say why, then
 its end, as Maven puts the cause first.
 
@@ -700,8 +705,8 @@ loop's test gate does not run (`Composition.testRunner`). Standards stay.
 
 `sheriff_fix`, the loop's first pass and `sheriff:fix` repair with one class,
 `SheriffRepair` (`SheriffRunner.fix` and `DeterministicFixer` only call it
-and word its outcome): Sheriff's default set, then `--fixers` with every rule
-found, again for each profile whose count the round before lowered, until a
+and word its outcome): Sheriff's default set, one `fix` after each analysis,
+again for each profile whose count the round before lowered, until a
 round repairs nothing (`SHERIFF_REPAIR_ROUNDS` sets a limit), each round's
 analysis measuring the one before. It always ends, as a round runs only when
 the count dropped, and has no limit by default, as fixers that make room for
@@ -749,9 +754,15 @@ server's start, through the public `releases/latest` redirect
 (`GitHubReleases`: no API, so no rate limit and no token, and never a
 prerelease). `notify`, the default, has the first answer of a session say so
 with the install line and `git pull && scripts/install.sh`; `auto` downloads
-the release's jar, checks it against its `.sha256`, and moves it over the
-installed one in one move, for the sessions that start after; `never` does not
-look. Only a jar outside a build's `target/` is replaced. On Linux a running
+the release's jar, checks it against its `.sha256` and its `.sig`, and moves
+it over the installed one in one move, for the sessions that start after;
+`never` does not look. The checksum comes from the release, so it tells only a
+download cut short; the signature (`ReleaseSignature`, Ed25519) is made by
+`release.yml` with the `RELEASE_SIGNING_KEY` secret and checked with the
+public half the jar carries (`release-key.pem`), so a release someone else
+filled is refused. A new key pair needs a release with the new public half
+installed by hand, as jars carrying the old one refuse what the new one
+signs. The install line checks the checksum alone. Only a jar outside a build's `target/` is replaced. On Linux a running
 server keeps answering after its jar is replaced that way, new classes
 included, and a new process starts the new jar (measured); on Windows, where a
 running server holds its jar, the move is refused and the answer says the
@@ -857,9 +868,13 @@ Kaizten's rules are not a convention to interpret — they are compiled into
 the image as profiles. When writing code here:
 
 - **Both modules must stay green under `JAVA`.** Check before finishing, and
-  prefer the plugin's own goal for the plugin. `JAVA` checks `pom.xml` too,
-  and its outdated-dependency rule asks the network, so a new release
-  anywhere can turn a module red with no change here. On the plugin it flags
+  prefer the plugin's own goal for the plugin. **`test JAVA` does not read
+  `pom.xml` in the image of 12 November 2026** (measured: it is not among the
+  files tracked, and the pom rules are in no profile; `JAVA_POM` is listed
+  and answers "Test not defined"). In the images before, `JAVA` checked it
+  too, and its outdated-dependency rule asks the network, so a new release
+  anywhere can turn a module red with no change here; what follows is kept
+  for when it comes back. On the plugin it flags
   `maven-core` and `maven-plugin-api`, whose version is the oldest Maven the
   plugin runs on, as maven-plugin-plugin writes it into the descriptor
   (3.10.0 refused Maven 3.9), and its fixer would write `maven.version`
@@ -1044,3 +1059,13 @@ pass can break the build. So the loop runs the project's tests however it
 stops (`RunSummary.testsPassed`), `sheriff_fix` takes `verify`, the Stop
 hook requires green tests with `SHERIFF_STOP_RUNS_TESTS=1`, and `sheriff:fix`
 analyzes again and fails on what it could not repair.
+
+**The loop runs the tests before it changes anything too**
+(`RunSummary.testsPassedBefore`, `tests_passed_before` in the report), as
+tests that fail after a run say it broke something only when they passed
+before it: a build that needs another Java than the machine's fails either
+way. When they already failed, a run that leaves no errors ends
+`tests_already_failing`, reached (`ok`), with no repair pass, which would be
+spent on a failure that is not the run's: a check that cannot be made holds
+nothing, and the answer says the tests do not tell whether the run broke
+something.

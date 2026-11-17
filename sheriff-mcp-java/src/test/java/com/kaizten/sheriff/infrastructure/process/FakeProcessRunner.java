@@ -26,6 +26,7 @@ public final class FakeProcessRunner implements ProcessRunner {
     private final List<Path> directories = new ArrayList<>();
     private final List<String> inputs = new ArrayList<>();
     private final List<String> errorRecords = new ArrayList<>();
+    private final List<String> argumentFiles = new ArrayList<>();
 
     /**
      * @param outcomes what successive runs should return
@@ -81,7 +82,8 @@ public final class FakeProcessRunner implements ProcessRunner {
         commands.add(command);
         environments.add(environment);
         directories.add(workingDirectory);
-        errorRecords.add(errorRecordIn(workingDirectory));
+        errorRecords.add(textIn(workingDirectory, "sheriff_errors.json"));
+        argumentFiles.add(textIn(workingDirectory, "sheriff-arguments"));
         ProcessOutcome outcome = outcomes.size() == 1 ? outcomes.peek() : outcomes.removeFirst();
         if (recordsSheriffReport) {
             recordSheriffTest(outcome, command, workingDirectory);
@@ -126,12 +128,12 @@ public final class FakeProcessRunner implements ProcessRunner {
         return start < 0 ? "[]" : standardOutput.substring(start);
     }
 
-    private static String errorRecordIn(Path directory) {
+    private static String textIn(Path directory, String name) {
         if (directory == null) {
             return "";
         }
         try {
-            return Files.readString(directory.resolve("sheriff_errors.json"));
+            return Files.readString(directory.resolve(name));
         } catch (IOException missing) {
             return "";
         }
@@ -145,6 +147,16 @@ public final class FakeProcessRunner implements ProcessRunner {
      */
     public List<String> errorRecords() {
         return errorRecords;
+    }
+
+    /**
+     * The file of arguments each run found in its working directory, which
+     * Sheriff reads as part of its command line: empty when there was none.
+     *
+     * @return one per command, in order
+     */
+    public List<String> argumentFiles() {
+        return argumentFiles;
     }
 
     /**

@@ -199,7 +199,22 @@ public final class SheriffContainer {
      * @return what the run produced
      */
     public ProcessOutcome run(List<String> arguments) {
-        return MountLock.holding(lockFor(componentOf(arguments)), () -> runLocked(arguments));
+        return run(arguments, List.of());
+    }
+
+    /**
+     * Runs Sheriff once with some of its arguments in the file of arguments
+     * rather than on the command line: a {@code fix} kept to some files
+     * names each with a {@code --file}, and a command line has a limit, on
+     * Windows a short one.
+     *
+     * @param arguments what to pass to Sheriff: a subcommand and its flags
+     * @param inFile more arguments, one per line of the file; a run on no
+     *     component has no folder for the file and gets them on its line
+     * @return what the run produced
+     */
+    public ProcessOutcome run(List<String> arguments, List<String> inFile) {
+        return MountLock.holding(lockFor(componentOf(arguments)), () -> runLocked(arguments, inFile));
     }
 
     /**
@@ -310,9 +325,10 @@ public final class SheriffContainer {
      * created when missing.
      *
      * @param arguments what to pass to Sheriff
+     * @param inFile more arguments, for the file of arguments
      * @return what the run produced
      */
-    private ProcessOutcome runLocked(List<String> arguments) {
+    private ProcessOutcome runLocked(List<String> arguments, List<String> inFile) {
         Optional<Path> state = componentOf(arguments).map(this::stateFolder);
         Path directory = state.orElse(repositoryRoot);
         try {
@@ -325,7 +341,7 @@ public final class SheriffContainer {
         }
         Path argumentsFile = directory.resolve(ARGUMENTS_FILE);
         try {
-            List<String> given = withToken(arguments, state.isPresent(), argumentsFile);
+            List<String> given = withFile(arguments, state.isPresent(), argumentsFile, inFile);
             String name = names.get();
             ProcessOutcome outcome = processes.run(command(name, given), directory, Map.of(), timeout);
             if (outcome.status() == ProcessStatus.TIMED_OUT || outcome.status() == ProcessStatus.CANCELLED) {
@@ -356,28 +372,40 @@ public final class SheriffContainer {
     }
 
     /**
-     * The arguments with the GitHub token's file among them, for a
-     * {@code test} or {@code fix} on a component when there is a token, with
-     * the file written: Sheriff's other commands take no token, and a run on
-     * no component has no state folder of its own to hold it. The file is
-     * its owner's alone before the token goes into it (see
+     * The arguments with the file of arguments among them, the file written:
+     * the GitHub token, for a {@code test} or {@code fix} on a component
+     * when there is one, and the arguments given for the file. Sheriff's
+     * other commands take no token, and a run on no component has no state
+     * folder of its own to hold the file, so its arguments stay on its line.
+     * The file is its owner's alone before the token goes into it (see
      * {@link #createOwnerOnly(Path)}).
      *
      * @param arguments what to pass to Sheriff
      * @param ownFolder whether the run has a state folder of its own
      * @param file where the file goes, in that folder
+     * @param inFile more arguments, one per line of the file
      * @return the arguments to run with
      * @throws IOException when the file cannot be written
      */
-    private List<String> withToken(List<String> arguments, boolean ownFolder, Path file) throws IOException {
+    private List<String> withFile(List<String> arguments, boolean ownFolder, Path file, List<String> inFile)
+            throws IOException {
+        List<String> given = new ArrayList<>(arguments);
+        if (!ownFolder) {
+            given.addAll(inFile);
+            return given;
+        }
+        List<String> lines = new ArrayList<>();
         Optional<String> token = tokens.get();
-        if (!ownFolder || token.isEmpty() || !TOKEN_COMMANDS.contains(arguments.get(SUBCOMMAND))) {
-            return arguments;
+        if (token.isPresent() && TOKEN_COMMANDS.contains(arguments.get(SUBCOMMAND))) {
+            lines.addAll(List.of(TOKEN_FLAG, token.get()));
+        }
+        lines.addAll(inFile);
+        if (lines.isEmpty()) {
+            return given;
         }
         Files.deleteIfExists(file);
         createOwnerOnly(file);
-        Files.writeString(file, TOKEN_FLAG + LINE_END + token.get() + LINE_END, StandardCharsets.UTF_8);
-        List<String> given = new ArrayList<>(arguments);
+        Files.writeString(file, String.join(LINE_END, lines) + LINE_END, StandardCharsets.UTF_8);
         given.add(SUBCOMMAND + NEXT, ARGUMENTS_IN_CONTAINER);
         return given;
     }

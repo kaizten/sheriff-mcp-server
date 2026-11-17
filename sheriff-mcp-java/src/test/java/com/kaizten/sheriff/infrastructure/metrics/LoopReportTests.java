@@ -121,6 +121,19 @@ class LoopReportTests {
     }
 
     @Test
+    @DisplayName("a finished run says how the tests stood before it changed anything")
+    void theReportCarriesTheTestsBeforeTheRun() throws IOException {
+        Path file = folder.resolve("before.json");
+        LoopReport report = new LoopReport(file, CONTEXT, () -> errors());
+        report.analyzed(errors());
+        assertTrue(read(file).get("tests_passed_before").isNull());
+        report.finished(new RunSummary(true, StopReason.TESTS_ALREADY_FAILING, 1, 3, false, List.of(), "b", false,
+                false));
+        assertFalse(read(file).get("tests_passed_before").asBoolean(true));
+        assertEquals("tests_already_failing", read(file).get("stopped_reason").asText());
+    }
+
+    @Test
     @DisplayName("a run that stopped before its last pass was measured is analyzed once more")
     void anUnmeasuredLastPassIsAnalyzedAgain() throws IOException {
         Path file = folder.resolve("run.json");

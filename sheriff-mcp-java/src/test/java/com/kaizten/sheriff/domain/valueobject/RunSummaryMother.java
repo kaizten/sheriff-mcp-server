@@ -31,7 +31,7 @@ final class RunSummaryMother {
      * @return a RunSummary equal to {@code value}
      */
     public static RunSummary equalTo(RunSummary value) {
-        return new RunSummary(value.ok(), value.stoppedReason(), value.iterationsUsed(), value.maxIterations(), value.repairPassUsed(), value.parkedFiles(), value.workingBranch(), value.testsPassed());
+        return new RunSummary(value.ok(), value.stoppedReason(), value.iterationsUsed(), value.maxIterations(), value.repairPassUsed(), value.parkedFiles(), value.workingBranch(), value.testsPassed(), value.testsPassedBefore());
     }
 
     /**
@@ -41,7 +41,7 @@ final class RunSummaryMother {
      * @return a RunSummary not equal to {@code value}
      */
     public static RunSummary differentTo(RunSummary value) {
-        return new RunSummary(!value.ok(), StopReason.STALLED, value.iterationsUsed() + 1, value.maxIterations(), value.repairPassUsed(), value.parkedFiles(), value.workingBranch(), value.testsPassed());
+        return new RunSummary(!value.ok(), StopReason.STALLED, value.iterationsUsed() + 1, value.maxIterations(), value.repairPassUsed(), value.parkedFiles(), value.workingBranch(), value.testsPassed(), value.testsPassedBefore());
     }
 
     /**

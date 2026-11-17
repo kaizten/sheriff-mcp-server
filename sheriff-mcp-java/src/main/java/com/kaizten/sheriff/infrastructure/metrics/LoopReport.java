@@ -71,6 +71,7 @@ public final class LoopReport implements RunMetrics {
     private static final String PARKED_FIELD = "parked_files";
     private static final String BRANCH_FIELD = "working_branch";
     private static final String TESTS_FIELD = "tests_passed";
+    private static final String TESTS_BEFORE_FIELD = "tests_passed_before";
     private static final String INITIAL_FIELD = "initial";
     private static final String FINAL_FIELD = "final";
     private static final String TOTAL_FIELD = "total";
@@ -239,7 +240,7 @@ public final class LoopReport implements RunMetrics {
         root.put(ELAPSED_FIELD, Duration.between(started, finished == null ? Instant.now() : finished).toMillis());
         if (summary == null) {
             List.of(OK_FIELD, STOPPED_FIELD, ITERATIONS_FIELD, MAX_ITERATIONS_FIELD, REPAIR_FIELD, PARKED_FIELD,
-                    BRANCH_FIELD, TESTS_FIELD).forEach(root::putNull);
+                    BRANCH_FIELD, TESTS_FIELD, TESTS_BEFORE_FIELD).forEach(root::putNull);
         } else {
             root.put(OK_FIELD, summary.ok());
             root.put(STOPPED_FIELD, summary.stoppedReason().wireName());
@@ -249,6 +250,7 @@ public final class LoopReport implements RunMetrics {
             root.set(PARKED_FIELD, json.valueToTree(summary.parkedFiles()));
             root.set(BRANCH_FIELD, json.valueToTree(summary.workingBranch()));
             root.set(TESTS_FIELD, json.valueToTree(summary.testsPassed()));
+            root.set(TESTS_BEFORE_FIELD, json.valueToTree(summary.testsPassedBefore()));
         }
         new TreeMap<>(context).forEach((section, values) -> root.set(section, json.valueToTree(values)));
         root.set(INITIAL_FIELD, counts(first));

@@ -660,19 +660,46 @@ check "the gate holds a new file back in the component with errors" '(( gate_bac
 check "and lets it through in the one Sheriff was never applied to, errors and all" '(( gate_never == 0 ))'
 
 echo "25. GITHUB_TOKEN reaches Sheriff in a file of arguments, and one Sheriff would refuse is left out"
+# Sheriff's JAVA test stopped reading pom.xml (image of 12 November 2026), so
+# nothing it answers tells a token arrived any more. A docker in front of the
+# real one keeps each run's command line and a copy of the file of arguments
+# in the folder mounted at /data, and then runs it: Sheriff still has to take
+# the file as its own arguments and analyze.
 tokened="$work/tokened"
 component "$tokened/app"
-cp "$repo/sheriff-maven-plugin/pom.xml" "$tokened/app/pom.xml"
-for token in none ghp_notARealTokenAtAll0000000000000000 not-a-token; do
-  (cd "$tokened" && env -u SHERIFF_SCOPE GITHUB_TOKEN="$token" SHERIFF_REPO="$tokened" \
-    java -jar "$mcp_jar" --check --component app --profile JAVA >"$work/25-$token.out" 2>&1)
+watched="$work/watched-bin"
+mkdir -p "$watched"
+cat > "$watched/docker" <<WATCHED
+#!/bin/sh
+if [ "\$1" = run ] && [ -n "\$TOKEN_RUN" ]; then
+  echo "\$*" >> "$work/25-\$TOKEN_RUN.docker"
+  for argument in "\$@"; do
+    case "\$argument" in
+      *source=*,target=/data)
+        state="\${argument#*source=}"
+        state="\${state%%,*}"
+        [ -f "\$state/sheriff-arguments" ] && cat "\$state/sheriff-arguments" >> "$work/25-\$TOKEN_RUN.arguments" ;;
+    esac
+  done
+fi
+exec "$(command -v docker)" "\$@"
+WATCHED
+chmod +x "$watched/docker"
+fake_token=ghp_notARealTokenAtAll0000000000000000
+for token in none "$fake_token" not-a-token; do
+  (cd "$tokened" && env -u SHERIFF_SCOPE GITHUB_TOKEN="$token" SHERIFF_REPO="$tokened" TOKEN_RUN="$token" \
+    PATH="$watched:$PATH" java -jar "$mcp_jar" --check --component app --profile JAVA >"$work/25-$token.out" 2>&1)
 done
-# A token that is not real is refused by GitHub, which only a run given one meets.
-check "a token in GitHub's form reaches Sheriff's dependency checks" \
-  'grep -q "Cannot complete Maven dependency" "$work/25-ghp_notARealTokenAtAll0000000000000000.out"'
-check "with none they run without it" '! grep -q "Cannot complete Maven dependency" "$work/25-none.out"'
+check "a token in GitHub's form reaches Sheriff in the file of arguments" \
+  'grep -qx -- "--github-token" "$work/25-$fake_token.arguments" && grep -qx "$fake_token" "$work/25-$fake_token.arguments"'
+check "which the command line names, and never the token itself" \
+  'grep -q " test @/data/sheriff-arguments " "$work/25-$fake_token.docker" && ! grep -q "$fake_token" "$work/25-$fake_token.docker"'
+check "and Sheriff reads the file as its arguments and analyzes" \
+  'grep -q "error(s) under JAVA" "$work/25-$fake_token.out"'
+check "with none there is no file of arguments" \
+  '[[ ! -e "$work/25-none.arguments" ]] && grep -q " test --test JAVA " "$work/25-none.docker" && grep -q "error(s) under JAVA" "$work/25-none.out"'
 check "and one of another form is not passed, so Sheriff still runs" \
-  'grep -q "error(s) under JAVA" "$work/25-not-a-token.out" && ! grep -q "Cannot complete" "$work/25-not-a-token.out"'
+  '[[ ! -e "$work/25-not-a-token.arguments" ]] && ! grep -q "not-a-token" "$work/25-not-a-token.docker" && grep -q "error(s) under JAVA" "$work/25-not-a-token.out"'
 check "it leaves no file of arguments behind" \
   '[[ -z "$(find "${XDG_CACHE_HOME:-$HOME/.cache}/sheriff-mcp/state" -name sheriff-arguments 2>/dev/null)" ]]'
 

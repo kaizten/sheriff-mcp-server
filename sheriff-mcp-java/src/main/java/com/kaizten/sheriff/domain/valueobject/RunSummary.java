@@ -21,6 +21,9 @@ import java.util.List;
  * @param testsPassed whether the project's own tests pass on what the run
  *     left behind, {@code null} when they were not run; a run that stopped
  *     short still checks, so a branch that no longer compiles says so
+ * @param testsPassedBefore whether they passed before the run changed
+ *     anything, {@code null} when they were not run then; tests that fail
+ *     after a run say it broke something only when they passed before it
  */
 public record RunSummary(boolean ok,
         StopReason stoppedReason,
@@ -29,7 +32,8 @@ public record RunSummary(boolean ok,
         boolean repairPassUsed,
         List<String> parkedFiles,
         String workingBranch,
-        Boolean testsPassed) {
+        Boolean testsPassed,
+        Boolean testsPassedBefore) {
 
     /**
      * Checks the values it is given instead of quietly correcting them.
@@ -53,6 +57,30 @@ public record RunSummary(boolean ok,
     }
 
     /**
+     * A summary whose tests were not run before the run.
+     *
+     * @param ok whether the run reached zero errors with the tests passing
+     * @param stoppedReason why it ended
+     * @param iterationsUsed how many iterations it took
+     * @param maxIterations the resolved cap, null when it never needed one
+     * @param repairPassUsed whether the unrestricted repair pass was spent
+     * @param parkedFiles files a pass over them changed nothing in
+     * @param workingBranch the branch the run left the repository on
+     * @param testsPassed whether the project's own tests pass after the run
+     */
+    public RunSummary(boolean ok,
+            StopReason stoppedReason,
+            int iterationsUsed,
+            Integer maxIterations,
+            boolean repairPassUsed,
+            List<String> parkedFiles,
+            String workingBranch,
+            Boolean testsPassed) {
+        this(ok, stoppedReason, iterationsUsed, maxIterations, repairPassUsed, parkedFiles, workingBranch, testsPassed,
+                null);
+    }
+
+    /**
      * A summary whose tests were not run.
      *
      * @param ok whether the run reached zero errors with the tests passing
@@ -70,7 +98,7 @@ public record RunSummary(boolean ok,
             boolean repairPassUsed,
             List<String> parkedFiles,
             String workingBranch) {
-        this(ok, stoppedReason, iterationsUsed, maxIterations, repairPassUsed, parkedFiles, workingBranch, null);
+        this(ok, stoppedReason, iterationsUsed, maxIterations, repairPassUsed, parkedFiles, workingBranch, null, null);
     }
 
     /**

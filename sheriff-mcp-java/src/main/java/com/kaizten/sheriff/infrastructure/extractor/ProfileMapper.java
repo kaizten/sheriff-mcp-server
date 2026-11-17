@@ -38,6 +38,8 @@ public final class ProfileMapper {
     private static final String ENUM_CONSTANT_REGEX = "AnalysisTest\\.([A-Z_]+):";
     private static final String CASE_NUMBER_REGEX = "(?:iconst_(\\d)|bipush\\s+(\\d+))";
     private static final String SWITCH_ENTRY_REGEX = "^\\s*(\\d+): (\\d+)\\s*$";
+    private static final int TWO_HALVES = 2;
+    private static final int SECOND_GROUP = 2;
     private static final String INSTANTIATION_REGEX =
             "^\\s*(\\d+): new\\s+#\\d+\\s+// class (com/kaizten/\\S+)";
     private static final Pattern ENUM_CONSTANT = Pattern.compile(ENUM_CONSTANT_REGEX);
@@ -96,7 +98,7 @@ public final class ProfileMapper {
         if (!dump.contains(CREATE_MARKER)) {
             return Map.of();
         }
-        String[] halves = dump.split(CREATE_MARKER, 2);
+        String[] halves = dump.split(CREATE_MARKER, TWO_HALVES);
         Map<String, Integer> profileCase = profileCases(halves[0]);
         Map<Integer, Integer> caseOffset = caseOffsets(halves[1]);
         Map<Integer, String> offsetClass = instantiations(halves[1]);
@@ -179,7 +181,7 @@ public final class ProfileMapper {
             }
             Matcher number = CASE_NUMBER.matcher(line);
             if (number.find() && !pending.isEmpty()) {
-                String value = number.group(1) == null ? number.group(2) : number.group(1);
+                String value = number.group(1) == null ? number.group(SECOND_GROUP) : number.group(1);
                 cases.put(pending, Integer.parseInt(value));
                 pending = "";
             }
@@ -207,7 +209,7 @@ public final class ProfileMapper {
             }
             Matcher entry = SWITCH_ENTRY.matcher(line);
             if (entry.find()) {
-                offsets.put(Integer.parseInt(entry.group(1)), Integer.parseInt(entry.group(2)));
+                offsets.put(Integer.parseInt(entry.group(1)), Integer.parseInt(entry.group(SECOND_GROUP)));
             }
             if (line.contains(DEFAULT_CASE)) {
                 inSwitch = false;
@@ -228,7 +230,7 @@ public final class ProfileMapper {
         for (String line : create.split(NEWLINE)) {
             Matcher instantiation = INSTANTIATION.matcher(line);
             if (instantiation.find()) {
-                classes.put(Integer.parseInt(instantiation.group(1)), instantiation.group(2));
+                classes.put(Integer.parseInt(instantiation.group(1)), instantiation.group(SECOND_GROUP));
             }
         }
         return classes;

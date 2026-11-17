@@ -91,6 +91,28 @@ jobs:
           cp sheriff-mcp-java/target/sheriff-mcp.jar scripts/install.sh scripts/install.ps1 scripts/uninstall.sh dist/
           cp playbook/build/sheriff-playbook-es.pdf playbook/build/sheriff-playbook-en.pdf dist/
           (cd dist && sha256sum sheriff-mcp.jar > sheriff-mcp.jar.sha256)
+      # The checksum comes from the release itself, so it tells a download cut
+      # short and nothing else. The signature is made with a key only this
+      # workflow holds (the RELEASE_SIGNING_KEY secret, an Ed25519 private key
+      # as openssl writes it), and SHERIFF_UPDATES=auto takes a jar only when
+      # it is signed with it: the public half is in the jar
+      # (src/main/resources/release-key.pem). Checked here against that file,
+      # so a secret that is not its pair fails the release, not every update.
+      - name: Sign the jar
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+        run: |
+          if [ -z "$RELEASE_SIGNING_KEY" ]; then
+            echo "::error::the RELEASE_SIGNING_KEY secret is not set, so the jar cannot be signed"
+            exit 1
+          fi
+          key="$RUNNER_TEMP/release-key"
+          (umask 077 && printf '%s\n' "$RELEASE_SIGNING_KEY" > "$key")
+          trap 'rm -f "$key"' EXIT
+          openssl pkeyutl -sign -inkey "$key" -rawin -in dist/sheriff-mcp.jar | openssl base64 -A > dist/sheriff-mcp.jar.sig
+          openssl base64 -d -A -in dist/sheriff-mcp.jar.sig -out "$RUNNER_TEMP/signature"
+          openssl pkeyutl -verify -pubin -inkey sheriff-mcp-java/src/main/resources/release-key.pem \
+            -rawin -in dist/sheriff-mcp.jar -sigfile "$RUNNER_TEMP/signature"
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
