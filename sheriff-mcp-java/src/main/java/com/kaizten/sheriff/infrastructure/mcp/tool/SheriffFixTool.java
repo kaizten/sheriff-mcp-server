@@ -2,6 +2,9 @@ package com.kaizten.sheriff.infrastructure.mcp.tool;
 
 import com.kaizten.sheriff.domain.valueobject.SheriffFinding;
 import com.kaizten.sheriff.domain.valueobject.VerificationResult;
+import com.kaizten.sheriff.infrastructure.build.CompileCheck;
+import com.kaizten.sheriff.infrastructure.build.CompileError;
+import com.kaizten.sheriff.infrastructure.build.CompileOutcome;
 import com.kaizten.sheriff.infrastructure.docker.FixerFailures;
 import com.kaizten.sheriff.infrastructure.hook.StuckErrors;
 import com.kaizten.sheriff.infrastructure.mcp.AcceptedCode;
@@ -83,6 +86,17 @@ final class SheriffFixTool {
     private static final String UNDONE = "%nSheriff's fixers repaired %d of these error(s) before, and the repair "
             + "was undone since, so no fixer makes it again and they are left for the end: %s";
     private static final String UNDONE_LINE = "%s: %s [%s]";
+    private static final String NOT_COMPILING = "%nThe component does not compile%s (%s)%s: %d error(s) of the "
+            + "compiler's.";
+    private static final String AFTER_THIS_REPAIR = " after this repair";
+    private static final String BYPASSING = ", run without %s, which stops the build before compiling";
+    private static final String COMPILE_ERROR_LINE = "%n  - %s:%d: %s%s";
+    private static final String CHANGED_BY_REPAIR = "  [this repair changed this file]";
+    private static final String MORE_COMPILE_ERRORS = "%n  (%d more)";
+    private static final int COMPILE_ERRORS_SHOWN = 10;
+    private static final String TESTS_STOPPED = "%nThe project's tests did not run (%s): the build's check %s "
+            + "stopped it before them, on code that compiles%s.%n%s";
+    private static final String COMPILED_WITH = " (%s)";
     private static final int TEST_OUTPUT_LIMIT = 2000;
     private static final String NO_TESTS =
             "%nNo build tool with tests was found in %s (Maven, Gradle or an npm test script), so no tests "
@@ -171,7 +185,7 @@ final class SheriffFixTool {
             body.append(String.format(ROUNDS, run.rounds()));
         }
         Set<String> undone = context.stuck().undone(directory, StuckErrors.keys(run.before().errors()));
-        Set<String> removed = new LinkedHashSet<>(StuckErrors.keys(run.before().errors()));
+        Set<String> removed = new LinkedHashSet<>(StuckErrors.keys(run.seen()));
         removed.removeAll(StuckErrors.keys(run.after().errors()));
         context.stuck().repaired(directory, removed);
         if (!undone.isEmpty()) {
@@ -198,14 +212,34 @@ final class SheriffFixTool {
         if (!changed.isEmpty()) {
             context.answers().repairChanged(component, changed);
         }
-        boolean testsRun = verify && context.config().layout().hasTests(component);
+        Optional<CompileOutcome> compiled = changed.isEmpty() ? Optional.empty() : context.compile().apply(component);
+        boolean compiles = compiled.map(CompileOutcome::compiles).orElse(true);
+        boolean testsRun = compiles && verify && context.config().layout().hasTests(component);
         VerificationResult tests = testsRun ? context.tests().apply(component) : null;
-        if (verify) {
+        if (tests != null && !tests.ok() && compiled.isEmpty()) {
+            compiled = context.compile().apply(component);
+        }
+        if (compiled.isPresent() && !compiled.get().compiles()) {
+            body.append(notCompiling(compiled.get(), changed));
+            return body.append(NextStep.afterBrokenCompile(compiled.get().errors().stream().map(CompileError::file)
+                    .distinct().toList(), context.fixCall(component, asked))).toString();
+        }
+        Optional<String> stoppedBy = tests == null || tests.ok() ? Optional.empty()
+                : compiled.flatMap(CompileOutcome::bypassed).filter(goal -> CompileCheck.stoppingGoal(tests.output())
+                        .filter(goal::equals).isPresent());
+        if (stoppedBy.isPresent()) {
+            body.append(String.format(TESTS_STOPPED, context.config().layout().verificationCommand(component),
+                    stoppedBy.get(), String.format(COMPILED_WITH, compiled.get().command()),
+                    BuildOutput.excerpt(tests.output(), TEST_OUTPUT_LIMIT)));
+        } else if (verify) {
             boolean unchanged = !run.before().trackedFiles().isEmpty() && changed.isEmpty();
             body.append(verification(component, tests, unchanged ? earlier : null));
         }
         if (tests != null && tests.ok()) {
             context.answers().repairChanged(component, List.of());
+        }
+        if (run.after().total() == NO_ERRORS && stoppedBy.isPresent()) {
+            return body.append(NextStep.afterStoppedTests(stoppedBy.get())).toString();
         }
         if (run.after().total() > NO_ERRORS) {
             body.append(outstanding(component, asked, run, referenceCode));
@@ -249,8 +283,11 @@ final class SheriffFixTool {
             return body.toString();
         }
         List<SheriffFinding> listable = workable.isEmpty() ? left : workable;
-        FindingsRenderer renderer = new FindingsRenderer(context.catalog().allRules());
         Set<String> unrepaired = unrepaired(run, referenceCode);
+        Set<String> notRun = new LinkedHashSet<>(unrepaired);
+        notRun.removeAll(run.fixersRan());
+        notRun.removeAll(FixerFailures.codesOf(run.fixerFailures()));
+        FindingsRenderer renderer = new FindingsRenderer(context.catalog().allRules(), notRun);
         Set<String> repairable = renderer.repairableRules(listable, unrepaired);
         if (context.answers().sameAsLastTime(component, listable)) {
             body.append(String.format(SAME_AS_LAST_TIME, listable.size()));
@@ -378,6 +415,30 @@ final class SheriffFixTool {
             }
         }
         return codes;
+    }
+
+    /**
+     * Says where a component does not compile after a repair, the files the
+     * repair changed marked, as those are where a fixer most often took out
+     * what the code still used.
+     *
+     * @param outcome the compile
+     * @param changed the files the repair changed, as Sheriff names them
+     * @return the lines to append to the answer
+     */
+    private static String notCompiling(CompileOutcome outcome, List<String> changed) {
+        String bypassed = outcome.bypassed().map(goal -> String.format(BYPASSING, goal)).orElse(NO_FILE);
+        String after = changed.isEmpty() ? NO_FILE : AFTER_THIS_REPAIR;
+        StringBuilder text = new StringBuilder(String.format(NOT_COMPILING, after, outcome.command(), bypassed,
+                outcome.errors().size()));
+        for (CompileError error : outcome.errors().stream().limit(COMPILE_ERRORS_SHOWN).toList()) {
+            String mark = changed.contains(error.file()) ? CHANGED_BY_REPAIR : NO_FILE;
+            text.append(String.format(COMPILE_ERROR_LINE, error.file(), error.line(), error.message(), mark));
+        }
+        if (outcome.errors().size() > COMPILE_ERRORS_SHOWN) {
+            text.append(String.format(MORE_COMPILE_ERRORS, outcome.errors().size() - COMPILE_ERRORS_SHOWN));
+        }
+        return text.toString();
     }
 
     /**

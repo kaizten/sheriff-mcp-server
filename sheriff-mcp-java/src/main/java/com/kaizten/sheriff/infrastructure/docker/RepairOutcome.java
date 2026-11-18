@@ -3,6 +3,7 @@ package com.kaizten.sheriff.infrastructure.docker;
 import com.kaizten.sheriff.domain.valueobject.AnalysisResult;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * What one repair by Sheriff's own fixers did: the findings before it and
@@ -21,13 +22,17 @@ import java.util.Optional;
  *     an analysis that could not be trusted, or a {@code fix} that did not run
  * @param rounds how many rounds of fixers ran, each measured by the analysis
  *     after it
+ * @param fixersRan the rules whose fixer Sheriff said it ran, in any round:
+ *     a rule the catalog knows a fixer for can be among none of them, when
+ *     Sheriff's record marks no script for its findings
  */
 public record RepairOutcome(AnalysisResult before,
         AnalysisResult after,
         List<String> codes,
         List<String> fixerFailures,
         Optional<String> failure,
-        int rounds) {
+        int rounds,
+        Set<String> fixersRan) {
 
     private static final int NO_ROUNDS = 0;
 
@@ -38,6 +43,24 @@ public record RepairOutcome(AnalysisResult before,
         codes = codes == null ? List.of() : List.copyOf(codes);
         fixerFailures = fixerFailures == null ? List.of() : List.copyOf(fixerFailures);
         failure = failure == null ? Optional.empty() : failure;
+        fixersRan = Set.copyOf(fixersRan);
+    }
+
+    /**
+     * An outcome that does not say which fixers ran.
+     *
+     * @param before what the first analysis found
+     * @param after what the last analysis found
+     * @param codes the rules the catalog knows a fixer for, among those handed
+     *     to the fixers
+     * @param fixerFailures the fixers Sheriff said it could not apply
+     * @param failure why the repair could not be carried out, when it could
+     *     not
+     * @param rounds how many rounds of fixers ran
+     */
+    public RepairOutcome(AnalysisResult before, AnalysisResult after, List<String> codes, List<String> fixerFailures,
+            Optional<String> failure, int rounds) {
+        this(before, after, codes, fixerFailures, failure, rounds, Set.of());
     }
 
     /**

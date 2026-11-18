@@ -31,7 +31,8 @@ import java.util.regex.Pattern;
 public final class UntestedMethods {
 
     private static final String DECLARATION = "(?m)^[ \\t]*((?:@\\w+(?:\\([^)]*\\))?\\s+)*)"
-            + "((?:(?:public|protected|private|static|final|synchronized|abstract|default|native|strictfp)\\s+)*)"
+            + "((?:(?:public|protected|private|static|final|synchronized|abstract|default|native|strictfp"
+            + "|@\\w+(?:\\([^)]*\\))?)\\s+)*)"
             + "(?:<[^>]+>\\s+)?([\\w.$<>\\[\\],?]+(?:\\s*<[^>]*>)?(?:\\[\\])*)\\s+(\\w+)\\s*\\(";
     private static final Pattern METHOD = Pattern.compile(DECLARATION);
     private static final String RETURN = "return";
@@ -49,8 +50,9 @@ public final class UntestedMethods {
     private static final String SYNCHRONIZED = "synchronized";
     private static final String ABSTRACT = "abstract";
     private static final String DEFAULT = "default";
+    private static final String RECORD = "record";
     private static final Set<String> NOT_A_TYPE = Set.of(RETURN, NEW, THROW, ELSE, CASE, YIELD, ASSERT, PRIVATE,
-            PUBLIC, PROTECTED, STATIC, FINAL, SYNCHRONIZED, ABSTRACT, DEFAULT);
+            PUBLIC, PROTECTED, STATIC, FINAL, SYNCHRONIZED, ABSTRACT, DEFAULT, RECORD);
     private static final String JAVA = ".java";
     private static final String MAIN_SOURCES = "/src/main/";
     private static final String TEST_SOURCES = "/src/test/";

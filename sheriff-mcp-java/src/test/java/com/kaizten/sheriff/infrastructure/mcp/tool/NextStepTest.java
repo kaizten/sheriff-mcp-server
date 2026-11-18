@@ -31,6 +31,26 @@ class NextStepTest {
     }
 
     @Test
+    @DisplayName("code a repair left not compiling is the step, before anything of Sheriff's, with no choice in it")
+    void aBrokenCompileIsTheStep() {
+        String step = NextStep.afterBrokenCompile(java.util.List.of("app/src/A.java", "app/src/B.java"), CALL);
+        assertTrue(step.contains("make the component compile again: fix the compiler's errors listed above, in "
+                + "app/src/A.java, app/src/B.java, putting back what the code still uses"), step);
+        assertTrue(step.contains("Then " + CALL + " again."), step);
+        isOneStepLast(step);
+    }
+
+    @Test
+    @DisplayName("tests a check of the build stopped are told to the user, as a check that rejects Sheriff's code is")
+    void stoppedTestsAreToldToTheUser() {
+        String step = NextStep.afterStoppedTests("spring-javaformat-maven-plugin:validate");
+        assertTrue(step.contains("Next step: none: the component meets the standards and compiles, but the build's "
+                + "own check spring-javaformat-maven-plugin:validate stops it before the tests"), step);
+        assertTrue(step.contains("Keep Sheriff's code, run no formatter, and tell the user"), step);
+        isOneStepLast(step);
+    }
+
+    @Test
     @DisplayName("a clean change is measured through the repair with verify")
     void aCleanChangeIsMeasured() {
         String step = NextStep.afterCleanToMeasure(CALL);

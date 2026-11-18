@@ -63,6 +63,10 @@ public final class ComponentGate {
             + "each line listed, take every branch of each condition listed (each side of every && and ||) and "
             + "fail on each change listed, by checking what the code returns, edge cases included. Then call the sheriff_fix tool with component '%s' and verify true, and do the step each "
             + "answer ends with. Do not ask the user whether to.%nWithout the sheriff tools, %s instead.";
+    private static final String COMPILE_STEP = "Next step: fix the compiler's errors above, putting back what the "
+            + "code still uses that a repair of Sheriff's took out, such as an import; a repair of Sheriff's that is "
+            + "undone is not made again. Then call the sheriff_fix tool with component '%s' once more. Do not ask the "
+            + "user whether to.%nWithout the sheriff tools, %s instead.";
     private static final String TESTS_STEP = "Next step: run %s and fix what fails until it passes, then call "
             + "the sheriff_test tool with component '%s' once more, as a fix can break a rule. If the tests "
             + "already failed before this turn, say so instead of leaving them.";
@@ -149,6 +153,19 @@ public final class ComponentGate {
         String command = ToolCall.throughCommandLine(configuration.projectDirectory(), runningJar())
                 .phrase(FIX_TOOL, component, NO_PROFILE);
         return String.format(REPAIR_STEP, component, command);
+    }
+
+    /**
+     * The step a hook ends with when a component is clean by Sheriff and does
+     * not compile.
+     *
+     * @param component the component
+     * @return the step
+     */
+    public String compileStep(String component) {
+        String command = ToolCall.throughCommandLine(configuration.projectDirectory(), runningJar())
+                .phrase(FIX_TOOL, component, NO_PROFILE);
+        return String.format(COMPILE_STEP, component, command);
     }
 
     /**

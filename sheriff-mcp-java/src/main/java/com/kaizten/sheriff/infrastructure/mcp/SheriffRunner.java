@@ -11,6 +11,7 @@ import com.kaizten.sheriff.infrastructure.hook.VerdictCache;
 import com.kaizten.sheriff.infrastructure.process.ProcessRunner;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Predicate;
@@ -198,8 +199,11 @@ public final class SheriffRunner {
         SheriffDockerAnalyzer stateKeeping =
                 new SheriffDockerAnalyzer(processes, image, profile, component, repository, timeout, false);
         SheriffDockerAnalyzer analyzer = exportDirectory.map(stateKeeping::exportingTo).orElse(stateKeeping);
-        RepairRoundObserver observer = (round, analyzed, analysis, fixersRan) -> report
-                .ifPresent(session -> session.round(component, analyzed, round, analysis, fixersRan));
+        List<SheriffFinding> seen = new ArrayList<>();
+        RepairRoundObserver observer = (round, analyzed, analysis, fixersRan) -> {
+            seen.addAll(analysis.errors());
+            report.ifPresent(session -> session.round(component, analyzed, round, analysis, fixersRan));
+        };
         SheriffRepair repair = new SheriffRepair(container, analyzer, component).withRounds(rounds)
                 .withholding(withheld).observedBy(observer);
         RepairOutcome outcome = referenceCode.isEmpty() ? repair.everyFixer(List.of()) : repair.onlyRules(referenceCode);
@@ -209,6 +213,8 @@ public final class SheriffRunner {
         verdicts.rememberAnalyzed(repository, component, profile, outcome.after());
         report.ifPresent(session -> session.analyzed(component, profile, outcome.before(), outcome.after(),
                 outcome.rounds()));
-        return new FixRun(outcome.before(), outcome.after(), outcome.fixerFailures(), outcome.rounds());
+        seen.addAll(outcome.before().errors());
+        return new FixRun(outcome.before(), outcome.after(), outcome.fixerFailures(), outcome.rounds(), seen,
+                outcome.fixersRan());
     }
 }
