@@ -24,6 +24,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -724,6 +725,49 @@ class HookTests {
             assertTrue(errors.contains("--call sheriff_fix component='app' verify=true"), errors);
             assertTrue(gate(ProcessOutcome.completed(0, "", "")).coverageStep("api")
                     .startsWith("Next step: add tests under the component's src/test"));
+        }
+
+        @Test
+        @DisplayName("with tests off, a clean turn whose code does not compile cannot end, and says where (PetClinic, 18 Nov)")
+        void codeThatDoesNotCompileCannotEndATurn() throws IOException {
+            com.kaizten.sheriff.infrastructure.build.CompileOutcome broken =
+                    new com.kaizten.sheriff.infrastructure.build.CompileOutcome(false, List.of(
+                            new com.kaizten.sheriff.infrastructure.build.CompileError("app/src/main/java/demo/Owner.java",
+                                    60, "cannot find symbol, symbol: variable CascadeType")), "mvn test-compile",
+                            Optional.empty());
+            SheriffStopHook stop = new SheriffStopHook(gate(ProcessOutcome.completed(0, "", "")), gitSeeingAppTouched())
+                    .withCompileCheck(component -> Optional.of(broken));
+            assertEquals(HookExit.BLOCK, capturingStandardError(() -> stop.decide("{\"stop_hook_active\":false}")));
+            assertTrue(errors.contains("Not done: the standards check is clean, but the code does not compile."), errors);
+            assertTrue(errors.contains("  app/src/main/java/demo/Owner.java:60: cannot find symbol, symbol: variable "
+                    + "CascadeType"), errors);
+            assertTrue(errors.contains("call the sheriff_fix tool with component 'app' once more"), errors);
+            assertTrue(errors.contains("--call sheriff_fix component='app'"), errors);
+            assertTrue(gate(ProcessOutcome.completed(0, "", "")).compileStep("api")
+                    .startsWith("Next step: fix the compiler's errors above, putting back what the code still uses"));
+            assertFalse(gate(ProcessOutcome.completed(0, "", "")).compileStep("api").contains(" or "));
+        }
+
+        @Test
+        @DisplayName("code that compiles, or a build that cannot tell, lets the turn end; with tests on it is not compiled")
+        void compilingCodeEndsATurn() throws IOException {
+            com.kaizten.sheriff.infrastructure.build.CompileOutcome compiles =
+                    new com.kaizten.sheriff.infrastructure.build.CompileOutcome(true, List.of(), "mvn test-compile",
+                            Optional.empty());
+            assertEquals(HookExit.ALLOW, new SheriffStopHook(gate(ProcessOutcome.completed(0, "", "")),
+                    gitSeeingAppTouched()).withCompileCheck(component -> Optional.of(compiles))
+                    .decide("{\"stop_hook_active\":false}"));
+            assertEquals(HookExit.ALLOW, new SheriffStopHook(gate(ProcessOutcome.completed(0, "", "")),
+                    gitSeeingAppTouched()).withCompileCheck(component -> Optional.empty())
+                    .decide("{\"stop_hook_active\":false}"));
+            List<String> compiled = new ArrayList<>();
+            SheriffStopHook tested = withTests(com.kaizten.sheriff.domain.valueobject.VerificationResult.passed("ok"))
+                    .withCompileCheck(component -> {
+                        compiled.add(component);
+                        return Optional.empty();
+                    });
+            assertEquals(HookExit.ALLOW, tested.decide("{\"stop_hook_active\":false}"));
+            assertEquals(List.of(), compiled, "the tests compile it");
         }
 
         @Test

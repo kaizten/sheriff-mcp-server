@@ -738,7 +738,8 @@ Compuerta & Antes de la primera edición de la sesión en un componente &
   edita con parches, y el fin de turno detecta lo mismo después. \\
 Fin de turno & Cuando el asistente va a terminar &
   Si lo que ha cambiado en el turno tiene errores, o la compuerta paró una
-  edición del turno y siguen ahí, o hay métodos nuevos sin test (en Java), le
+  edición del turno y siguen ahí, o el código no compila (en Java con Maven,
+  si no ejecuta los tests), o hay métodos nuevos sin test (en Java), le
   devuelve el turno con la lista. También si los ajustes del proyecto
   comprueban menos que al empezar el turno. \\
 Inicio de turno & Al llegar tu mensaje &
@@ -799,6 +800,34 @@ Sheriff's fixers repaired 1 of these error(s) before, and the repair was undone
 since, so no fixer makes it again and they are left for the end:
 spring-petclinic/pom.xml: Maven dependency 'com.puppycrawl.tools:checkstyle' is
 outdated: 12.3.1 -> 14.3.0. [JavaPomOutdatedDependency]
+\end{command}
+  \item \textbf{Una reparación de Sheriff que rompe la compilación se dice en
+        el momento.} Tras cada \code{sheriff_fix} que cambia ficheros, el
+        componente se compila (Java con Maven). Si un check del build lo para
+        antes de compilar, como \code{spring-javaformat:validate}, se compila
+        sin él, sin tocar el proyecto. Si no compila, arreglarlo es el
+        siguiente paso, antes que los errores de Sheriff. En PetClinic, el
+        fixer de \code{UnusedImport} quitó, con el import que sobraba, cuatro
+        que el código usaba (copiado de una ejecución real):
+\begin{command}[basicstyle=\ttfamily\footnotesize]{respuesta}
+Ran every fixer Sheriff has for these errors on spring-petclinic: 1 error(s)
+before, 0 after (1 repaired).
+Files the fixers changed (1): Owner.java, under spring-petclinic/src/main/java/
+org/springframework/samples/petclinic/owner/
+The component does not compile after this repair (cd 'spring-petclinic' &&
+./mvnw '-B' '-q' 'compiler:compile' 'compiler:testCompile'), run without
+spring-javaformat-maven-plugin:validate, which stops the build before
+compiling: 8 error(s) of the compiler's.
+  - spring-petclinic/src/main/java/org/springframework/samples/petclinic/owner/
+    Owner.java:60: cannot find symbol, symbol: variable CascadeType  [this
+    repair changed this file]
+  [...]
+Next step: make the component compile again: fix the compiler's errors listed
+above, in spring-petclinic/src/main/java/org/springframework/samples/petclinic/
+owner/Owner.java, putting back what the code still uses that a repair of
+Sheriff's took out, such as an import; a repair of Sheriff's that is undone is
+not made again. Then call the sheriff_fix tool with component
+'spring-petclinic' again.
 \end{command}
   \item \textbf{El asistente no baja el listón.} Cuando el
         \code{.sheriff.properties} del proyecto, o las propiedades

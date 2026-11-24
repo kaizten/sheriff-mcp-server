@@ -186,6 +186,7 @@ public final class SheriffRepair {
         List<FixerAttempts> attempts = profiles.stream().map(profile -> new FixerAttempts()).toList();
         Set<String> codes = new LinkedHashSet<>();
         List<String> failures = new ArrayList<>();
+        Set<String> ran = new LinkedHashSet<>();
         AnalysisResult before = null;
         AnalysisResult after;
         int round = FIRST_ROUND;
@@ -215,6 +216,7 @@ public final class SheriffRepair {
                     if (!plan.isEmpty()) {
                         codes.addAll(DeterministicPolicy.fixableCodes(repairable, rules));
                         List<String> outputs = runFixes(single, plan);
+                        ran.addAll(fixersIn(outputs));
                         attempts.get(index).ran(codesOf(repairable), fixersIn(outputs), analysis);
                         outputs.forEach(output -> failures.addAll(FixerFailures.in(output)));
                         repaired = true;
@@ -231,7 +233,7 @@ public final class SheriffRepair {
             round++;
         } while (repaired);
         return new RepairOutcome(before, after, List.copyOf(codes), stillFailing(failures, after),
-                Optional.empty(), repairRounds);
+                Optional.empty(), repairRounds, ran);
     }
 
     /**

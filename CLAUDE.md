@@ -327,8 +327,10 @@ installers and both workflows compare it with a release's. Do not move to a
     fixed than there were.
   And a fixer can break the build and be right by Sheriff, as
   `FolderNameUnderscore`'s did when it left the `import`s of a package it
-  renamed. Only the project's tests catch that, which is why a repair is
-  verified by them.
+  renamed, and `UnusedImport`'s does when it takes out, with the import it
+  was given, every one it thinks unused, an import used only as a qualifier
+  (`Objects.equals`, `CascadeType.ALL`) among them (image of 17 November).
+  So a repair that changed files is compiled, and verified by the tests.
 - **`fix` is always recursive** (image of 11 November 2026, which took
   `--disable-recursive` away): after each fixer it analyzes again and repairs
   what it finds, so a finding taken out of the record it reads is repaired
@@ -641,6 +643,19 @@ component that is a path inside one is refused before Sheriff runs
 (`ToolContext.componentArgument`), and its description gives no example
 name, which models copy.
 
+**A repair that changed files is compiled** (`CompileCheck`, Java with
+Maven only): `test-compile` through the component's own build, and when a
+goal other than the compiler's stops it first, as `spring-javaformat:validate`
+does on PetClinic, `compiler:compile compiler:testCompile`, which runs no
+other plugin and changes nothing of the project's. Code that does not compile
+is the step, before Sheriff's errors and the tests, with the compiler's
+errors and the files the repair changed marked: a PetClinic session ended on
+code `UnusedImport`'s fixer had broken, as the tests it ran stopped at the
+formatter before compiling. With `verify`, tests that check stopped before
+they ran are told to the user (`NextStep.afterStoppedTests`), not put on the
+repair. The Stop hook compiles every component the turn changed when it does
+not run the tests, which compile it.
+
 **An error that stays through the work on it is left for the end, not
 skipped** (`StuckErrors`, a record per component in the user's temporary
 folder, shared by the answers and the hooks). An error is known by its file,
@@ -657,7 +672,9 @@ that stopped at the first error knows only one, so it never counts as only
 deferred.
 
 **A repair of Sheriff's that was undone is not made again.** The same record
-keeps the errors Sheriff's fixers removed; one of them back later had its
+keeps the errors Sheriff's fixers removed, those a round of the repair
+brought and repaired too (`FixRun.seen`), as `UnusedImport`'s finding came
+only after another fixer's; one of them back later had its
 repair undone, which a model does when the repair broke the build. Such an
 error is left for the end at once, so it blocks neither the gate nor the
 Stop hook, and `SheriffRepair` withholds it from every `fix`, which so runs
@@ -672,8 +689,9 @@ test** (`UntestedMethods`): a non-private method with a body in `src/main`
 that the last commit does not have must be called from a test file that
 changed too. The MCP's clean step names them, after `sheriff_fix` with
 `verify` too, as passing tests say nothing of a method none calls, and the Stop hook blocks on
-them before the tests. It reads Java declarations by pattern, compares with
-`git show HEAD:`, and with no repository checks nothing. `scripts/e2e.sh`
+them before the tests. It reads Java declarations by pattern (an annotation among
+the modifiers, as `public @ResponseBody Vets list()`, included; a record's
+header is no method), compares with `git show HEAD:`, and with no repository checks nothing. `scripts/e2e.sh`
 scenario 19 runs it.
 
 **Nor while its tests do not test the change** (`ChangeCoverage`, Java with

@@ -9,6 +9,8 @@ import com.kaizten.sheriff.domain.valueobject.RunSummary;
 import com.kaizten.sheriff.domain.valueobject.SheriffFinding;
 import com.kaizten.sheriff.domain.valueobject.SheriffRule;
 import com.kaizten.sheriff.domain.valueobject.VerificationResult;
+import com.kaizten.sheriff.infrastructure.build.CompileError;
+import com.kaizten.sheriff.infrastructure.build.CompileOutcome;
 import com.kaizten.sheriff.infrastructure.coverage.ChangeCoverage;
 import com.kaizten.sheriff.infrastructure.coverage.CoverageThresholds;
 import com.kaizten.sheriff.infrastructure.docker.ImageProvisioning;
@@ -146,7 +148,7 @@ final class ToolsTest {
     void onlyACallWithNoProfileOnANeverAppliedComponentIsNotChecked() {
         ToolContext context = new ToolContext(new McpConfig(Map.of("SHERIFF_REPO", repository.toString(),
                 "XDG_STATE_HOME", state.toString())), null, null, null, null, null, ToolCall.throughMcp(), null, null,
-                null, null, null);
+                null, null, null, null);
 
         assertTrue(context.notChecked(Map.of(), "web").orElseThrow().startsWith("web is not checked"));
         assertEquals(Optional.empty(), context.notChecked(Map.of("profile", "JAVA"), "web"));
@@ -358,8 +360,10 @@ final class ToolsTest {
 
         assertTrue(repair.contains("Files the fixers changed (1): pom.xml"), repair);
         assertTrue(verified.contains("This repair changed no file, but an earlier one changed app/pom.xml, which may be "
-                + "what broke them: fix what broke, or undo that change; a repair of Sheriff's that is undone is not "
-                + "made again."), verified);
+                + "what broke them. Fix what makes them fail and keep the repair: where a line it changed is what "
+                + "broke them, put that line back as it was; a repair of Sheriff's that is undone is not made again."),
+                verified);
+        assertFalse(verified.contains(", or undo"), "the answer offers no choice: " + verified);
         assertTrue(verified.contains("class file version 65.0"), verified);
         assertFalse(verified.contains("already failing"), verified);
     }
@@ -419,6 +423,221 @@ final class ToolsTest {
 
     private static final ProcessOutcome FIXER_RAN = ProcessOutcome.completed(0, "", "");
 
+    private static final String OLD_JAVA = "{\"/data/app/A.java\": {\"hash\": \"aaa\"}}";
+    private static final String CHANGED_JAVA = "{\"/data/app/A.java\": {\"hash\": \"bbb\"}}";
+    private static final String UNUSED = "{\"file\":\"/data/app/A.java\",\"description\":\"Unused import 'x.Y'\","
+            + "\"howToSolve\":\"h\",\"referenceCode\":\"UnusedImport\",\"type\":\"ERROR\",\"script\":\"s\"}";
+    private static final String COMPILE_COMMAND = "cd 'app' && mvn -B -q compiler:compile compiler:testCompile";
+    private static final String FORMAT_CHECK = "spring-javaformat-maven-plugin:validate";
+
+    private final List<String> compileCalls = new ArrayList<>();
+    private final Deque<VerificationResult> testResults = new ArrayDeque<>();
+
+    private Tools compilingTools(List<CompileOutcome> compiles, List<String> tracked, List<VerificationResult> results,
+            ProcessOutcome... outcomes) throws IOException {
+        mavenComponent("app");
+        McpConfig config = new McpConfig(Map.of("SHERIFF_REPO", repository.toString(), "XDG_STATE_HOME", state.toString()));
+        SheriffRunner runner = new SheriffRunner(new QueuedProcessRunner(tracked, outcomes), config.image(), repository,
+                Duration.ofSeconds(30));
+        testResults.addAll(results);
+        Deque<CompileOutcome> compiled = new ArrayDeque<>(compiles);
+        return new Tools(config, runner, List::of, config::rulesCatalog, component -> testResults.poll(),
+                ImageProvisioning.alreadyReady(), ToolCall.throughMcp(), Tools.changeCoverage(config),
+                component -> {
+                    compileCalls.add(component);
+                    return Optional.ofNullable(compiled.poll());
+                });
+    }
+
+    private static CompileOutcome brokenIn(int errors) {
+        List<CompileError> list = new ArrayList<>();
+        for (int line = 1; line <= errors; line++) {
+            list.add(new CompileError("app/A.java", line, "cannot find symbol"));
+        }
+        return new CompileOutcome(false, list, COMPILE_COMMAND, Optional.empty());
+    }
+
+    @Test
+    @DisplayName("a repair that changed nothing is not compiled, and with no verify nothing else runs")
+    void aRepairThatChangedNothingIsNotCompiled() throws IOException {
+        Tools tools = compilingTools(List.of(), List.of(), List.of(), found(UNSORTED), FIXER_RAN, found(UNSORTED));
+
+        String text = tools.call("sheriff_fix", Map.of("component", "app")).text();
+
+        assertEquals(List.of(), compileCalls, text);
+    }
+
+    @Test
+    @DisplayName("a compile that cannot tell lets the tests run, and code that does not compile runs none")
+    void aCompileThatCannotTellRunsTheTests() throws IOException {
+        Tools unknown = compilingTools(List.of(), List.of(OLD_JAVA, CHANGED_JAVA),
+                List.of(VerificationResult.passed("ok")), found(UNUSED), FIXER_RAN, found());
+
+        String text = unknown.call("sheriff_fix", Map.of("component", "app", "verify", "true")).text();
+
+        assertTrue(text.contains("still pass after the repair"), text);
+        assertEquals(List.of("app"), compileCalls);
+    }
+
+    @Test
+    @DisplayName("on code that does not compile the tests are not run")
+    void noTestsRunOnCodeThatDoesNotCompile() throws IOException {
+        Tools tools = compilingTools(List.of(brokenIn(1)), List.of(OLD_JAVA, CHANGED_JAVA),
+                List.of(VerificationResult.passed("ok")), found(UNUSED), FIXER_RAN, found());
+
+        String text = tools.call("sheriff_fix", Map.of("component", "app", "verify", "true")).text();
+
+        assertEquals(1, testResults.size(), "the result queued for the tests is still there: " + text);
+        assertTrue(text.contains("Then call the sheriff_fix tool with component 'app' again."), text);
+    }
+
+    @Test
+    @DisplayName("ten of the compiler's errors are listed, and how many more there are")
+    void tenCompileErrorsAreListed() throws IOException {
+        String eleven = compilingTools(List.of(brokenIn(11)), List.of(OLD_JAVA, CHANGED_JAVA), List.of(),
+                found(UNUSED), FIXER_RAN, found()).call("sheriff_fix", Map.of("component", "app")).text();
+        assertTrue(eleven.contains("app/A.java:10: cannot find symbol"), eleven);
+        assertFalse(eleven.contains("app/A.java:11:"), eleven);
+        assertTrue(eleven.contains("\n  (1 more)"), eleven);
+    }
+
+    @Test
+    @DisplayName("exactly ten errors are all listed, with nothing more")
+    void exactlyTenCompileErrorsAreAllListed() throws IOException {
+        String ten = compilingTools(List.of(brokenIn(10)), List.of(OLD_JAVA, CHANGED_JAVA), List.of(),
+                found(UNUSED), FIXER_RAN, found()).call("sheriff_fix", Map.of("component", "app")).text();
+        assertTrue(ten.contains("app/A.java:10: cannot find symbol"), ten);
+        assertFalse(ten.contains("more)"), ten);
+    }
+
+    @Test
+    @DisplayName("tests that fail at another goal than the check left out are failing tests, put on the repair")
+    void testsFailingElsewhereAreFailingTests() throws IOException {
+        CompileOutcome compiles = new CompileOutcome(true, List.of(), COMPILE_COMMAND, Optional.of(FORMAT_CHECK));
+        VerificationResult failing = VerificationResult.failed("[ERROR] Failed to execute goal "
+                + "org.apache.maven.plugins:maven-surefire-plugin:3.5.4:test (default-test): There are test failures");
+        Tools tools = compilingTools(List.of(compiles), List.of(OLD_JAVA, CHANGED_JAVA), List.of(failing),
+                found(UNUSED), FIXER_RAN, found());
+
+        String text = tools.call("sheriff_fix", Map.of("component", "app", "verify", "true")).text();
+
+        assertTrue(text.contains("The project's own tests FAIL after the repair"), text);
+        assertFalse(text.contains("did not run"), text);
+    }
+
+    @Test
+    @DisplayName("tests a check stopped, with errors of Sheriff's left, go on with the errors; a long output is cut")
+    void stoppedTestsWithErrorsLeftGoOnWithThem() throws IOException {
+        CompileOutcome compiles = new CompileOutcome(true, List.of(), COMPILE_COMMAND, Optional.of(FORMAT_CHECK));
+        String output = "[ERROR] Failed to execute goal io.spring.javaformat:spring-javaformat-maven-plugin:0.0.47:"
+                + "validate (default)\n" + "[ERROR]  * /x/A.java\n".repeat(300);
+        Tools tools = compilingTools(List.of(compiles), List.of(OLD_JAVA, CHANGED_JAVA),
+                List.of(VerificationResult.failed(output)), found(UNUSED, UNSORTED), FIXER_RAN, found(UNSORTED),
+                FIXER_RAN, found(UNSORTED));
+
+        String text = tools.call("sheriff_fix", Map.of("component", "app", "verify", "true")).text();
+
+        assertTrue(text.contains("The project's tests did not run"), text);
+        assertTrue(text.contains("[...]"), "the output is cut: " + text);
+        assertEquals(List.of("app"), compileCalls, "compiled once");
+        assertTrue(text.contains("Still outstanding: 1 error(s)"), text);
+        assertFalse(text.substring(text.lastIndexOf("Next step:")).startsWith("Next step: none"), text);
+    }
+
+    @Test
+    @DisplayName("the server's compile check tells nothing of a component that does not build with Maven")
+    void theProjectCompileSkipsWhatIsNotMaven() throws IOException {
+        Files.createDirectories(repository.resolve("plain/src"));
+        McpConfig config = new McpConfig(Map.of("SHERIFF_REPO", repository.toString(), "XDG_STATE_HOME", state.toString()));
+
+        assertEquals(Optional.empty(), Tools.projectCompile(config).apply("plain"));
+    }
+
+    @Test
+    @DisplayName("a repair that leaves the component not compiling says where, and that is the step, first")
+    void aRepairThatBreaksTheCompileSaysWhere() throws IOException {
+        CompileOutcome broken = new CompileOutcome(false, List.of(new CompileError("app/A.java", 3,
+                "cannot find symbol, symbol: variable Objects")), COMPILE_COMMAND, Optional.of(FORMAT_CHECK));
+        Tools tools = compilingTools(List.of(broken), List.of(OLD_JAVA, CHANGED_JAVA), List.of(),
+                found(UNUSED, UNSORTED), FIXER_RAN, found(UNSORTED), FIXER_RAN, found(UNSORTED));
+
+        String text = tools.call("sheriff_fix", Map.of("component", "app", "verify", "true")).text();
+
+        assertTrue(text.contains("The component does not compile after this repair (" + COMPILE_COMMAND + "), run "
+                + "without " + FORMAT_CHECK + ", which stops the build before compiling: 1 error(s) of the "
+                + "compiler's."), text);
+        assertTrue(text.contains("  - app/A.java:3: cannot find symbol, symbol: variable Objects  [this repair "
+                + "changed this file]"), text);
+        assertTrue(text.substring(text.lastIndexOf("Next step:")).startsWith("Next step: make the component compile again: fix the compiler's "
+                + "errors listed above, in app/A.java, putting back"), text);
+        assertFalse(text.contains("Still outstanding"), "the compile comes before Sheriff's errors: " + text);
+        assertFalse(text.contains("tests"), "no tests run on code that does not compile: " + text);
+    }
+
+    @Test
+    @DisplayName("a repair that leaves it compiling adds nothing to the answer")
+    void aRepairThatCompilesSaysNothingOfIt() throws IOException {
+        CompileOutcome compiles = new CompileOutcome(true, List.of(), COMPILE_COMMAND, Optional.empty());
+        Tools tools = compilingTools(List.of(compiles), List.of(OLD_JAVA, CHANGED_JAVA), List.of(),
+                found(UNUSED, UNSORTED), FIXER_RAN, found(UNSORTED), FIXER_RAN, found(UNSORTED));
+
+        String text = tools.call("sheriff_fix", Map.of("component", "app")).text();
+
+        assertFalse(text.contains("compile"), text);
+        assertTrue(text.contains("Still outstanding: 1 error(s)"), text);
+    }
+
+    @Test
+    @DisplayName("tests a check of the build stopped before they ran are told as such, and the user is told")
+    void testsStoppedByACheckAreToldToTheUser() throws IOException {
+        CompileOutcome compiles = new CompileOutcome(true, List.of(), COMPILE_COMMAND, Optional.of(FORMAT_CHECK));
+        VerificationResult stopped = VerificationResult.failed("[ERROR] Failed to execute goal "
+                + "io.spring.javaformat:spring-javaformat-maven-plugin:0.0.47:validate (default): Formatting violations");
+        Tools tools = compilingTools(List.of(compiles), List.of(OLD_JAVA, CHANGED_JAVA), List.of(stopped),
+                found(UNUSED), FIXER_RAN, found());
+
+        String text = tools.call("sheriff_fix", Map.of("component", "app", "verify", "true")).text();
+
+        assertTrue(text.contains("The project's tests did not run (cd 'app' && mvn -q test): the build's check "
+                + FORMAT_CHECK + " stopped it before them, on code that compiles (" + COMPILE_COMMAND + ")."), text);
+        assertEquals(List.of("app"), compileCalls, "compiled once, after the repair");
+        assertFalse(text.contains("FAIL after the repair"), text);
+        assertTrue(text.substring(text.lastIndexOf("Next step:")).startsWith("Next step: none: the component meets the standards and compiles, "
+                + "but the build's own check " + FORMAT_CHECK + " stops it before the tests"), text);
+    }
+
+    @Test
+    @DisplayName("failing tests after a repair that changed nothing are compiled too, and a broken compile is the step")
+    void failingTestsAreCompiled() throws IOException {
+        CompileOutcome broken = new CompileOutcome(false, List.of(new CompileError("app/A.java", 3, "cannot find "
+                + "symbol")), COMPILE_COMMAND, Optional.of(FORMAT_CHECK));
+        Tools tools = compilingTools(List.of(broken), List.of(), List.of(VerificationResult.failed("[ERROR] Failed to "
+                + "execute goal io.spring.javaformat:spring-javaformat-maven-plugin:0.0.47:validate")), found(), found());
+
+        String text = tools.call("sheriff_fix", Map.of("component", "app", "verify", "true")).text();
+
+        assertTrue(text.contains("The component does not compile (" + COMPILE_COMMAND), text);
+        assertTrue(text.contains("  - app/A.java:3: cannot find symbol\n"), text);
+        assertFalse(text.contains("[this repair changed this file]"), text);
+        assertTrue(text.substring(text.lastIndexOf("Next step:")).startsWith("Next step: make the component compile again"), text);
+    }
+
+    @Test
+    @DisplayName("an error a repair's own round brought and repaired is known as repaired, so undoing it is seen")
+    void anErrorARoundBroughtIsRememberedAsRepaired() throws IOException {
+        String other = POM_OUTDATED.replace("outdated:", "stale:");
+        Tools tools = fixTools(List.of(), List.of(), found(POM_OUTDATED, other), FIXER_RAN, found(UNUSED), FIXER_RAN,
+                found(), found(UNUSED));
+
+        String repaired = tools.call("sheriff_fix", Map.of("component", "app")).text();
+        String undone = tools.call("sheriff_fix", Map.of("component", "app")).text();
+
+        assertTrue(repaired.contains("2 error(s) before, 0 after"), repaired);
+        assertTrue(undone.contains("Sheriff's fixers repaired 1 of these error(s) before, and the repair was undone "
+                + "since, so no fixer makes it again and they are left for the end: app/A.java: Unused import 'x.Y' "
+                + "[UnusedImport]"), "one analysis and no fixer, or the runner would have run out: " + undone);
+    }
+
     @Test
     @DisplayName("only the errors whose repair was undone are named as undone, each on one line")
     void onlyUndoneErrorsAreNamed() throws IOException {
@@ -477,9 +696,11 @@ final class ToolsTest {
 
         String text = tools.call("sheriff_fix", Map.of("component", "app", "verify", "true")).text();
 
-        assertTrue(text.contains("The project's own tests FAIL after the repair (cd 'app' && mvn -q test). The repair is "
-                + "left in place for you to review: fix what broke, or undo it; a repair of Sheriff's that is undone is "
-                + "not made again.\njava.lang.IllegalStateException: the cause\n[...]\n"), text);
+        assertTrue(text.contains("The project's own tests FAIL after the repair (cd 'app' && mvn -q test). Fix what "
+                + "makes them fail and keep the repair: where a line it changed is what broke them, such as an import "
+                + "it took out that is still used, put that line back as it was; a repair of Sheriff's that is undone "
+                + "is not made again.\njava.lang.IllegalStateException: the cause\n[...]\n"), text);
+        assertFalse(text.contains(", or undo"), "the answer offers no choice: " + text);
         assertTrue(text.contains("MIDDLE\nthe end"), text);
         assertTrue(text.length() < output.length(), "the output is cut");
     }
@@ -515,7 +736,8 @@ final class ToolsTest {
                 "java", "", "java/comparison.py", List.of("JAVA"));
         McpConfig config = new McpConfig(Map.of("SHERIFF_REPO", repository.toString(), "XDG_STATE_HOME", state.toString()));
         SheriffRunner runner = new SheriffRunner(new QueuedProcessRunner(
-                ProcessOutcome.completed(0, remaining, ""), ProcessOutcome.completed(1, "Fixing process completed.", ""),
+                ProcessOutcome.completed(0, remaining, ""), ProcessOutcome.completed(1, "Selected error: "
+                        + "JavaHardcodedValueInComparisonMessage1 | hasScript=true\nFixing process completed.", ""),
                 ProcessOutcome.completed(0, remaining, "")), config.image(), repository, Duration.ofSeconds(30));
         Tools tools = new Tools(config, runner, () -> List.of(comparison));
 
@@ -524,6 +746,25 @@ final class ToolsTest {
 
         assertTrue(text.contains("its fixer did not repair it, edit it by hand"), text);
         assertFalse(text.contains("can repair this one"), text);
+    }
+
+    @Test
+    @DisplayName("a rule with a fixer in the catalog that Sheriff ran no fixer for is not marked as its fixer's failure")
+    void aFixerThatNeverRanIsNotCalledAFailure() {
+        String tabs = "[{\"file\":\"/data/app/A.java\",\"description\":\"Invalid indentation\",\"howToSolve\":"
+                + "\"h\",\"referenceCode\":\"FourSpaceIndentation\",\"type\":\"ERROR\"}]";
+        SheriffRule indentation = new SheriffRule("FourSpaceIndentation", "Invalid indentation", "", "java", "",
+                "java/format/tabs-to-four-spaces/tabs-to-four-spaces.py", List.of("JAVA"));
+        McpConfig config = new McpConfig(Map.of("SHERIFF_REPO", repository.toString(), "XDG_STATE_HOME", state.toString()));
+        SheriffRunner runner = new SheriffRunner(new QueuedProcessRunner(ProcessOutcome.completed(0, tabs, ""),
+                ProcessOutcome.completed(0, "Fixing process completed.", ""), ProcessOutcome.completed(0, tabs, "")),
+                config.image(), repository, Duration.ofSeconds(30));
+        Tools tools = new Tools(config, runner, () -> List.of(indentation));
+
+        String text = tools.call("sheriff_fix", Map.of("component", "app")).text();
+
+        assertTrue(text.contains("[FourSpaceIndentation: Sheriff ran no fixer for it, edit it by hand]"), text);
+        assertFalse(text.contains("its fixer did not repair it"), text);
     }
 
     @Test
@@ -1291,7 +1532,7 @@ final class ToolsTest {
         Map<String, String> environment = Map.of("SHERIFF_REPO", repository.toString(), "XDG_STATE_HOME",
                 state.toString());
         ToolContext context = new ToolContext(new McpConfig(environment), null, null, null, null, null, null, null,
-                null, null, null, null);
+                null, null, null, null, null);
         SheriffConfigTool tool = new SheriffConfigTool(context, (given, project, idle) -> {
             throw new IOException("no port");
         });

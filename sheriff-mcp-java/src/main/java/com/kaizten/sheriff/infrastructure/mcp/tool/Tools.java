@@ -2,6 +2,8 @@ package com.kaizten.sheriff.infrastructure.mcp.tool;
 
 import com.kaizten.sheriff.domain.port.RuleCatalog;
 import com.kaizten.sheriff.domain.valueobject.VerificationResult;
+import com.kaizten.sheriff.infrastructure.build.CompileCheck;
+import com.kaizten.sheriff.infrastructure.build.CompileOutcome;
 import com.kaizten.sheriff.infrastructure.coverage.ChangeCoverage;
 import com.kaizten.sheriff.infrastructure.docker.ImageProvisioning;
 import com.kaizten.sheriff.infrastructure.git.UntestedMethods;
@@ -134,7 +136,8 @@ public final class Tools implements AutoCloseable {
      */
     public Tools(McpConfig config, SheriffRunner runner, RuleCatalog catalog, Supplier<Path> catalogPath,
             ImageProvisioning image) {
-        this(config, runner, catalog, catalogPath, projectTests(config), image);
+        this(config, runner, catalog, catalogPath, projectTests(config), image, ToolCall.throughMcp(),
+                changeCoverage(config), projectCompile(config));
     }
 
     /**
@@ -166,7 +169,8 @@ public final class Tools implements AutoCloseable {
      */
     public Tools(McpConfig config, SheriffRunner runner, RuleCatalog catalog, Supplier<Path> catalogPath,
             Function<String, VerificationResult> tests, ImageProvisioning image, ToolCall toolCall) {
-        this(config, runner, catalog, catalogPath, tests, image, toolCall, changeCoverage(config));
+        this(config, runner, catalog, catalogPath, tests, image, toolCall, changeCoverage(config),
+                projectCompile(config));
     }
 
     /**
@@ -185,11 +189,34 @@ public final class Tools implements AutoCloseable {
     public Tools(McpConfig config, SheriffRunner runner, RuleCatalog catalog, Supplier<Path> catalogPath,
             Function<String, VerificationResult> tests, ImageProvisioning image, ToolCall toolCall,
             ChangeCoverage coverage) {
+        this(config, runner, catalog, catalogPath, tests, image, toolCall, coverage, component -> Optional.empty());
+    }
+
+    /**
+     * Every collaborator, with a chosen way of compiling a component after a
+     * repair, which the constructors that take a way of running the tests and
+     * no way of naming the next call leave out, so a test of the answers runs
+     * no build.
+     *
+     * @param config where the server runs and with what
+     * @param runner what runs Sheriff
+     * @param catalog the rules
+     * @param catalogPath where the catalog file is, for the fix loop
+     * @param tests what runs a component's own tests
+     * @param image whether Sheriff's image is here yet
+     * @param toolCall how a step names the next call
+     * @param coverage what measures how well the tests test a change
+     * @param compile what compiles a component after a repair changed it,
+     *     empty when it cannot tell
+     */
+    public Tools(McpConfig config, SheriffRunner runner, RuleCatalog catalog, Supplier<Path> catalogPath,
+            Function<String, VerificationResult> tests, ImageProvisioning image, ToolCall toolCall,
+            ChangeCoverage coverage, Function<String, Optional<CompileOutcome>> compile) {
         this.image = image;
         this.tasks = new TaskRegistry(config.tasksDirectory(), () -> provenance(image));
         ToolContext context = new ToolContext(config, runner, catalog, catalogPath, tests, tasks, toolCall,
                 new AnswerMemory(), new UntestedMethods(new SystemProcessRunner()), coverage, new StuckErrors(),
-                image::description);
+                image::description, compile);
         Map<String, Tool> definitions = new LinkedHashMap<>();
         this.settings = new SheriffConfigTool(context);
         for (Tool tool : List.of(new SheriffTestTool(context).definition(), new SheriffFixTool(context).definition(),
@@ -229,6 +256,18 @@ public final class Tools implements AutoCloseable {
     public static ChangeCoverage changeCoverage(McpConfig config) {
         return new ChangeCoverage(new SystemProcessRunner(), config.repository(), config.layout()::mavenCommand,
                 config::coverageThresholds, config.coverageTimeout(), config.mutationTimeout());
+    }
+
+    /**
+     * What compiles a component after a repair: its Maven, from the mount,
+     * with as long as its tests get.
+     *
+     * @param config where the project is
+     * @return that check, one component at a time
+     */
+    public static Function<String, Optional<CompileOutcome>> projectCompile(McpConfig config) {
+        return new CompileCheck(new SystemProcessRunner(), config.repository(), config.layout()::mavenCommand,
+                config.testTimeout())::check;
     }
 
     /**

@@ -50,6 +50,7 @@ public final class FindingsRenderer {
     private static final String RECOVERED_SUFFIX = ", recovered from the message";
     private static final String FIXER_MARKER = ": %s can repair this one";
     private static final String FAILED_FIXER_MARKER = ": its fixer did not repair it, edit it by hand";
+    private static final String FIXER_NOT_RUN_MARKER = ": Sheriff ran no fixer for it, edit it by hand";
     private static final String HELD_BACK_HEADING =
             "%n%d more error(s) in %d file(s), listed by name only -- spelling them all out here would "
             + "cost more context than it is worth. The next analysis lists them once those above are fixed.";
@@ -68,6 +69,7 @@ public final class FindingsRenderer {
     static final int MAX_FINDINGS_RENDERED = 60;
     private final Map<String, SheriffRule> byCode;
     private final RuleRecovery recovery;
+    private final Set<String> notRun;
 
     /**
      * Wires the renderer to the catalog it looks rules up in.
@@ -75,12 +77,28 @@ public final class FindingsRenderer {
      * @param catalog every rule Sheriff knows, empty when there is none
      */
     public FindingsRenderer(List<SheriffRule> catalog) {
+        this(catalog, Set.of());
+    }
+
+    /**
+     * Wires the renderer to the catalog, knowing which rules with a fixer
+     * in it Sheriff ran no fixer for, so their mark does not say a fixer
+     * tried: {@code FourSpaceIndentation} has a fixer in the catalog, and on
+     * PetClinic its findings carried no script in Sheriff's record, so it
+     * never ran, and 660 errors were marked as its fixer's failure.
+     *
+     * @param catalog every rule Sheriff knows, empty when there is none
+     * @param notRun the rule codes with a fixer in the catalog that Sheriff
+     *     did not run
+     */
+    public FindingsRenderer(List<SheriffRule> catalog, Set<String> notRun) {
         Map<String, SheriffRule> indexed = new LinkedHashMap<>();
         for (SheriffRule rule : catalog) {
             indexed.put(rule.code(), rule);
         }
         this.byCode = Map.copyOf(indexed);
         this.recovery = new RuleRecovery(catalog);
+        this.notRun = Set.copyOf(notRun);
     }
 
     /**
@@ -326,19 +344,20 @@ public final class FindingsRenderer {
 
     /**
      * What a finding's rule line says about repairing it: that the fix tool
-     * can, that its fixer just failed, or nothing when it has none.
+     * can, that its fixer just failed, that Sheriff ran none, or nothing
+     * when it has none.
      *
      * @param rule the finding's rule, when it is known
      * @param fixToolName the name of the tool that can repair a fixable rule
      * @param failedFixers the rule codes whose fixer just failed or repaired nothing
      * @return the marker, empty when there is nothing to say
      */
-    private static String markerFor(Optional<SheriffRule> rule, String fixToolName, Set<String> failedFixers) {
+    private String markerFor(Optional<SheriffRule> rule, String fixToolName, Set<String> failedFixers) {
         if (rule.filter(SheriffRule::hasFixer).isEmpty()) {
             return EMPTY;
         }
         if (failedFixers.contains(rule.get().code())) {
-            return FAILED_FIXER_MARKER;
+            return notRun.contains(rule.get().code()) ? FIXER_NOT_RUN_MARKER : FAILED_FIXER_MARKER;
         }
         return String.format(FIXER_MARKER, fixToolName);
     }

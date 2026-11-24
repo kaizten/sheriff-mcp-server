@@ -44,6 +44,14 @@ final class NextStep {
     private static final String PROTOTYPE = DONE + "standards. SHERIFF_PROTOTYPE is 1, so nothing asks for its tests, runs them, measures them; tell the "
             + "user so, and that setting it back to 0 asks for them before the work is kept.";
     private static final String FAILING = "%n" + STEP_MARK + " fix what makes the tests fail, then %s again.";
+    private static final String NOT_COMPILING = "%n" + STEP_MARK + " make the component compile again: fix the "
+            + "compiler's errors listed above, in %s, putting back what the code still uses that a repair of "
+            + "Sheriff's took out, such as an import; a repair of Sheriff's that is undone is not made again. Then "
+            + "%s again.";
+    private static final String TESTS_STOPPED = "%n" + STEP_MARK + " none: the component meets the standards and "
+            + "compiles, but the build's own check %s stops it before the tests, so neither they nor how well they "
+            + "test the change could be checked. Keep Sheriff's code, run no formatter, and tell the user that "
+            + "this check rejects it and that the tests did not run.";
     private static final String UNAVAILABLE = "%n%n" + STEP_MARK + " tell the user the code standards check could "
             + "not run, and why, in their words above. Go on with the rest of the work, run the project's own "
             + "tests, and %s again before finishing.";
@@ -236,6 +244,32 @@ final class NextStep {
      */
     static String afterFailingTests(String testCall) {
         return String.format(FAILING, testCall);
+    }
+
+    /**
+     * The step after a repair that left the component not compiling: that
+     * first, before any error of Sheriff's, as nothing else can be checked
+     * on code that does not compile.
+     *
+     * @param files the files the compiler named
+     * @param fixCall the repair's call, written to be made as it stands
+     * @return the step, as the answer's last line
+     */
+    static String afterBrokenCompile(List<String> files, String fixCall) {
+        return String.format(NOT_COMPILING, String.join(FILE_SEPARATOR, files), fixCall);
+    }
+
+    /**
+     * The step when a check of the build's, bound before the tests, stops
+     * them from running on code Sheriff accepts and that compiles: to tell
+     * the user, as the instructions say of a check that rejects Sheriff's
+     * code, rather than send the model after tests that never ran.
+     *
+     * @param check the goal that stopped the build, as {@code artifactId:goal}
+     * @return the step, as the answer's last line
+     */
+    static String afterStoppedTests(String check) {
+        return String.format(TESTS_STOPPED, check);
     }
 
     /**

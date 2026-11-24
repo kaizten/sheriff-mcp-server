@@ -17,6 +17,7 @@ import com.kaizten.sheriff.infrastructure.antigravity.AntigravityCliFixer;
 import com.kaizten.sheriff.infrastructure.antigravity.AntigravityHome;
 import com.kaizten.sheriff.infrastructure.api.AnthropicApiFixer;
 import com.kaizten.sheriff.infrastructure.api.OpenAiApiFixer;
+import com.kaizten.sheriff.infrastructure.build.CompileOutcome;
 import com.kaizten.sheriff.infrastructure.catalog.CatalogFreshness;
 import com.kaizten.sheriff.infrastructure.catalog.CatalogProvisioning;
 import com.kaizten.sheriff.infrastructure.catalog.JsonRuleCatalog;
@@ -133,6 +134,7 @@ public final class Composition {
     private final UnaryOperator<String> modelTests;
     private Path provisionedCatalog;
     private Function<String, CoverageVerdict> changeCoverage;
+    private Function<String, Optional<CompileOutcome>> compileCheck;
 
     /**
      * Wires a composition to a configuration, analyzing every component
@@ -203,6 +205,18 @@ public final class Composition {
      */
     public Composition withChangeCoverage(Function<String, CoverageVerdict> measure) {
         this.changeCoverage = measure;
+        return this;
+    }
+
+    /**
+     * The same composition, with what compiles a component for the Stop
+     * hook, which needs the MCP's project layout to know its build.
+     *
+     * @param check what compiles a component, empty when it cannot tell
+     * @return this composition
+     */
+    public Composition withCompileCheck(Function<String, Optional<CompileOutcome>> check) {
+        this.compileCheck = check;
         return this;
     }
 
@@ -605,7 +619,8 @@ public final class Composition {
                 configuration.stopMaxBlocks()).withTestCommands(modelTests)
                 .withMaxStalls(configuration.stopMaxStalls());
         return configuration.prototype() ? hook
-                : hook.withUntestedMethods(new UntestedMethods(processes)).withChangeCoverage(changeCoverage);
+                : hook.withUntestedMethods(new UntestedMethods(processes)).withChangeCoverage(changeCoverage)
+                        .withCompileCheck(compileCheck);
     }
 
     /**

@@ -104,4 +104,57 @@ class UntestedMethodsTests {
         assertEquals(Set.of("getVisits"), UntestedMethods.declared(String.format(PET, "")));
         assertEquals(Set.of(), UntestedMethods.declared("interface R { List<Pet> findAll(); }"));
     }
+
+    @Test
+    @DisplayName("an annotation between the modifiers and the type is still a declaration")
+    void readsAnAnnotationAmongTheModifiers() {
+        assertEquals(Set.of("showResourcesVetList"), UntestedMethods.declared("""
+                class VetController {
+                    @GetMapping({ "/vets" })
+                    public @ResponseBody Vets showResourcesVetList() {
+                        return new Vets();
+                    }
+                }
+                """));
+    }
+
+    @Test
+    @DisplayName("a record's header is no method")
+    void aRecordIsNoMethod() {
+        assertEquals(Set.of("size"), UntestedMethods.declared("""
+                public record Point(int x, int y) {
+                    public int size() {
+                        return x + y;
+                    }
+                }
+                """));
+    }
+
+    @Test
+    @DisplayName("moving an annotation of an old method before its modifiers does not make it new (PetClinic, 18 Nov)")
+    void anAnnotationMovedDoesNotMakeAMethodNew() throws IOException, InterruptedException {
+        Path app = mount.resolve("app");
+        Path source = Files.createDirectories(app.resolve("src/main/java/demo")).resolve("VetController.java");
+        Files.writeString(source, """
+                class VetController {
+                    public @ResponseBody Vets showResourcesVetList() {
+                        return new Vets();
+                    }
+                }
+                """);
+        Files.createDirectories(app.resolve("src/test/java/demo"));
+        git(app, "init", "-q");
+        git(app, "add", "-A");
+        git(app, "commit", "-q", "-m", "seed");
+        Files.writeString(source, """
+                class VetController {
+                    @ResponseBody
+                    public Vets showResourcesVetList() {
+                        return new Vets();
+                    }
+                }
+                """);
+
+        assertEquals(List.of(), new UntestedMethods(new SystemProcessRunner()).in(mount, "app"));
+    }
 }

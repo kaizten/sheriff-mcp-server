@@ -184,6 +184,7 @@ class CompositionTests {
     void theChangeCoverageIsWired() {
         Composition composition = with(Map.of("SHERIFF_STOP_RUNS_TESTS", "1"));
         assertSame(composition, composition.withChangeCoverage(component -> null));
+        assertSame(composition, composition.withCompileCheck(component -> java.util.Optional.empty()));
         assertNotNull(composition.stopHook());
     }
 

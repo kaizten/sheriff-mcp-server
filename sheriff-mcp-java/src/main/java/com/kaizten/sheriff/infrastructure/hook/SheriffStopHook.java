@@ -3,6 +3,7 @@ package com.kaizten.sheriff.infrastructure.hook;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kaizten.sheriff.domain.valueobject.VerificationResult;
+import com.kaizten.sheriff.infrastructure.build.CompileOutcome;
 import com.kaizten.sheriff.infrastructure.config.ChosenSettings;
 import com.kaizten.sheriff.infrastructure.config.LoosenedSettings;
 import com.kaizten.sheriff.infrastructure.config.Loosening;
@@ -139,6 +140,14 @@ public final class SheriffStopHook {
             %s
             """;
     private static final String TESTS_REPORT = "%s:%n%s%n";
+    private static final String COMPILE_BLOCKED = """
+            Not done: the standards check is clean, but the code does not compile.
+
+            %s
+            %s
+            """;
+    private static final String COMPILE_LINE = "  %s:%d: %s";
+    private static final int COMPILE_ERRORS_SHOWN = 10;
     private static final String COVERAGE_BLOCKED = """
             Not done: the tests pass, but they do not test enough of what this turn wrote.
 
@@ -175,6 +184,7 @@ public final class SheriffStopHook {
     private UnaryOperator<String> testCommands = component -> PROJECT_TESTS;
     private UntestedMethods untested;
     private Function<String, CoverageVerdict> coverage;
+    private Function<String, Optional<CompileOutcome>> compile;
     private int maxStalls = DEFAULT_MAX_STALLS;
     private final Map<String, GateVerdict> dirtyVerdicts = new LinkedHashMap<>();
     private String reason = "";
@@ -267,6 +277,20 @@ public final class SheriffStopHook {
      */
     public SheriffStopHook withMaxStalls(int stalls) {
         this.maxStalls = stalls;
+        return this;
+    }
+
+    /**
+     * The same hook, compiling each component the turn changed once it is
+     * clean, when the tests are off: a repair of Sheriff's can break the
+     * build and be right by Sheriff, as {@code UnusedImport}'s did on
+     * PetClinic, and a session ended on code that did not compile.
+     *
+     * @param check what compiles a component, empty when it cannot tell
+     * @return this hook
+     */
+    public SheriffStopHook withCompileCheck(Function<String, Optional<CompileOutcome>> check) {
+        this.compile = check;
         return this;
     }
 
@@ -439,6 +463,9 @@ public final class SheriffStopHook {
                     String.join(System.lineSeparator(), dirty) + gate.floorNote(), gate.repairStep(first));
             return HookExit.BLOCK;
         }
+        if (compileDecide(touched) == HookExit.BLOCK) {
+            return HookExit.BLOCK;
+        }
         if (untestedDecide(touched) == HookExit.BLOCK) {
             return HookExit.BLOCK;
         }
@@ -458,6 +485,34 @@ public final class SheriffStopHook {
     private boolean unchanged(String component, Map<String, String> start) {
         String now = gate.fingerprintOf(component);
         return !now.isEmpty() && now.equals(start.get(component));
+    }
+
+    /**
+     * Whether every component the turn changed compiles, once the standards
+     * are clean. With the tests on they compile it, so it is not compiled
+     * twice.
+     *
+     * @param touched the components the turn changed
+     * @return the exit code
+     */
+    private int compileDecide(Set<String> touched) {
+        if (compile == null || tests != null) {
+            return HookExit.ALLOW;
+        }
+        List<String> broken = new ArrayList<>();
+        List<String> lines = new ArrayList<>();
+        for (String component : touched) {
+            Optional<CompileOutcome> outcome = compile.apply(component).filter(compiled -> !compiled.compiles());
+            outcome.ifPresent(compiled -> broken.add(component));
+            outcome.ifPresent(compiled -> compiled.errors().stream().limit(COMPILE_ERRORS_SHOWN).forEach(error -> lines
+                    .add(String.format(COMPILE_LINE, error.file(), error.line(), error.message()))));
+        }
+        if (broken.isEmpty()) {
+            return HookExit.ALLOW;
+        }
+        reason = String.format(COMPILE_BLOCKED, String.join(System.lineSeparator(), lines),
+                gate.compileStep(broken.get(0)));
+        return HookExit.BLOCK;
     }
 
     /**

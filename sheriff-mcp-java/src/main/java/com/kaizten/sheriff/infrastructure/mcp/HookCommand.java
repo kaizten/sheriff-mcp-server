@@ -63,7 +63,8 @@ public final class HookCommand {
             Configuration configuration = new Configuration(agentEnvironment, config.cachedCatalog().getParent());
             Composition composition = Composition.real(configuration, guardedProfiles(config),
                     config.layout()::verificationCommand, config.layout()::testCommandForModel)
-                    .withChangeCoverage(Tools.changeCoverage(config)::measure);
+                    .withChangeCoverage(Tools.changeCoverage(config)::measure)
+                    .withCompileCheck(Tools.projectCompile(config));
             return new Agent(configuration, composition).run(List.of(hook));
         } catch (RuntimeException exception) {
             System.err.printf(COULD_NOT_START, exception.getMessage());
