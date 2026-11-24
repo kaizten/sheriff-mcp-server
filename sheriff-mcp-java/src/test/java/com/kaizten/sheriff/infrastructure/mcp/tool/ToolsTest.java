@@ -360,8 +360,10 @@ final class ToolsTest {
 
         assertTrue(repair.contains("Files the fixers changed (1): pom.xml"), repair);
         assertTrue(verified.contains("This repair changed no file, but an earlier one changed app/pom.xml, which may be "
-                + "what broke them: fix what broke, or undo that change; a repair of Sheriff's that is undone is not "
-                + "made again."), verified);
+                + "what broke them. Fix what makes them fail and keep the repair: where a line it changed is what "
+                + "broke them, put that line back as it was; a repair of Sheriff's that is undone is not made again."),
+                verified);
+        assertFalse(verified.contains(", or undo"), "the answer offers no choice: " + verified);
         assertTrue(verified.contains("class file version 65.0"), verified);
         assertFalse(verified.contains("already failing"), verified);
     }
@@ -694,9 +696,11 @@ final class ToolsTest {
 
         String text = tools.call("sheriff_fix", Map.of("component", "app", "verify", "true")).text();
 
-        assertTrue(text.contains("The project's own tests FAIL after the repair (cd 'app' && mvn -q test). The repair is "
-                + "left in place for you to review: fix what broke, or undo it; a repair of Sheriff's that is undone is "
-                + "not made again.\njava.lang.IllegalStateException: the cause\n[...]\n"), text);
+        assertTrue(text.contains("The project's own tests FAIL after the repair (cd 'app' && mvn -q test). Fix what "
+                + "makes them fail and keep the repair: where a line it changed is what broke them, such as an import "
+                + "it took out that is still used, put that line back as it was; a repair of Sheriff's that is undone "
+                + "is not made again.\njava.lang.IllegalStateException: the cause\n[...]\n"), text);
+        assertFalse(text.contains(", or undo"), "the answer offers no choice: " + text);
         assertTrue(text.contains("MIDDLE\nthe end"), text);
         assertTrue(text.length() < output.length(), "the output is cut");
     }

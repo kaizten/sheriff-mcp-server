@@ -75,14 +75,16 @@ final class SheriffFixTool {
     private static final String EXHAUSTED_LINE = "%n  - %s: %s  [%s]";
     private static final String TESTS_PASS_AFTER = "%nThe project's own tests still pass after the repair (%s).";
     private static final String TESTS_FAIL_AFTER =
-            "%nThe project's own tests FAIL after the repair (%s). The repair is left in place for you "
-            + "to review: fix what broke, or undo it; a repair of Sheriff's that is undone is not made again.%n%s";
+            "%nThe project's own tests FAIL after the repair (%s). Fix what makes them fail and keep the "
+            + "repair: where a line it changed is what broke them, such as an import it took out that is still "
+            + "used, put that line back as it was; a repair of Sheriff's that is undone is not made again.%n%s";
     private static final String TESTS_FAIL_UNCHANGED =
             "%nThe project's own tests FAIL (%s). This repair changed no file, so it did not break them.%n%s";
     private static final String TESTS_FAIL_EARLIER =
             "%nThe project's own tests FAIL (%s). This repair changed no file, but an earlier one changed %s, "
-            + "which may be what broke them: fix what broke, or undo that change; a repair of Sheriff's that is "
-            + "undone is not made again.%n%s";
+            + "which may be what broke them. Fix what makes them fail and keep the repair: where a line it changed "
+            + "is what broke them, put that line back as it was; a repair of Sheriff's that is undone is not made "
+            + "again.%n%s";
     private static final String UNDONE = "%nSheriff's fixers repaired %d of these error(s) before, and the repair "
             + "was undone since, so no fixer makes it again and they are left for the end: %s";
     private static final String UNDONE_LINE = "%s: %s [%s]";
