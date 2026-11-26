@@ -32,7 +32,10 @@ if [[ ! -f "$mcp_jar" ]]; then
   mvn -B -q -f "$repo/pom.xml" install -DskipTests || exit 1
 fi
 
-# A component with a handful of findings, one of which Sheriff fixes itself.
+# A component with a handful of findings that Sheriff's fixers repair, and
+# three that no fixer does (JavaMethodNameInvalid), so the model is left work:
+# the image of 25 November 2026 repaired all the others, and the scenarios
+# that need a model's pass found none to make.
 component() {
   mkdir -p "$1/src/main/java/demo"
   cat > "$1/src/main/java/demo/Thermometer.java" <<'JAVA'
@@ -56,6 +59,18 @@ public class Thermometer {
 
     public String label() {
         return "thermometer " + name;
+    }
+
+    public String Name() {
+        return name;
+    }
+
+    public String Upper() {
+        return name.toUpperCase();
+    }
+
+    public String Lower() {
+        return name.toLowerCase();
     }
 }
 JAVA
